@@ -3,9 +3,13 @@ import 'dart:ui';
 import 'package:flutter/physics.dart';
 
 import '../app_theme.dart';
+import '../navigation_destinations.dart';
+import 'add_task_button.dart';
 
 class FloatingNavigationGroup extends StatefulWidget {
-  const FloatingNavigationGroup({super.key});
+  const FloatingNavigationGroup({super.key, required this.selectedIndex});
+
+  final int selectedIndex;
 
   @override
   State<FloatingNavigationGroup> createState() =>
@@ -14,15 +18,7 @@ class FloatingNavigationGroup extends StatefulWidget {
 
 class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
   with TickerProviderStateMixin {
-  static const _items = [
-    _NavigationItem(name: 'Home'),
-    _NavigationItem(name: 'Calendar'),
-    _NavigationItem(name: 'To-Do'),
-    _NavigationItem(name: 'Timer'),
-    _NavigationItem(name: 'AI'),
-  ];
-
-  int _selectedIndex = 0;
+  static const _items = AppDestination.values;
   late final AnimationController _fabController = AnimationController(
     vsync: this,
     duration: AppSpacing.fabAnimationDuration,
@@ -139,7 +135,8 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
               children: [
                 Expanded(child: _buildNavigationDock(primary)),
                 const SizedBox(width: AppSpacing.floatingGroupGap),
-                _AddButton(
+                AddTaskButton(
+                  key: ValueKey('add-task-button-${widget.selectedIndex}'),
                   primary: primary,
                   controller: _fabController,
                   isOpen: _isPopupOpen,
@@ -167,13 +164,14 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
           for (var index = 0; index < _items.length; index++)
             Expanded(
               child: _NavigationButton(
+                key: ValueKey(_items[index].route),
                 item: _items[index],
-                selected: index == _selectedIndex,
+                selected: index == widget.selectedIndex,
                 primary: primary,
                 onPressed: () {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
+                  Navigator.of(context).pushReplacementNamed(
+                    _items[index].route,
+                  );
                 },
               ),
             ),
@@ -183,21 +181,16 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
   }
 }
 
-class _NavigationItem {
-  const _NavigationItem({required this.name});
-
-  final String name;
-}
-
 class _NavigationButton extends StatelessWidget {
   const _NavigationButton({
+    super.key,
     required this.item,
     required this.selected,
     required this.primary,
     required this.onPressed,
   });
 
-  final _NavigationItem item;
+  final AppDestination item;
   final bool selected;
   final Color primary;
   final VoidCallback onPressed;
@@ -205,7 +198,7 @@ class _NavigationButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = Image.asset(
-      'assets/img/${selected ? 'selected' : 'unselected'}/${item.name}.png',
+      'assets/img/${selected ? 'selected' : 'unselected'}/${item.iconName}.png',
       width: AppSpacing.navigationIconSize,
       height: AppSpacing.navigationIconSize,
       fit: BoxFit.contain,
@@ -228,48 +221,3 @@ class _NavigationButton extends StatelessWidget {
   }
 }
 
-class _AddButton extends StatelessWidget {
-  const _AddButton({
-    required this.primary,
-    required this.controller,
-    required this.isOpen,
-    required this.onPressed,
-  });
-
-  final Color primary;
-  final AnimationController controller;
-  final bool isOpen;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, child) => Transform.rotate(
-        angle: controller.value * 3.14159 * 2,
-        child: child,
-      ),
-      child: AnimatedContainer(
-        duration: AppSpacing.fabAnimationDuration,
-        decoration: BoxDecoration(
-          color: isOpen ? AppColors.secondary : primary,
-          shape: BoxShape.circle,
-          boxShadow: const [
-            BoxShadow(
-              color: AppColors.popupScrim,
-              blurRadius: AppSpacing.sm,
-              offset: Offset(0, AppSpacing.xs),
-            ),
-          ],
-        ),
-        child: IconButton(
-          onPressed: onPressed,
-          icon: const Icon(Icons.add, color: AppColors.onPrimary),
-          iconSize: AppSpacing.addIconSize,
-          padding: const EdgeInsets.all(AppSpacing.md),
-          tooltip: 'Add',
-        ),
-      ),
-    );
-  }
-}

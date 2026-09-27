@@ -8,10 +8,14 @@
 // StatefulWidget, setState, Scaffold, AppBar, Column, Card, FilledButton.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'app_theme.dart';
-import 'widgets/bottom_navigation_bar.dart';
+import 'navigation_destinations.dart';
+import 'screens/ai_screen.dart';
+import 'screens/calendar_screen.dart';
+import 'screens/dashboard_screen.dart';
+import 'screens/timer_screen.dart';
+import 'screens/todo_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -23,52 +27,54 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'My Final Project',
+      title: 'Momentum',
       debugShowCheckedModeBanner: false,
 
       theme: appTheme,
-
-      home: const HomeScreen(),
+      initialRoute: AppDestination.dashboard.route,
+      onGenerateRoute: _buildRoute,
     );
   }
-}
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  Route<void>? _buildRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case '/dashboard':
+        return _screenRoute(
+          const DashboardScreen(key: ValueKey('dashboard-screen')),
+          settings,
+        );
+      case '/calendar':
+        return _screenRoute(
+          const CalendarScreen(key: ValueKey('calendar-screen')),
+          settings,
+        );
+      case '/todo':
+        return _screenRoute(
+          const TodoScreen(key: ValueKey('todo-screen')),
+          settings,
+        );
+      case '/timer':
+        return _screenRoute(
+          const TimerScreen(key: ValueKey('timer-screen')),
+          settings,
+        );
+      case '/ai':
+        return _screenRoute(
+          const AiScreen(key: ValueKey('ai-screen')),
+          settings,
+        );
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    return null;
+  }
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        centerTitle: true,
-        toolbarHeight: AppSpacing.appBarHeight,
-        title: Text(
-          'Dashboard',
-          style: theme.textTheme.headlineLarge?.copyWith(
-            color: theme.colorScheme.onPrimary,
-          ),
-        ),
-        backgroundColor: theme.colorScheme.primary,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(AppRadii.appBarBottom),
-          ),
-        ),
-        systemOverlayStyle: SystemUiOverlayStyle.light,
-      ),
-      body: const Stack(
-        children: [
-          SizedBox.expand(),
-          Positioned.fill(
-            child: FloatingNavigationGroup(),
-          ),
-        ],
-      ),
+  MaterialPageRoute<void> _screenRoute(
+    Widget screen,
+    RouteSettings settings,
+  ) {
+    return MaterialPageRoute<void>(
+      settings: settings,
+      builder: (context) => screen,
     );
   }
 }

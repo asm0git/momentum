@@ -28,6 +28,10 @@ flutter:
     - assets/img/selected/Home.png
     - assets/img/selected/Timer.png
     - assets/img/selected/To-Do.png
+    - assets/img/categories/gym.png
+    - assets/img/categories/personal.png
+    - assets/img/categories/school.png
+    - assets/img/categories/work.png
     - assets/img/unselected/AI.png
     - assets/img/unselected/Calendar.png
     - assets/img/unselected/Home.png

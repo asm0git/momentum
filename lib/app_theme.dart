@@ -10,6 +10,7 @@ class AppColors {
   static const error = Color(0xFF961212);
   static const transparent = Colors.transparent;
   static const popupScrim = Color(0x26000000);
+  static const disabled = Color(0xFF94A3B8);
 }
 
 class AppSpacing {
