@@ -71,7 +71,7 @@ List<TaskCategory> createMockCategories() {
           estimatedDuration: const Duration(hours: 8),
         ),
         Task(
-          title: 'Grade first-year Python logic formulation assignments',
+          title: 'Grade first-year assignments',
           isChecked: false,
           date: today.add(const Duration(days: 1)),
           time: const TimeOfDay(hour: 9, minute: 0),

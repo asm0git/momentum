@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../navigation_destinations.dart';
 import '../widgets/bottom_navigation_bar.dart';
+import '../widgets/clock.dart';
 import '../widgets/primary_app_bar.dart';
 
 class TimerScreen extends StatelessWidget {
@@ -18,7 +19,9 @@ class TimerScreen extends StatelessWidget {
       ),
       body: Stack(
         children: [
-          SizedBox.expand(),
+          const Center(
+            child: Clock(),
+          ),
           Positioned.fill(
             child: FloatingNavigationGroup(
               key: ValueKey('timer-navigation'),

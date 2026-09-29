@@ -9,11 +9,13 @@ class TaskWidget extends StatelessWidget {
   const TaskWidget({
     super.key,
     required this.task,
+    this.categoryIconName,
     this.appearanceType = TaskAppearanceType.checkable,
     this.onChecked,
   });
 
   final Task task;
+  final String? categoryIconName;
   final TaskAppearanceType appearanceType;
   final ValueChanged<bool>? onChecked;
 
@@ -34,39 +36,54 @@ class TaskWidget extends StatelessWidget {
     final titleStyle = textTheme.bodyMedium?.copyWith(
       color: textColor,
       decoration: task.isChecked ? TextDecoration.lineThrough : null,
+      height: 1.15,
     );
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Checkbox(
-          value: task.isChecked,
-          onChanged: (value) => onChecked?.call(value ?? false),
-          activeColor: AppColors.primary,
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: Checkbox(
+            value: task.isChecked,
+            onChanged: (value) => onChecked?.call(value ?? false),
+            activeColor: AppColors.primary,
+            shape: const CircleBorder(),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
         ),
-        const SizedBox(width: AppSpacing.sm),
+        if (categoryIconName != null) ...[
+          const SizedBox(width: 12),
+          Image.asset(
+            'assets/img/categories/$categoryIconName.png',
+            width: AppSpacing.navigationIconSize,
+            height: AppSpacing.navigationIconSize,
+            color: AppColors.primary,
+            colorBlendMode: BlendMode.srcIn,
+          ),
+        ],
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(task.title, style: titleStyle),
-              const SizedBox(height: AppSpacing.xs),
+              const SizedBox(height: 2),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: Text(
-                      _formatDateTime(task.date, task.time),
-                      style: textTheme.bodySmall?.copyWith(color: textColor),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  Text(
+                    _formatDateTime(task.date, task.time),
+                    style: textTheme.bodySmall?.copyWith(color: textColor),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Icon(
                     Icons.check_circle,
-                    size: AppSpacing.sm,
+                    size: AppSpacing.sm * 1.5,
                     color: textColor,
                   ),
-                  const SizedBox(width: AppSpacing.xs),
+                  const SizedBox(width: AppSpacing.xs / 4),
                   Text(
                     _formatDuration(task.estimatedDuration),
                     style: textTheme.bodySmall?.copyWith(color: textColor),

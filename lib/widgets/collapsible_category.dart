@@ -57,7 +57,7 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
                   color: AppColors.primary,
                   size: AppSpacing.navigationIconSize,
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.xs),
                 Image.asset(
                   'assets/img/categories/${widget.iconName}.png',
                   width: AppSpacing.navigationIconSize,
@@ -65,7 +65,7 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
                   color: AppColors.primary,
                   colorBlendMode: BlendMode.srcIn,
                 ),
-                const SizedBox(width: AppSpacing.md),
+                const SizedBox(width: AppSpacing.xs),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,27 +91,36 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
             ),
           ),
         ),
-        if (_isExpanded)
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _items.length,
-            itemBuilder: (context, index) {
-              final item = _items[index];
-              return Padding(
-                padding: const EdgeInsets.only(
-                  left: AppSpacing.lg,
-                  bottom: AppSpacing.sm,
-                ),
-                child: item is Task
-                    ? TaskWidget(
-                        task: item,
-                        onChecked: (isChecked) => _checkTask(item, isChecked),
-                      )
-                    : Text(item.title, style: textTheme.bodyMedium),
-              );
-            },
+        if (_isExpanded) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            padding: const EdgeInsets.all(16),
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _items.length,
+              itemBuilder: (context, index) {
+                final item = _items[index];
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == _items.length - 1 ? 0 : 12,
+                  ),
+                  child: item is Task
+                      ? TaskWidget(
+                          task: item,
+                          categoryIconName: widget.iconName,
+                          onChecked: (isChecked) => _checkTask(item, isChecked),
+                        )
+                      : Text(item.title, style: textTheme.bodyMedium),
+                );
+              },
+            ),
           ),
+        ],
       ],
     );
   }
