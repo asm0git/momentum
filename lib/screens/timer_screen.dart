@@ -4,6 +4,7 @@ import '../app_theme.dart';
 import '../navigation_destinations.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/clock.dart';
+import '../widgets/focus_preset.dart';
 import '../widgets/primary_app_bar.dart';
 
 class TimerScreen extends StatelessWidget {
@@ -20,7 +21,32 @@ class TimerScreen extends StatelessWidget {
       body: Stack(
         children: [
           const Center(
-            child: Clock(),
+            child: const Padding(
+              padding: EdgeInsets.only(
+                top: AppSpacing.md,
+                left: AppSpacing.screenEdgePadding,
+                right: AppSpacing.screenEdgePadding,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: const Row(
+                        children: [FocusPreset()],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  const SizedBox(
+                    width: double.infinity,
+                    child: Clock(),
+                  ),
+                ],
+              ),
+            ),
           ),
           Positioned.fill(
             child: FloatingNavigationGroup(
