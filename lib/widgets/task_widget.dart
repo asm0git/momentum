@@ -70,15 +70,17 @@ class TaskWidget extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(
-          width: 24,
-          height: 24,
-          child: Checkbox(
-            value: task.isChecked,
-            onChanged: (value) => onChecked?.call(value ?? false),
-            activeColor: AppColors.primary,
-            shape: const CircleBorder(),
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        SizedBox.square(
+          dimension: AppSpacing.navigationIconSize,
+          child: Center(
+            child: Checkbox(
+              value: task.isChecked,
+              onChanged: (value) => onChecked?.call(value ?? false),
+              activeColor: AppColors.primary,
+              shape: const CircleBorder(),
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+            ),
           ),
         ),
         if (includeCategoryIcon && categoryIconName != null) ...[

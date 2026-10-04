@@ -26,18 +26,14 @@ class DashboardCategoryCard extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
-          child: _debugOutline(
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _debugOutline(_buildHeading(context, textTheme)),
-                _debugGap(AppSpacing.xs),
-                _debugOutline(
-                  _buildUpcomingPreview(textTheme, upcomingItem),
-                ),
-              ],
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeading(context, textTheme),
+              const SizedBox(height: AppSpacing.xs),
+              _buildUpcomingPreview(textTheme, upcomingItem),
+            ],
           ),
         ),
       ),
@@ -47,54 +43,44 @@ class DashboardCategoryCard extends StatelessWidget {
   Widget _buildHeading(BuildContext context, TextTheme textTheme) {
     return Row(
       children: [
-        _debugOutline(
-          Image.asset(
-            'assets/img/categories/${category.iconName}.png',
-            width: 20,
-            height: 20,
-            fit: BoxFit.contain,
-            color: AppColors.primary,
-            colorBlendMode: BlendMode.srcIn,
-          ),
+        Image.asset(
+          'assets/img/categories/${category.iconName}.png',
+          width: 20,
+          height: 20,
+          fit: BoxFit.contain,
+          color: AppColors.primary,
+          colorBlendMode: BlendMode.srcIn,
         ),
-        _debugGap(AppSpacing.xs, horizontal: true),
+        const SizedBox(width: AppSpacing.xs),
         Expanded(
-          child: _debugOutline(
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _debugOutline(
-                  Text(
-                    category.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.titleMedium?.copyWith(
-                      color: AppColors.primary,
-                    ),
-                  ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                category.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.titleMedium?.copyWith(
+                  color: AppColors.primary,
                 ),
-                _debugOutline(
-                  Text(
-                    '${category.pendingCount} pending',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.secondary,
-                    ),
-                  ),
+              ),
+              Text(
+                '${category.pendingCount} pending',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.bodySmall?.copyWith(
+                  color: AppColors.secondary,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        _debugGap(AppSpacing.xxs, horizontal: true),
-        _debugOutline(
-          const Icon(
-            Icons.chevron_right,
-            color: AppColors.onSurface,
-            size: 20,
-          ),
+        const SizedBox(width: AppSpacing.xxs),
+        const Icon(
+          Icons.chevron_right,
+          color: AppColors.onSurface,
+          size: 20,
         ),
       ],
     );
@@ -102,14 +88,12 @@ class DashboardCategoryCard extends StatelessWidget {
 
   Widget _buildUpcomingPreview(TextTheme textTheme, _UpcomingItem? item) {
     if (item == null) {
-      return _debugOutline(
-        Text(
-          'No upcoming tasks',
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.bodySmall?.copyWith(
-            color: AppColors.onSurface,
-          ),
+      return Text(
+        'No upcoming tasks',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: textTheme.bodySmall?.copyWith(
+          color: AppColors.onSurface,
         ),
       );
     }
@@ -117,24 +101,20 @@ class DashboardCategoryCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _debugOutline(
-          Text(
-            item.item.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.bodySmall?.copyWith(
-              color: AppColors.onSurface,
-            ),
+        Text(
+          item.item.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.bodySmall?.copyWith(
+            color: AppColors.onSurface,
           ),
         ),
-        _debugOutline(
-          Text(
-            _formatPreviewDate(item),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.labelSmall?.copyWith(
-              color: AppColors.onSurface,
-            ),
+        Text(
+          _formatPreviewDate(item),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.bodySmall?.copyWith(
+            color: AppColors.onSurface,
           ),
         ),
       ],
@@ -192,24 +172,6 @@ class DashboardCategoryCard extends StatelessWidget {
     return '$weekday, $hour:$minute $period';
   }
 
-  Widget _debugOutline(Widget child) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.dashboardBorder, width: 1),
-      ),
-      child: child,
-    );
-  }
-
-  Widget _debugGap(double size, {bool horizontal = false}) {
-    return Container(
-      width: horizontal ? size : null,
-      height: horizontal ? null : size,
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.dashboardBorder, width: 1),
-      ),
-    );
-  }
 }
 
 class _UpcomingItem {

@@ -22,7 +22,11 @@ class DayWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final day = date;
+    final textTheme = Theme.of(context).textTheme;
     final isToday = day != null && _sameDay(day, DateTime.now());
+    final circleSize = isToday
+        ? AppSpacing.calendarTodayCircleSize
+        : AppSpacing.selectedIconContainerSize;
     final circleColor = isToday
       ? AppColors.secondary
       : isSelected
@@ -51,8 +55,8 @@ class DayWidget extends StatelessWidget {
                   ? null
                   : Center(
                       child: Container(
-                        width: AppSpacing.selectedIconContainerSize,
-                        height: AppSpacing.selectedIconContainerSize,
+                        width: circleSize,
+                        height: circleSize,
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: circleColor,
@@ -60,12 +64,9 @@ class DayWidget extends StatelessWidget {
                         ),
                         child: Text(
                           '${day.day}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(
-                                color: textColor,
-                              ),
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: textColor,
+                          ),
                         ),
                       ),
                     ),
@@ -102,6 +103,7 @@ class _CategoryCountPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       decoration: const ShapeDecoration(
@@ -121,9 +123,7 @@ class _CategoryCountPill extends StatelessWidget {
           const SizedBox(width: 2),
           Text(
             '${category.items.whereType<Task>().length}',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.onSurface,
-            ),
+            style: textTheme.labelSmall?.copyWith(color: AppColors.onSurface),
           ),
         ],
       ),

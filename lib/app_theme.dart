@@ -17,7 +17,6 @@ class AppColors {
   static const popupScrim = Color(0x26000000);
   static const disabled = Color(0xFF94A3B8);
   static const calendarBorder = surface;
-  static const dashboardBorder = Color(0xFFFF0000);
 }
 
 class AppSpacing {
@@ -38,7 +37,10 @@ class AppSpacing {
   static const double navigationDockHeight = base * 9;
   static const double navigationIconSize = base * 3;
   static const double selectedIconContainerSize = base * 6;
-  static const double calendarDayHeight = 55;
+  static const double calendarTodayCircleSize = 36;
+  static const double calendarDayHeight = base * 10;
+  static const double calendarMonthControlSize = base * 4;
+  static const double calendarMonthChevronSize = base * 3;
   static const double addIconSize = base * 3;
   static const fabAnimationDuration = Duration(milliseconds: 240);
   static const double floatingGroupEdge = 20;
@@ -89,28 +91,40 @@ final appTheme = ThemeData(
       fontFamily: 'SFProDisplay',
       fontSize: 16,
       fontWeight: FontWeight.bold,
-      letterSpacing: -0.3
+      letterSpacing: -0.3,
+      height: 1.2,
     ),
     bodyLarge: TextStyle(
         fontFamily: 'SFProText',
         fontSize: 24,
         fontWeight: FontWeight.w600,
+        height: 1.2,
         letterSpacing: -0.3),
     bodyMedium: TextStyle(
         fontFamily: 'SFProText',
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        letterSpacing: -0.6),
+        letterSpacing: -0.6,
+        height: 1.2),
     bodySmall: TextStyle(
         fontFamily: 'SFProText',
         fontSize: 12,
         fontWeight: FontWeight.w500,
-        letterSpacing: -0.3),
+        letterSpacing: -0.4,
+        height: 1),
+    labelMedium: TextStyle(
+      fontFamily: 'SFProText',
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      letterSpacing: -0.3,
+      height: 1,
+    ),
     labelSmall: TextStyle(
         fontFamily: 'SFProRounded',
         fontSize: 10,
         fontWeight: FontWeight.w500,
-        letterSpacing: -0.3),
+        letterSpacing: -0.3,
+        height: 1)
   ),
   cardTheme: const CardThemeData(
     margin: EdgeInsets.all(AppSpacing.sm),

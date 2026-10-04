@@ -154,6 +154,7 @@ class _CalendarHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return Row(
         children: [
           _CalendarControl(
@@ -162,13 +163,20 @@ class _CalendarHeader extends StatelessWidget {
             onPressed: onPreviousMonth,
           ),
           Expanded(
-            child: Container(
-              height: AppSpacing.lg * 2,
-              alignment: Alignment.center,
-              child: Text(
-                '$monthName $year',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  monthName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.bodyLarge?.copyWith(color: AppColors.primary),
+                ),
+                Text(
+                  '$year',
+                  style: textTheme.bodySmall?.copyWith(color: AppColors.primary),
+                ),
+              ],
             ),
           ),
           _CalendarControl(
@@ -194,12 +202,20 @@ class _CalendarControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: AppSpacing.lg * 2,
-      height: AppSpacing.lg * 2,
+    return SizedBox.square(
+      dimension: AppSpacing.calendarMonthControlSize,
       child: IconButton(
         onPressed: onPressed,
         tooltip: tooltip,
+        iconSize: AppSpacing.calendarMonthChevronSize,
+        style: IconButton.styleFrom(
+          foregroundColor: AppColors.onSurface,
+          backgroundColor: AppColors.background,
+          padding: EdgeInsets.zero,
+          shape: const CircleBorder(
+            side: BorderSide(color: AppColors.calendarBorder),
+          ),
+        ),
         icon: Icon(icon),
       ),
     );

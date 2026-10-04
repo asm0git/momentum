@@ -50,11 +50,18 @@ class FocusPreset extends StatelessWidget {
                 '$workMinutes minutes',
                 style: textTheme.titleMedium,
               ),
+              
               Text(
                 '$breakMinutes minutes rest',
                 style: textTheme.bodySmall,
               ),
             ],
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          const Icon(
+            Icons.chevron_right,
+            color: AppColors.onSurface,
+            size: AppSpacing.navigationIconSize,
           ),
         ],
       ),

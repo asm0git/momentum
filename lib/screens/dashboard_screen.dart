@@ -16,9 +16,9 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const PrimaryAppBar(
+      appBar: PrimaryAppBar(
         key: ValueKey('dashboard-app-bar'),
         destination: AppDestination.dashboard,
       ),
@@ -293,6 +293,7 @@ class _ScreenBody extends StatelessWidget {
           textAlign: TextAlign.left,
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        const SizedBox(height: AppSpacing.xxs),
         IntrinsicHeight(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -331,6 +332,7 @@ class _ScreenBody extends StatelessWidget {
           textAlign: TextAlign.left,
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        const SizedBox(height: AppSpacing.xxs),
         TaskListContainer(
           items: tasks,
           appearanceType: TaskAppearanceType.withoutCategoryIcon,
@@ -348,6 +350,7 @@ class _ScreenBody extends StatelessWidget {
           textAlign: TextAlign.left,
           style: Theme.of(context).textTheme.titleMedium,
         ),
+        const SizedBox(height: AppSpacing.xxs),
         IntrinsicHeight(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,

@@ -28,18 +28,21 @@ class _TodoScreenState extends State<TodoScreen> {
       ),
       body: Stack(
         children: [
-          ListView(
+          ListView.separated(
             padding: const EdgeInsets.all(AppSpacing.md),
-            children: [
-              for (final category in _categories)
-                CollapsibleCategory(
-                  key: ValueKey(category.title),
-                  title: category.title,
-                  pendingLabel: '${category.pendingCount} pending',
-                  iconName: category.iconName,
-                  items: category.items,
-                ),
-            ],
+            itemCount: _categories.length,
+            separatorBuilder: (context, index) =>
+                const SizedBox(height: AppSpacing.xxs),
+            itemBuilder: (context, index) {
+              final category = _categories[index];
+              return CollapsibleCategory(
+                key: ValueKey(category.title),
+                title: category.title,
+                pendingLabel: '${category.pendingCount} pending',
+                iconName: category.iconName,
+                items: category.items,
+              );
+            },
           ),
           Positioned.fill(
             child: FloatingNavigationGroup(

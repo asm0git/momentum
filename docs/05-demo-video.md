@@ -1,8 +1,8 @@
 # Demo video
 
-**File:** `demo.mp4` in this folder, or the hosted link (see below)
-**Length:** aim for 3 to 5 minutes
-**Recorded on:** the device you used
+**File:** https://drive.google.com/drive/folders/1MwIXI-WKYCeKETUISc-WlHO22oYcv9nz?usp=drive_link
+**Length:** 4:32 minutes
+**Recorded on:** Windows
 
 ## What it shows
 
