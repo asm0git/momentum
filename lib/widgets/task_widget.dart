@@ -3,8 +3,14 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import '../data_models.dart';
 
-enum TaskAppearanceType { checkable, compact, completed }
+enum TaskAppearanceType {
+  checkable,
+  withoutCategoryIcon,
+  compact,
+  completed,
+}
 
+// Individual task row with checkbox, category icon, and task metadata.
 class TaskWidget extends StatelessWidget {
   const TaskWidget({
     super.key,
@@ -23,14 +29,19 @@ class TaskWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (appearanceType) {
       case TaskAppearanceType.checkable:
-        return _buildCheckableTask(context);
+        return _buildCheckableTask(context, includeCategoryIcon: true);
+      case TaskAppearanceType.withoutCategoryIcon:
+        return _buildCheckableTask(context, includeCategoryIcon: false);
       case TaskAppearanceType.compact:
       case TaskAppearanceType.completed:
         return const SizedBox.shrink();
     }
   }
 
-  Widget _buildCheckableTask(BuildContext context) {
+  Widget _buildCheckableTask(
+    BuildContext context, {
+    required bool includeCategoryIcon,
+  }) {
     final textTheme = Theme.of(context).textTheme;
     final textColor = task.isChecked ? AppColors.disabled : AppColors.onSurface;
     final titleStyle = textTheme.bodyMedium?.copyWith(
@@ -53,8 +64,8 @@ class TaskWidget extends StatelessWidget {
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
         ),
-        if (categoryIconName != null) ...[
-          const SizedBox(width: 12),
+        if (includeCategoryIcon && categoryIconName != null) ...[
+          const SizedBox(width: 8),
           Image.asset(
             'assets/img/categories/$categoryIconName.png',
             width: AppSpacing.navigationIconSize,
@@ -63,7 +74,7 @@ class TaskWidget extends StatelessWidget {
             colorBlendMode: BlendMode.srcIn,
           ),
         ],
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,7 +113,21 @@ class TaskWidget extends StatelessWidget {
     final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
-    return '$weekday, $hour:$minute $period';
+    final formattedTime = '$hour:$minute $period';
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final taskDate = DateTime(date.year, date.month, date.day);
+    final daysFromToday = taskDate.difference(todayDate).inDays;
+
+    if (daysFromToday == 0) {
+      return 'Today, $formattedTime';
+    }
+    if (daysFromToday > 0 && daysFromToday <= 7) {
+      return '$weekday, $formattedTime';
+    }
+
+    final month = _months[date.month - 1];
+    return '$weekday, ${date.day} $month, $formattedTime';
   }
 
   String _formatDuration(Duration duration) {
@@ -120,5 +145,20 @@ class TaskWidget extends StatelessWidget {
     'Friday',
     'Saturday',
     'Sunday',
+  ];
+
+  static const _months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
 }

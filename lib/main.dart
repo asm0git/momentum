@@ -27,6 +27,7 @@ void main() {
   );
 }
 
+// App shell that provides theme, routing, and the initial screen.
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 

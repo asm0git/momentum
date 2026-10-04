@@ -5,6 +5,7 @@ import '../navigation_destinations.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/primary_app_bar.dart';
 
+// Dashboard screen scaffold and its primary content area.
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
@@ -21,6 +22,7 @@ class DashboardScreen extends StatelessWidget {
   }
 }
 
+// Dashboard body behind the floating navigation group.
 class _ScreenBody extends StatelessWidget {
   const _ScreenBody();
 

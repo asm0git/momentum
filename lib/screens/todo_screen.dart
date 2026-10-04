@@ -7,6 +7,7 @@ import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/collapsible_category.dart';
 import '../widgets/primary_app_bar.dart';
 
+// To-do screen containing the expandable task categories.
 class TodoScreen extends StatefulWidget {
   const TodoScreen({super.key});
 
@@ -27,24 +28,18 @@ class _TodoScreenState extends State<TodoScreen> {
       ),
       body: Stack(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.md,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final category in _categories)
-                  CollapsibleCategory(
-                    key: ValueKey(category.title),
-                    title: category.title,
-                    pendingLabel: '${category.pendingCount} pending',
-                    iconName: category.iconName,
-                    items: category.items,
-                  ),
-              ],
-            ),
+          ListView(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            children: [
+              for (final category in _categories)
+                CollapsibleCategory(
+                  key: ValueKey(category.title),
+                  title: category.title,
+                  pendingLabel: '${category.pendingCount} pending',
+                  iconName: category.iconName,
+                  items: category.items,
+                ),
+            ],
           ),
           Positioned.fill(
             child: FloatingNavigationGroup(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 
+// Floating action button used to add a task from the bottom navigation area.
 class AddTaskButton extends StatelessWidget {
   const AddTaskButton({
     super.key,

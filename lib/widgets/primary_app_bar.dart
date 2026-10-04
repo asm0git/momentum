@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../app_theme.dart';
 import '../navigation_destinations.dart';
 
+// Shared colored app bar shown at the top of every main screen.
 class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
   const PrimaryAppBar({super.key, required this.destination});
 

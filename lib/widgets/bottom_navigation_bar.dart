@@ -6,6 +6,7 @@ import '../app_theme.dart';
 import '../navigation_destinations.dart';
 import 'add_task_button.dart';
 
+// Bottom navigation dock, add-task button, and expandable popup overlay.
 class FloatingNavigationGroup extends StatefulWidget {
   const FloatingNavigationGroup({super.key, required this.selectedIndex});
 
@@ -82,6 +83,35 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
 
     return Stack(
       children: [
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: AppSpacing.navigationDockHeight +
+              AppSpacing.floatingGroupBottom +
+              AppSpacing.sectionGap,
+          child: ClipRect(
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (bounds) {
+                return const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.navigationBlurMaskStart,
+                    AppColors.navigationBlurMaskEnd,
+                  ],
+                ).createShader(bounds);
+              },
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: const SizedBox.expand(
+                  child: ColoredBox(color: AppColors.navigationBlurTint),
+                ),
+              ),
+            ),
+          ),
+        ),
         if (_isPopupVisible) ...[
           Positioned.fill(
             child: BackdropFilter(
@@ -130,6 +160,7 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
           bottom: AppSpacing.floatingGroupBottom,
           child: SafeArea(
             top: false,
+            bottom: false,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -181,6 +212,7 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
   }
 }
 
+// Individual destination button inside the floating navigation dock.
 class _NavigationButton extends StatelessWidget {
   const _NavigationButton({
     super.key,

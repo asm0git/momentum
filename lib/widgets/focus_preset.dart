@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 
+// Compact timer preset card shown above the clock on the timer screen.
 class FocusPreset extends StatelessWidget {
   const FocusPreset({
     super.key,
@@ -17,12 +18,15 @@ class FocusPreset extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      margin: const EdgeInsets.all(AppSpacing.md),
+      margin: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.xs,
+      vertical: AppSpacing.md,
+    ),
       padding: const EdgeInsets.all(AppSpacing.md),
       alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(AppRadii.focusPreset),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -30,22 +34,22 @@ class FocusPreset extends StatelessWidget {
         children: [
           Image.asset(
             'assets/img/unselected/Timer.png',
-            width: 16,
-            height: 16,
+            width: AppSpacing.md,
+            height: AppSpacing.md,
             fit: BoxFit.contain,
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: AppSpacing.xs),
           Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 '$workMinutes mins',
-                style: textTheme.titleMedium?.copyWith(height: 1),
+                style: textTheme.titleMedium?.copyWith(height: 0),
               ),
               Text(
                 '$breakMinutes mins',
-                style: textTheme.bodySmall?.copyWith(height: 1),
+                style: textTheme.bodySmall?.copyWith(height: 0),
               ),
             ],
           ),

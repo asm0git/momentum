@@ -9,13 +9,20 @@ class AppColors {
   static const onSurface = Color(0xFF1E293B);
   static const error = Color(0xFF961212);
   static const transparent = Colors.transparent;
+  static const navigationBlurMaskStart = Colors.transparent;
+  static const navigationBlurMaskEnd = Colors.black;
+  // A small nonzero tint keeps the backdrop filter composited without adding
+  // a visible overlay over the content beneath the navigation dock.
+  static const navigationBlurTint = Color(0x12FFFFFF);
   static const popupScrim = Color(0x26000000);
   static const disabled = Color(0xFF94A3B8);
+  static const calendarBorder = surface;
 }
 
 class AppSpacing {
   static const double base = 8;
 
+  static const double xxs = base / 2;
   static const double xs = base;
   static const double sm = base;
   static const double md = base * 2;
@@ -30,11 +37,12 @@ class AppSpacing {
   static const double navigationDockHeight = base * 9;
   static const double navigationIconSize = base * 3;
   static const double selectedIconContainerSize = base * 6;
+  static const double calendarDayHeight = base * 9;
   static const double addIconSize = base * 3;
   static const fabAnimationDuration = Duration(milliseconds: 240);
-  static const double floatingGroupEdge = md;
-  static const double floatingGroupBottom = md;
-  static const double floatingGroupGap = sm;
+  static const double floatingGroupEdge = xs;
+  static const double floatingGroupBottom = lg;
+  static const double floatingGroupGap = xs;
   static const double popupHeight = base * 20;
 }
 
@@ -43,6 +51,7 @@ class AppRadii {
   static const double navigationDock = AppSpacing.base * 5;
   static const double navigationItem = AppSpacing.base * 1000;
   static const double popup = AppSpacing.base * 4;
+  static const double focusPreset = AppSpacing.base * 3;
 }
 
 final appTheme = ThemeData(
@@ -62,11 +71,21 @@ final appTheme = ThemeData(
       fontSize: 32,
       fontWeight: FontWeight.bold,
     ),
+    titleLarge: TextStyle(
+      fontFamily: 'SFProDisplay',
+      fontSize: 64,
+      fontWeight: FontWeight.bold,
+    ),
     titleMedium: TextStyle(
       fontFamily: 'SFProDisplay',
       fontSize: 16,
       fontWeight: FontWeight.bold,
     ),
+    bodyLarge: TextStyle(
+        fontFamily: 'SFProText',
+        fontSize: 24,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.4),
     bodyMedium: TextStyle(
         fontFamily: 'SFProText',
         fontSize: 16,

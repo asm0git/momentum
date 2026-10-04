@@ -5,6 +5,7 @@ import '../navigation_destinations.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/primary_app_bar.dart';
 
+// AI screen content shown below the primary app bar.
 class AiScreen extends StatelessWidget {
   const AiScreen({super.key});
 

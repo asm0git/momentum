@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../app_theme.dart';
 
+// Interactive countdown clock displayed on the timer screen.
 class Clock extends StatefulWidget {
   const Clock({super.key});
 
@@ -17,7 +18,6 @@ class _ClockState extends State<Clock> {
   bool _isRunning = false;
   Timer? _timer;
   double _previousProgress = 1;
-  bool _isPressed = false;
 
   void _toggleTimer() {
     if (_isRunning) {
@@ -66,17 +66,14 @@ class _ClockState extends State<Clock> {
     final textTheme = Theme.of(context).textTheme;
     final progress = _remainingSeconds / _totalSeconds;
 
-    return Align(
-      alignment: Alignment.topCenter,
-      child: SizedBox(
-        width: 450,
-        height: 450,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: AspectRatio(
+        aspectRatio: 1,
         child: Stack(
           alignment: Alignment.center,
           children: [
-            SizedBox(
-              width: 500,
-              height: 500,
+            Positioned.fill(
               child: GestureDetector(
                 onTap: _toggleTimer,
                 child: Container(
@@ -101,59 +98,61 @@ class _ClockState extends State<Clock> {
             Center(
               child: GestureDetector(
                 onTap: _toggleTimer,
-                onTapDown: (_) => setState(() => _isPressed = true),
-                onTapUp: (_) => setState(() => _isPressed = false),
-                onTapCancel: () => setState(() => _isPressed = false),
-                child: AnimatedScale(
-                  scale: _isPressed ? 0.96 : 1,
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutBack,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedOpacity(
+                      opacity: _isRunning ? 0.45 : 1,
+                      duration: AppSpacing.fabAnimationDuration,
+                      child: Container(
                         decoration: BoxDecoration(
                           border: Border.all(color: AppColors.surface),
                         ),
                         child: Text(
                           _isRunning ? 'Tap to pause' : 'Tap to start',
-                          style: textTheme.bodySmall?.copyWith(
+                          style: textTheme.bodyMedium?.copyWith(
                             color: AppColors.primary,
-                            fontSize: (textTheme.bodySmall?.fontSize ?? 12) * 2,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.surface),
-                        ),
-                        child: Text(
-                          _formatTime(_remainingSeconds),
-                          style: textTheme.headlineLarge?.copyWith(
-                            color: AppColors.secondary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: AppSpacing.lg * 4,
-                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.surface),
+                      ),
+                      child: Text(
+                        _formatTime(_remainingSeconds),
+                        style: textTheme.titleLarge?.copyWith(
+                          color: AppColors.secondary,
+                          fontWeight: FontWeight.bold,
+                          // fontSize: (textTheme.titleLarge?.fontSize ?? 64) * 3,
+                          letterSpacing: -2,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Container(
+                    ),
+                    const SizedBox(height: 0),
+                    AnimatedOpacity(
+                      opacity: _isRunning ? 0.45 : 1,
+                      duration: AppSpacing.fabAnimationDuration,
+                      child: Container(
                         decoration: BoxDecoration(
                           border: Border.all(color: AppColors.surface),
                         ),
                         child: Text(
                           '1:24:25',
-                          style: textTheme.bodyMedium?.copyWith(
+                          style: textTheme.bodyLarge?.copyWith(
                             color: AppColors.primary,
                             fontWeight: FontWeight.bold,
-                            fontSize:
-                                (textTheme.bodyMedium?.fontSize ?? 16),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Container(
+                    ),
+                    const SizedBox(height: 0),
+                    AnimatedOpacity(
+                      opacity: _isRunning ? 0.45 : 1,
+                      duration: AppSpacing.fabAnimationDuration,
+                      child: Container(
                         decoration: BoxDecoration(
                           border: Border.all(color: AppColors.surface),
                         ),
@@ -161,12 +160,11 @@ class _ClockState extends State<Clock> {
                           'Total focus time',
                           style: textTheme.bodySmall?.copyWith(
                             color: AppColors.primary,
-                            fontSize: (textTheme.bodySmall?.fontSize ?? 12) * 2,
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -184,7 +182,7 @@ class _ClockRingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final strokeWidth = AppSpacing.lg;
+    final strokeWidth = AppSpacing.md;
     final radius = (size.shortestSide - strokeWidth) / 2;
     final center = size.center(Offset.zero);
     final bounds = Rect.fromCircle(center: center, radius: radius);
