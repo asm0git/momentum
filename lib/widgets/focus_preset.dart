@@ -8,20 +8,23 @@ class FocusPreset extends StatelessWidget {
     super.key,
     this.workMinutes = 30,
     this.breakMinutes = 5,
+    this.margin,
   });
 
   final int workMinutes;
   final int breakMinutes;
+  final EdgeInsets? margin;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      margin: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.xs,
-      vertical: AppSpacing.md,
-    ),
+      margin: margin ??
+          const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xs,
+            vertical: AppSpacing.md,
+          ),
       padding: const EdgeInsets.all(AppSpacing.md),
       alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
@@ -44,12 +47,12 @@ class FocusPreset extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '$workMinutes mins',
-                style: textTheme.titleMedium?.copyWith(height: 0),
+                '$workMinutes minutes',
+                style: textTheme.titleMedium,
               ),
               Text(
-                '$breakMinutes mins',
-                style: textTheme.bodySmall?.copyWith(height: 0),
+                '$breakMinutes minutes rest',
+                style: textTheme.bodySmall,
               ),
             ],
           ),

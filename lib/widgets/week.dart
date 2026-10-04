@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../data_models.dart';
 import 'days.dart';
 
 class WeekWidget extends StatelessWidget {
@@ -8,36 +9,48 @@ class WeekWidget extends StatelessWidget {
     super.key,
     required this.days,
     required this.selectedDay,
+    required this.categories,
     required this.onDaySelected,
   });
 
   final List<DateTime?> days;
-  final DateTime? selectedDay;
+  final DateTime selectedDay;
+  final List<TaskCategory> categories;
   final ValueChanged<DateTime> onDaySelected;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.calendarBorder),
-      ),
-      child: Row(
+    return Row(
         children: [
           for (var index = 0; index < 7; index++)
-            Expanded(
-              child: DayWidget(
-                date: days[index],
-                isWeekend: index == 0 || index == 6,
-                isSelected: days[index] != null &&
-                  selectedDay != null &&
-                  _sameDay(days[index]!, selectedDay!),
-                onSelected: days[index] == null
-                    ? null
-                    : () => onDaySelected(days[index]!),
-              ),
-            ),
+            Expanded(child: _buildDay(index)),
         ],
-      ),
+    );
+  }
+
+  Widget _buildDay(int index) {
+    final date = days[index];
+    final dayCategories = date == null
+        ? const <TaskCategory>[]
+        : categories
+            .map(
+              (category) => TaskCategory(
+                title: category.title,
+                iconName: category.iconName,
+                items: category.items
+                    .whereType<Task>()
+                    .where((task) => _sameDay(task.date, date))
+                    .toList(),
+              ),
+            )
+            .where((category) => category.items.isNotEmpty)
+            .toList();
+    return DayWidget(
+      date: date,
+      categories: dayCategories,
+      isWeekend: index == 0 || index == 6,
+      isSelected: date != null && _sameDay(date, selectedDay),
+      onSelected: date == null ? null : () => onDaySelected(date),
     );
   }
 }

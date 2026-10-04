@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../data_models.dart';
 import 'week.dart';
 
 class CalendarWidget extends StatefulWidget {
-  const CalendarWidget({super.key});
+  const CalendarWidget({
+    super.key,
+    this.categories = const [],
+    this.onDateSelected,
+  });
+
+  final List<TaskCategory> categories;
+  final ValueChanged<DateTime>? onDateSelected;
 
   @override
   State<CalendarWidget> createState() => _CalendarWidgetState();
@@ -28,9 +36,14 @@ class _CalendarWidgetState extends State<CalendarWidget> {
   static const _weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   late DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
-  DateTime? _selectedDay;
+  late DateTime _selectedDay = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
 
   void _changeMonth(int offset) {
+    late DateTime selectedDate;
     setState(() {
       _visibleMonth = DateTime(
         _visibleMonth.year,
@@ -41,14 +54,14 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         _visibleMonth.month + 1,
         0,
       ).day;
-      if (_selectedDay != null) {
-        _selectedDay = DateTime(
-          _visibleMonth.year,
-          _visibleMonth.month,
-          _selectedDay!.day.clamp(1, lastDay),
-        );
-      }
+      selectedDate = DateTime(
+        _visibleMonth.year,
+        _visibleMonth.month,
+        _selectedDay.day.clamp(1, lastDay),
+      );
+      _selectedDay = selectedDate;
     });
+    widget.onDateSelected?.call(selectedDate);
   }
 
   @override
@@ -76,10 +89,12 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           );
         }),
         selectedDay: _selectedDay,
+        categories: widget.categories,
         onDaySelected: (day) {
           setState(() {
             _selectedDay = day;
           });
+          widget.onDateSelected?.call(day);
         },
       ),
     );
@@ -100,9 +115,6 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                 child: Container(
                   height: AppSpacing.lg,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.calendarBorder),
-                  ),
                   child: Text(
                     _weekdayNames[index],
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -116,13 +128,11 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        Expanded(
-          child: Column(
-            children: [
-              for (final week in weeks)
-                SizedBox(height: AppSpacing.calendarDayHeight, child: week),
-            ],
-          ),
+        Column(
+          children: [
+            for (final week in weeks)
+              SizedBox(height: AppSpacing.calendarDayHeight, child: week),
+          ],
         ),
       ],
     );
@@ -144,11 +154,7 @@ class _CalendarHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.calendarBorder),
-      ),
-      child: Row(
+    return Row(
         children: [
           _CalendarControl(
             icon: Icons.chevron_left,
@@ -159,11 +165,6 @@ class _CalendarHeader extends StatelessWidget {
             child: Container(
               height: AppSpacing.lg * 2,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border: Border.symmetric(
-                  vertical: BorderSide(color: AppColors.calendarBorder),
-                ),
-              ),
               child: Text(
                 '$monthName $year',
                 style: Theme.of(context).textTheme.titleMedium,
@@ -176,7 +177,6 @@ class _CalendarHeader extends StatelessWidget {
             onPressed: onNextMonth,
           ),
         ],
-      ),
     );
   }
 }

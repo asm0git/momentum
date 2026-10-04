@@ -46,23 +46,57 @@ class _TimerScreenState extends State<TimerScreen> {
                     children: [
                       SizedBox(
                         width: double.infinity,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Padding(
-                            padding: EdgeInsets.only(
-                              left: AppSpacing.screenEdgePadding -
-                                  AppSpacing.xs,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.screenEdgePadding,
+                              ),
+                              child: Text(
+                                'Presets',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
                             ),
-                            child: const Row(
-                              children: [
-                                FocusPreset(workMinutes: 30, breakMinutes: 5),
-                                FocusPreset(workMinutes: 25, breakMinutes: 2),
-                                FocusPreset(workMinutes: 45, breakMinutes: 10),
-                                FocusPreset(workMinutes: 50, breakMinutes: 10),
-                                FocusPreset(workMinutes: 60, breakMinutes: 15),
-                              ],
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  left: AppSpacing.screenEdgePadding +
+                                      AppSpacing.xxs,
+                                ),
+                                child: const Row(
+                                  children: [
+                                    FocusPreset(
+                                      workMinutes: 30,
+                                      breakMinutes: 5,
+                                      margin: EdgeInsets.all(AppSpacing.xxs),
+                                    ),
+                                    FocusPreset(
+                                      workMinutes: 25,
+                                      breakMinutes: 2,
+                                      margin: EdgeInsets.all(AppSpacing.xxs),
+                                    ),
+                                    FocusPreset(
+                                      workMinutes: 45,
+                                      breakMinutes: 10,
+                                      margin: EdgeInsets.all(AppSpacing.xxs),
+                                    ),
+                                    FocusPreset(
+                                      workMinutes: 50,
+                                      breakMinutes: 10,
+                                      margin: EdgeInsets.all(AppSpacing.xxs),
+                                    ),
+                                    FocusPreset(
+                                      workMinutes: 60,
+                                      breakMinutes: 15,
+                                      margin: EdgeInsets.all(AppSpacing.xxs),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: AppSpacing.xs),

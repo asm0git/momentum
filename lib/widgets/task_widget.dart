@@ -7,6 +7,7 @@ enum TaskAppearanceType {
   checkable,
   withoutCategoryIcon,
   compact,
+  calendarCellMini,
   completed,
 }
 
@@ -33,9 +34,26 @@ class TaskWidget extends StatelessWidget {
       case TaskAppearanceType.withoutCategoryIcon:
         return _buildCheckableTask(context, includeCategoryIcon: false);
       case TaskAppearanceType.compact:
+      case TaskAppearanceType.calendarCellMini:
+        return _buildCalendarCellMini(context);
       case TaskAppearanceType.completed:
         return const SizedBox.shrink();
     }
+  }
+
+  Widget _buildCalendarCellMini(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final textColor = task.isChecked ? AppColors.disabled : AppColors.onSurface;
+
+    return Text(
+      task.title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: textTheme.labelSmall?.copyWith(
+        color: textColor,
+        decoration: task.isChecked ? TextDecoration.lineThrough : null,
+      ),
+    );
   }
 
   Widget _buildCheckableTask(
@@ -47,7 +65,6 @@ class TaskWidget extends StatelessWidget {
     final titleStyle = textTheme.bodyMedium?.copyWith(
       color: textColor,
       decoration: task.isChecked ? TextDecoration.lineThrough : null,
-      height: 1.15,
     );
 
     return Row(
@@ -80,7 +97,6 @@ class TaskWidget extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(task.title, style: titleStyle),
-              const SizedBox(height: 2),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [

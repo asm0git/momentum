@@ -24,34 +24,16 @@ class TaskListContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final isScrollable = items.length > 4;
-    final bodyMediumSize = textTheme.bodyMedium?.fontSize ?? 16;
-    final bodySmallSize = textTheme.bodySmall?.fontSize ?? 12;
-    final estimatedTaskHeight =
-        (bodyMediumSize * 1.15) + 2 + (bodySmallSize * 1.2);
-    final maxTaskContentHeight = (estimatedTaskHeight * _maxVisibleTasks) +
-        (AppSpacing.md * (_maxVisibleTasks - 1));
-    final taskContent = isScrollable
-        ? ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: maxTaskContentHeight,
-            ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: items.length,
-              itemBuilder: (context, index) =>
-                  _buildTaskItem(context, index, textTheme),
-            ),
-          )
-        : Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var index = 0; index < items.length; index++)
-                _buildTaskItem(context, index, textTheme),
-            ],
-          );
+    final visibleItems = [...items]
+      ..sort(_compareChronologically);
+    final limitedItems = visibleItems.take(_maxVisibleTasks).toList();
+    final taskContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var index = 0; index < limitedItems.length; index++)
+          _buildTaskItem(context, index, textTheme, limitedItems),
+      ],
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -63,15 +45,38 @@ class TaskListContainer extends StatelessWidget {
     );
   }
 
+  int _compareChronologically(PlannerItem first, PlannerItem second) {
+    final firstDateTime = _dateTimeFor(first);
+    final secondDateTime = _dateTimeFor(second);
+    return firstDateTime.compareTo(secondDateTime);
+  }
+
+  DateTime _dateTimeFor(PlannerItem item) {
+    final time = switch (item) {
+      Task task => task.time,
+      Event event => event.start,
+      _ => const TimeOfDay(hour: 0, minute: 0),
+    };
+
+    return DateTime(
+      item.date.year,
+      item.date.month,
+      item.date.day,
+      time.hour,
+      time.minute,
+    );
+  }
+
   Widget _buildTaskItem(
     BuildContext context,
     int index,
     TextTheme textTheme,
+    List<PlannerItem> visibleItems,
   ) {
-    final item = items[index];
+    final item = visibleItems[index];
     return Padding(
       padding: EdgeInsets.only(
-        bottom: index == items.length - 1 ? 0 : AppSpacing.md,
+        bottom: index == visibleItems.length - 1 ? 0 : AppSpacing.md,
       ),
       child: item is Task
           ? TaskWidget(

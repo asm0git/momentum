@@ -17,6 +17,7 @@ class AppColors {
   static const popupScrim = Color(0x26000000);
   static const disabled = Color(0xFF94A3B8);
   static const calendarBorder = surface;
+  static const dashboardBorder = Color(0xFFFF0000);
 }
 
 class AppSpacing {
@@ -37,13 +38,15 @@ class AppSpacing {
   static const double navigationDockHeight = base * 9;
   static const double navigationIconSize = base * 3;
   static const double selectedIconContainerSize = base * 6;
-  static const double calendarDayHeight = base * 9;
+  static const double calendarDayHeight = 55;
   static const double addIconSize = base * 3;
   static const fabAnimationDuration = Duration(milliseconds: 240);
-  static const double floatingGroupEdge = xs;
-  static const double floatingGroupBottom = lg;
-  static const double floatingGroupGap = xs;
+  static const double floatingGroupEdge = 20;
+  static const double floatingGroupBottom = 28;
+  static const double floatingGroupGap = 12;
   static const double popupHeight = base * 20;
+  static const double dashboardCategoryWidth = base * 20;
+  static const double focusPresetWidth = base * 23;
 }
 
 class AppRadii {
@@ -66,6 +69,12 @@ final appTheme = ThemeData(
     error: AppColors.error,
   ),
   textTheme: const TextTheme(
+    displayLarge: TextStyle(
+      fontFamily: 'SFProDisplay',
+      fontSize: 72,
+      fontWeight: FontWeight.bold,
+      height: 1,
+    ),
     headlineLarge: TextStyle(
       fontFamily: 'SFProDisplay',
       fontSize: 32,
@@ -80,27 +89,28 @@ final appTheme = ThemeData(
       fontFamily: 'SFProDisplay',
       fontSize: 16,
       fontWeight: FontWeight.bold,
+      letterSpacing: -0.3
     ),
     bodyLarge: TextStyle(
         fontFamily: 'SFProText',
         fontSize: 24,
         fontWeight: FontWeight.w600,
-        letterSpacing: -0.4),
+        letterSpacing: -0.3),
     bodyMedium: TextStyle(
         fontFamily: 'SFProText',
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        letterSpacing: -0.4),
+        letterSpacing: -0.6),
     bodySmall: TextStyle(
         fontFamily: 'SFProText',
         fontSize: 12,
         fontWeight: FontWeight.w500,
-        letterSpacing: -0.4),
+        letterSpacing: -0.3),
     labelSmall: TextStyle(
         fontFamily: 'SFProRounded',
-        fontSize: 8,
+        fontSize: 10,
         fontWeight: FontWeight.w500,
-        letterSpacing: -0.4),
+        letterSpacing: -0.3),
   ),
   cardTheme: const CardThemeData(
     margin: EdgeInsets.all(AppSpacing.sm),

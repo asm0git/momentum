@@ -67,7 +67,7 @@ class _ClockState extends State<Clock> {
     final progress = _remainingSeconds / _totalSeconds;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 60),
       child: AspectRatio(
         aspectRatio: 1,
         child: Stack(
@@ -125,9 +125,6 @@ class _ClockState extends State<Clock> {
                         _formatTime(_remainingSeconds),
                         style: textTheme.titleLarge?.copyWith(
                           color: AppColors.secondary,
-                          fontWeight: FontWeight.bold,
-                          // fontSize: (textTheme.titleLarge?.fontSize ?? 64) * 3,
-                          letterSpacing: -2,
                         ),
                       ),
                     ),
@@ -143,7 +140,6 @@ class _ClockState extends State<Clock> {
                           '1:24:25',
                           style: textTheme.bodyLarge?.copyWith(
                             color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
@@ -182,7 +178,7 @@ class _ClockRingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final strokeWidth = AppSpacing.md;
+    final strokeWidth = AppSpacing.xs;
     final radius = (size.shortestSide - strokeWidth) / 2;
     final center = size.center(Offset.zero);
     final bounds = Rect.fromCircle(center: center, radius: radius);
