@@ -4,6 +4,20 @@ One entry per week, newest at the top, written **during** that week. Five minute
 each. They are the record of how the project actually went, and they make your
 final reflection almost write itself.
 
+# Week of: September 27, 2026
+
+## My goal this week
+This week, I aimed to generally complete 1-2 screens and a decent amount of core widgets, especially those repeated across different screens like tasks, events, checklists, and cards.
+
+## What I did
+I focused on building core reusable UI components, including a dynamic bottom navigation bar and an animated floating action button. On the backend, I established the foundational data models for tasks and events, populating them with mock data for testing. I also structured the main layout for the To-Do screen using collapsible category sections. Finally, I developed the primary task widget, programming it to visually update and automatically move to the bottom of the list when checked off.
+
+## What blocked me
+While I did not encounter major technical setbacks, I struggled with time constraints due to my other responsibilities. Within the project itself, I spent a significant amount of time coding the collapsible accordion section widgets for the To-Do screen. Specifically, managing the state of the dropdown toggle while getting the nested ListView.builder to size correctly inside a vertical Column—which required figuring out the shrinkWrap: true behavior—took much longer than expected to prevent unbounded height errors.
+
+## What I learned
+Technically, with the help of AI I learned how to conditionally recolor PNGs and SVGs based on active states. Furthermore, I learned how to "vibe code" efficiently through proper prompt engineering. By explicitly defining layout constraints first—such as 16px margins, exact typography, and precise row-by-row widget structures—I was able to guide the AI to generate much better code, which drastically reduced the time I spent debugging layout issues.
+
 ## Week of: September 22, 2026
 
 ## What changed this week
@@ -25,3 +39,4 @@ Develop the AI-powered task prioritization and daily planner.
 Implement location-based reminders.
 Test, debug, and refine the application.
 Complete documentation and prepare the final presentation.
+
