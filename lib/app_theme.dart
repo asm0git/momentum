@@ -46,7 +46,6 @@ class AppSpacing {
   static const double floatingGroupEdge = 20;
   static const double floatingGroupBottom = 28;
   static const double floatingGroupGap = 12;
-  static const double popupHeight = base * 20;
   static const double dashboardCategoryWidth = base * 20;
   static const double focusPresetWidth = base * 23;
 }

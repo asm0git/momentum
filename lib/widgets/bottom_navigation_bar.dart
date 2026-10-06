@@ -4,6 +4,7 @@ import 'package:flutter/physics.dart';
 
 import '../app_theme.dart';
 import '../navigation_destinations.dart';
+import 'add_item_popup.dart';
 import 'add_task_button.dart';
 
 // Bottom navigation dock, add-task button, and expandable popup overlay.
@@ -18,8 +19,9 @@ class FloatingNavigationGroup extends StatefulWidget {
 }
 
 class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
-  with TickerProviderStateMixin {
+    with TickerProviderStateMixin {
   static const _items = AppDestination.values;
+  final _overlayController = OverlayPortalController();
   late final AnimationController _fabController = AnimationController(
     vsync: this,
     duration: AppSpacing.fabAnimationDuration,
@@ -51,13 +53,15 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
       _isPopupOpen = true;
       _isPopupVisible = true;
     });
+    _overlayController.show();
     _fabController.forward();
     _popupController.animateWith(_popupSpring(from: 0, to: 1));
   }
 
   Future<void> _hidePopup() async {
     await _popupController.animateWith(_popupSpring(from: 1, to: 0));
-    if (mounted) {
+    if (mounted && !_isPopupOpen) {
+      _overlayController.hide();
       setState(() {
         _isPopupVisible = false;
       });
@@ -81,6 +85,20 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
 
+    return OverlayPortal.targetsRootOverlay(
+      controller: _overlayController,
+      overlayChildBuilder: (context) => Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: _buildNavigationGroup(primary, showPopup: true),
+      ),
+      child: _isPopupVisible
+          ? const SizedBox.expand()
+          : _buildNavigationGroup(primary, showPopup: false),
+    );
+  }
+
+  Widget _buildNavigationGroup(Color primary, {required bool showPopup}) {
     return Stack(
       children: [
         Positioned(
@@ -112,9 +130,10 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
             ),
           ),
         ),
-        if (_isPopupVisible) ...[
+        if (showPopup) ...[
           Positioned.fill(
             child: BackdropFilter(
+              key: const ValueKey('add-item-backdrop'),
               filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
               child: const ColoredBox(color: AppColors.popupScrim),
             ),
@@ -127,18 +146,8 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
                 AppSpacing.floatingGroupGap,
             child: AnimatedBuilder(
               animation: _popupController,
-              child: const SizedBox(
-                height: AppSpacing.popupHeight,
-                child: DecoratedBox(
-                  decoration: ShapeDecoration(
-                    color: AppColors.background,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(
-                        Radius.circular(AppRadii.popup),
-                      ),
-                    ),
-                  ),
-                ),
+              child: const AddItemPopup(
+                key: ValueKey('add-item-popup'),
               ),
               builder: (context, child) {
                 final progress =
@@ -252,4 +261,3 @@ class _NavigationButton extends StatelessWidget {
     );
   }
 }
-

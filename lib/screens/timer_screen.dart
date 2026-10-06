@@ -25,6 +25,11 @@ class _TimerScreenState extends State<TimerScreen> {
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final dateLabel = MaterialLocalizations.of(context).formatMediumDate(today);
+    final agendaIcons = {
+      for (final category in _categories)
+        for (final item in _todayTasks(category, today))
+          item: category.iconName,
+    };
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -42,99 +47,93 @@ class _TimerScreenState extends State<TimerScreen> {
                   bottom: AppSpacing.lg,
                 ),
                 child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.screenEdgePadding,
-                              ),
-                              child: Text(
-                                'Presets',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.screenEdgePadding,
                             ),
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Padding(
-                                padding: const EdgeInsets.only(
-                                  left: AppSpacing.screenEdgePadding +
-                                      AppSpacing.xxs,
-                                ),
-                                child: const Row(
-                                  children: [
-                                    FocusPreset(
-                                      workMinutes: 30,
-                                      breakMinutes: 5,
-                                      margin: EdgeInsets.all(AppSpacing.xxs),
-                                    ),
-                                    FocusPreset(
-                                      workMinutes: 25,
-                                      breakMinutes: 2,
-                                      margin: EdgeInsets.all(AppSpacing.xxs),
-                                    ),
-                                    FocusPreset(
-                                      workMinutes: 45,
-                                      breakMinutes: 10,
-                                      margin: EdgeInsets.all(AppSpacing.xxs),
-                                    ),
-                                    FocusPreset(
-                                      workMinutes: 50,
-                                      breakMinutes: 10,
-                                      margin: EdgeInsets.all(AppSpacing.xxs),
-                                    ),
-                                    FocusPreset(
-                                      workMinutes: 60,
-                                      breakMinutes: 15,
-                                      margin: EdgeInsets.all(AppSpacing.xxs),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      const SizedBox(
-                        width: double.infinity,
-                        child: Clock(),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.screenEdgePadding,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Today, $dateLabel',
+                            child: Text(
+                              'Presets',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
-                            const SizedBox(height: AppSpacing.xs),
-                            for (final category in _categories)
-                              if (_todayTasks(category, today).isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppSpacing.xs,
+                          ),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                left: AppSpacing.screenEdgePadding +
+                                    AppSpacing.xxs,
+                              ),
+                              child: const Row(
+                                children: [
+                                  FocusPreset(
+                                    workMinutes: 30,
+                                    breakMinutes: 5,
+                                    margin: EdgeInsets.all(AppSpacing.xxs),
                                   ),
-                                  child: TaskListContainer(
-                                    items: _todayTasks(category, today),
-                                    categoryIconName: category.iconName,
-                                    appearanceType:
-                                        TaskAppearanceType.checkable,
-                                    onChecked: _checkTask,
+                                  FocusPreset(
+                                    workMinutes: 25,
+                                    breakMinutes: 2,
+                                    margin: EdgeInsets.all(AppSpacing.xxs),
                                   ),
-                                ),
-                          ],
-                        ),
+                                  FocusPreset(
+                                    workMinutes: 45,
+                                    breakMinutes: 10,
+                                    margin: EdgeInsets.all(AppSpacing.xxs),
+                                  ),
+                                  FocusPreset(
+                                    workMinutes: 50,
+                                    breakMinutes: 10,
+                                    margin: EdgeInsets.all(AppSpacing.xxs),
+                                  ),
+                                  FocusPreset(
+                                    workMinutes: 60,
+                                    breakMinutes: 15,
+                                    margin: EdgeInsets.all(AppSpacing.xxs),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    const SizedBox(
+                      width: double.infinity,
+                      child: Clock(),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.screenEdgePadding,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Today, $dateLabel',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          if (agendaIcons.isNotEmpty)
+                            TaskListContainer(
+                              items: agendaIcons.keys.toList(),
+                              categoryIconForItem: (item) => agendaIcons[item],
+                              maxVisibleItems: null,
+                              appearanceType: TaskAppearanceType.checkable,
+                              onChecked: _checkTask,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

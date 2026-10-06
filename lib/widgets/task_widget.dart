@@ -9,9 +9,10 @@ enum TaskAppearanceType {
   compact,
   calendarCellMini,
   completed,
+  event,
 }
 
-// Individual task row with checkbox, category icon, and task metadata.
+// Shared task/event row with status icon, category icon, and scheduling details.
 class TaskWidget extends StatelessWidget {
   const TaskWidget({
     super.key,
@@ -19,9 +20,20 @@ class TaskWidget extends StatelessWidget {
     this.categoryIconName,
     this.appearanceType = TaskAppearanceType.checkable,
     this.onChecked,
-  });
+  }) : assert(appearanceType != TaskAppearanceType.event),
+       event = null;
 
-  final Task task;
+  const TaskWidget.event({
+    super.key,
+    required Event event,
+    this.categoryIconName,
+  }) : task = null,
+       event = event,
+       appearanceType = TaskAppearanceType.event,
+       onChecked = null;
+
+  final Task? task;
+  final Event? event;
   final String? categoryIconName;
   final TaskAppearanceType appearanceType;
   final ValueChanged<bool>? onChecked;
@@ -38,10 +50,13 @@ class TaskWidget extends StatelessWidget {
         return _buildCalendarCellMini(context);
       case TaskAppearanceType.completed:
         return const SizedBox.shrink();
+      case TaskAppearanceType.event:
+        return _buildEvent(context, event!);
     }
   }
 
   Widget _buildCalendarCellMini(BuildContext context) {
+    final task = this.task!;
     final textTheme = Theme.of(context).textTheme;
     final textColor = task.isChecked ? AppColors.disabled : AppColors.onSurface;
 
@@ -60,6 +75,7 @@ class TaskWidget extends StatelessWidget {
     BuildContext context, {
     required bool includeCategoryIcon,
   }) {
+    final task = this.task!;
     final textTheme = Theme.of(context).textTheme;
     final textColor = task.isChecked ? AppColors.disabled : AppColors.onSurface;
     final titleStyle = textTheme.bodyMedium?.copyWith(
@@ -126,26 +142,88 @@ class TaskWidget extends StatelessWidget {
     );
   }
 
-  String _formatDateTime(DateTime date, TimeOfDay time) {
-    final weekday = _weekdays[date.weekday - 1];
+  Widget _buildEvent(BuildContext context, Event event) {
+    final textTheme = Theme.of(context).textTheme;
+    final textColor = event.allDay ? AppColors.secondary : AppColors.onSurface;
+    final schedule = event.allDay
+        ? '${_formatDate(event.date)}, All day'
+        : '${_formatDate(event.date)}, ${_formatTime(event.start)} - '
+            '${_formatTime(event.end)}';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox.square(
+          dimension: AppSpacing.navigationIconSize,
+          child: Center(
+            child: Image.asset(
+              'assets/img/categories/all-day.png',
+              width: 18,
+              height: 18,
+              fit: BoxFit.contain,
+              color: textColor,
+              colorBlendMode: BlendMode.srcIn,
+              semanticLabel: event.allDay ? 'All-day event' : 'Event',
+            ),
+          ),
+        ),
+        if (categoryIconName != null) ...[
+          const SizedBox(width: AppSpacing.xs),
+          Image.asset(
+            'assets/img/categories/$categoryIconName.png',
+            width: AppSpacing.navigationIconSize,
+            height: AppSpacing.navigationIconSize,
+            color: textColor,
+            colorBlendMode: BlendMode.srcIn,
+          ),
+        ],
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                event.title,
+                style: textTheme.bodyMedium?.copyWith(color: textColor),
+              ),
+              Text(
+                schedule,
+                style: textTheme.bodySmall?.copyWith(color: textColor),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatDateTime(DateTime date, TimeOfDay time) =>
+      '${_formatDate(date)}, ${_formatTime(time)}';
+
+  String _formatTime(TimeOfDay time) {
     final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
-    final formattedTime = '$hour:$minute $period';
+    return '$hour:$minute $period';
+  }
+
+  String _formatDate(DateTime date) {
+    final weekday = _weekdays[date.weekday - 1];
     final today = DateTime.now();
     final todayDate = DateTime(today.year, today.month, today.day);
     final taskDate = DateTime(date.year, date.month, date.day);
     final daysFromToday = taskDate.difference(todayDate).inDays;
 
     if (daysFromToday == 0) {
-      return 'Today, $formattedTime';
+      return 'Today';
     }
     if (daysFromToday > 0 && daysFromToday <= 7) {
-      return '$weekday, $formattedTime';
+      return weekday;
     }
 
     final month = _months[date.month - 1];
-    return '$weekday, ${date.day} $month, $formattedTime';
+    return '$weekday, ${date.day} $month';
   }
 
   String _formatDuration(Duration duration) {

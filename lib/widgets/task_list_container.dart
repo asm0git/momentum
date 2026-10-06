@@ -12,12 +12,17 @@ class TaskListContainer extends StatelessWidget {
     super.key,
     required this.items,
     this.categoryIconName,
+    this.categoryIconForItem,
+    this.maxVisibleItems = _maxVisibleTasks,
     this.appearanceType = TaskAppearanceType.withoutCategoryIcon,
     this.onChecked,
-  });
+  }) : assert(maxVisibleItems == null || maxVisibleItems >= 0);
 
   final List<PlannerItem> items;
   final String? categoryIconName;
+  final String? Function(PlannerItem item)? categoryIconForItem;
+  // Null displays the complete agenda; dashboard previews keep the default cap.
+  final int? maxVisibleItems;
   final TaskAppearanceType appearanceType;
   final void Function(Task task, bool isChecked)? onChecked;
 
@@ -26,7 +31,9 @@ class TaskListContainer extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final visibleItems = [...items]
       ..sort(_compareChronologically);
-    final limitedItems = visibleItems.take(_maxVisibleTasks).toList();
+    final limitedItems = maxVisibleItems == null
+        ? visibleItems
+        : visibleItems.take(maxVisibleItems!).toList();
     final taskContent = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -74,6 +81,7 @@ class TaskListContainer extends StatelessWidget {
     List<PlannerItem> visibleItems,
   ) {
     final item = visibleItems[index];
+    final iconName = categoryIconForItem?.call(item) ?? categoryIconName;
     return Padding(
       padding: EdgeInsets.only(
         bottom: index == visibleItems.length - 1 ? 0 : AppSpacing.md,
@@ -81,13 +89,21 @@ class TaskListContainer extends StatelessWidget {
       child: item is Task
           ? TaskWidget(
               task: item,
-              categoryIconName: categoryIconName,
+              categoryIconName: iconName,
               appearanceType: appearanceType,
               onChecked: onChecked == null
                   ? null
                   : (isChecked) => onChecked!(item, isChecked),
             )
-          : Text(item.title, style: textTheme.bodyMedium),
+          : item is Event
+              ? TaskWidget.event(
+                  event: item,
+                  categoryIconName:
+                      appearanceType == TaskAppearanceType.withoutCategoryIcon
+                          ? null
+                          : iconName,
+                )
+              : Text(item.title, style: textTheme.bodyMedium),
     );
   }
 }

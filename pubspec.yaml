@@ -32,6 +32,7 @@ flutter:
     - assets/img/categories/personal.png
     - assets/img/categories/school.png
     - assets/img/categories/work.png
+    - assets/img/categories/all-day.png
     - assets/img/unselected/AI.png
     - assets/img/unselected/Calendar.png
     - assets/img/unselected/Home.png

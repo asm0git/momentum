@@ -155,7 +155,8 @@ class _ScreenBody extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Up next:', style: textTheme.bodySmall?.copyWith(
+          Text('Up next:',
+              style: textTheme.bodySmall?.copyWith(
                 color: AppColors.primary,
               )),
           Text('No upcoming items', style: textStyle),
@@ -301,7 +302,8 @@ class _ScreenBody extends StatelessWidget {
               children: [
                 for (var index = 0; index < categories.length; index++) ...[
                   DashboardCategoryCard(
-                    key: ValueKey('dashboard-category-${categories[index].title}'),
+                    key: ValueKey(
+                        'dashboard-category-${categories[index].title}'),
                     category: categories[index],
                   ),
                   if (index < categories.length - 1)

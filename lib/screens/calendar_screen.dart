@@ -23,6 +23,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final agendaIcons = {
+      for (final category in _categories)
+        for (final item in _tasksForDate(category)) item: category.iconName,
+    };
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const PrimaryAppBar(
@@ -58,17 +62,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         ),
                   ),
                   const SizedBox(height: AppSpacing.xs),
-                  for (final category in _categories)
-                    if (_tasksForDate(category).isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                        child: TaskListContainer(
-                          items: _tasksForDate(category),
-                          categoryIconName: category.iconName,
-                          appearanceType: TaskAppearanceType.checkable,
-                          onChecked: _checkTask,
-                        ),
-                      ),
+                  if (agendaIcons.isNotEmpty)
+                    TaskListContainer(
+                      items: agendaIcons.keys.toList(),
+                      categoryIconForItem: (item) => agendaIcons[item],
+                      maxVisibleItems: null,
+                      appearanceType: TaskAppearanceType.checkable,
+                      onChecked: _checkTask,
+                    ),
                 ],
               ),
             ),

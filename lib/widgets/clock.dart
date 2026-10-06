@@ -76,22 +76,17 @@ class _ClockState extends State<Clock> {
             Positioned.fill(
               child: GestureDetector(
                 onTap: _toggleTimer,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.surface),
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(
+                    begin: _previousProgress,
+                    end: progress,
                   ),
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween<double>(
-                      begin: _previousProgress,
-                      end: progress,
-                    ),
-                    duration: const Duration(milliseconds: 900),
-                    builder: (context, value, child) {
-                      return CustomPaint(
-                        painter: _ClockRingPainter(progress: value),
-                      );
-                    },
-                  ),
+                  duration: const Duration(milliseconds: 900),
+                  builder: (context, value, child) {
+                    return CustomPaint(
+                      painter: _ClockRingPainter(progress: value),
+                    );
+                  },
                 ),
               ),
             ),
@@ -104,27 +99,28 @@ class _ClockState extends State<Clock> {
                     AnimatedOpacity(
                       opacity: _isRunning ? 0.45 : 1,
                       duration: AppSpacing.fabAnimationDuration,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.surface),
-                        ),
-                        child: Text(
-                          _isRunning ? 'Tap to pause' : 'Tap to start',
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: AppColors.primary,
-                          ),
+                      child: Text(
+                        _isRunning ? 'Tap to pause' : 'Tap to start',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: AppColors.primary,
                         ),
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.surface),
+                    Text(
+                      _formatTime(_remainingSeconds),
+                      style: textTheme.titleLarge?.copyWith(
+                        color: AppColors.secondary,
                       ),
+                    ),
+                    const SizedBox(height: 0),
+                    AnimatedOpacity(
+                      opacity: _isRunning ? 0.45 : 1,
+                      duration: AppSpacing.fabAnimationDuration,
                       child: Text(
-                        _formatTime(_remainingSeconds),
-                        style: textTheme.titleLarge?.copyWith(
-                          color: AppColors.secondary,
+                        '1:24:25',
+                        style: textTheme.bodyLarge?.copyWith(
+                          color: AppColors.primary,
                         ),
                       ),
                     ),
@@ -132,31 +128,10 @@ class _ClockState extends State<Clock> {
                     AnimatedOpacity(
                       opacity: _isRunning ? 0.45 : 1,
                       duration: AppSpacing.fabAnimationDuration,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.surface),
-                        ),
-                        child: Text(
-                          '1:24:25',
-                          style: textTheme.bodyLarge?.copyWith(
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 0),
-                    AnimatedOpacity(
-                      opacity: _isRunning ? 0.45 : 1,
-                      duration: AppSpacing.fabAnimationDuration,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.surface),
-                        ),
-                        child: Text(
-                          'Total focus time',
-                          style: textTheme.bodySmall?.copyWith(
-                            color: AppColors.primary,
-                          ),
+                      child: Text(
+                        'Total focus time',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: AppColors.primary,
                         ),
                       ),
                     ),

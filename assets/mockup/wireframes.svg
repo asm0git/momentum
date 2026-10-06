@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="752" height="856" viewBox="0 0 752 856" role="img" aria-labelledby="title description">
+  <title id="title">Momentum: reconstructed main-screen wireframes</title>
+  <desc id="description">Low-fidelity wireframes derived from the supplied mockups: Dashboard, Calendar, Timer, AI Planner, and expanded To-do. They show header, content order, cards, and shared bottom navigation.</desc>
+  <style>
+    text { font-family: Arial, sans-serif; fill: #222; font-size: 12px; }
+    .heading { font-size: 16px; font-weight: bold; }
+    .section { font-weight: bold; }
+    .box { fill: #f6f6f6; stroke: #888; stroke-width: 1; }
+    .line { fill: none; stroke: #888; stroke-width: 1; }
+    .note { fill: #555; }
+  </style>
+  <defs>
+    <g id="phone">
+      <rect x="0" y="0" width="220" height="360" rx="16" fill="white" stroke="#555"/>
+      <path d="M0 16 Q0 0 16 0 H204 Q220 0 220 16 V26 Q220 52 194 52 H26 Q0 52 0 26Z" fill="#e8e8e8" stroke="#888"/>
+      <rect class="box" x="12" y="324" width="160" height="26" rx="13"/>
+      <text x="92" y="341" text-anchor="middle">Home · Cal · Timer · AI · To-do</text>
+      <circle class="box" cx="194" cy="337" r="13"/>
+      <text x="194" y="342" text-anchor="middle" font-size="18">+</text>
+    </g>
+    <g id="tasks">
+      <circle class="line" cx="12" cy="15" r="5"/>
+      <text x="26" y="15">Task title</text><text class="note" x="26" y="29">Date/time · duration</text>
+      <circle class="line" cx="12" cy="51" r="5"/>
+      <text x="26" y="51">Task title</text><text class="note" x="26" y="65">Date/time · duration</text>
+    </g>
+  </defs>
+  <rect width="752" height="856" fill="white"/>
+  <text class="heading" x="16" y="24">Main-screen wireframes reconstructed from the mockups</text>
+
+  <g transform="translate(16 48)">
+    <use href="#phone"/>
+    <text class="heading" x="110" y="32" text-anchor="middle">Dashboard</text>
+    <rect class="box" x="12" y="66" width="92" height="52" rx="4"/>
+    <text x="19" y="82">Day / date</text><text class="heading" x="19" y="104">Current time</text>
+    <rect class="box" x="112" y="66" width="96" height="52" rx="4"/>
+    <text x="119" y="82">Up next</text><text x="119" y="98">Time / title</text><text x="119" y="111">Category</text>
+    <text class="section" x="12" y="136">Categories</text>
+    <rect class="box" x="12" y="143" width="94" height="45" rx="8"/>
+    <rect class="box" x="114" y="143" width="94" height="45" rx="8"/>
+    <text x="19" y="159">Category ›</text><text x="19" y="175">Count / next item</text>
+    <text x="121" y="159">Category ›</text><text x="121" y="175">Count / next item</text>
+    <text class="section" x="12" y="206">To-do</text>
+    <rect class="box" x="12" y="212" width="196" height="76" rx="8"/>
+    <use href="#tasks" x="18" y="216"/>
+    <text class="section" x="12" y="302">Focus</text>
+    <rect class="box" x="12" y="307" width="94" height="13" rx="4"/>
+    <rect class="box" x="114" y="307" width="94" height="13" rx="4"/>
+    <text x="59" y="317" text-anchor="middle" style="font-size:10px">Work / rest preset</text>
+    <text x="161" y="317" text-anchor="middle" style="font-size:10px">Work / rest preset</text>
+  </g>
+
+  <g transform="translate(266 48)">
+    <use href="#phone"/>
+    <text class="heading" x="110" y="32" text-anchor="middle">Calendar</text>
+    <text class="heading" x="22" y="80">‹</text><text class="heading" x="193" y="80">›</text>
+    <text class="section" x="110" y="76" text-anchor="middle">Month</text>
+    <text x="110" y="92" text-anchor="middle">Year</text>
+    <rect class="box" x="12" y="103" width="196" height="126"/>
+    <path class="line" d="M40 103V229 M68 103V229 M96 103V229 M124 103V229 M152 103V229 M180 103V229 M12 124H208 M12 145H208 M12 166H208 M12 187H208 M12 208H208"/>
+    <text x="110" y="118" text-anchor="middle">Weekday labels</text>
+    <circle cx="110" cy="155" r="8" fill="#aaa"/>
+    <text class="section" x="12" y="247">Selected-day agenda</text>
+    <use href="#tasks" x="18" y="253"/>
+  </g>
+
+  <g transform="translate(516 48)">
+    <use href="#phone"/>
+    <text class="heading" x="110" y="32" text-anchor="middle">Timer / Pomodoro</text>
+    <text class="section" x="12" y="74">Presets</text>
+    <rect class="box" x="12" y="81" width="94" height="31" rx="8"/>
+    <rect class="box" x="114" y="81" width="94" height="31" rx="8"/>
+    <text x="59" y="101" text-anchor="middle">Work / rest</text>
+    <text x="161" y="101" text-anchor="middle">Work / rest</text>
+    <circle class="line" cx="110" cy="183" r="61" stroke-width="3"/>
+    <text x="110" y="162" text-anchor="middle">Tap to start/pause</text>
+    <text class="heading" x="110" y="184" text-anchor="middle">Countdown</text>
+    <text x="110" y="205" text-anchor="middle">Total focus time</text>
+    <text class="section" x="12" y="261">Due today</text>
+    <rect class="box" x="12" y="267" width="196" height="50" rx="8"/>
+    <text x="24" y="288">○ Task title</text><text class="note" x="38" y="304">Date/time · duration</text>
+  </g>
+
+  <g transform="translate(16 444)">
+    <use href="#phone"/>
+    <text class="heading" x="110" y="32" text-anchor="middle">AI Planner</text>
+    <rect class="box" x="12" y="67" width="196" height="43"/>
+    <text x="110" y="84" text-anchor="middle">Weekly date strip</text>
+    <text x="110" y="102" text-anchor="middle">Select planning day</text>
+    <text class="section" x="12" y="133">AI Planner</text>
+    <rect class="box" x="12" y="139" width="196" height="108" rx="8"/>
+    <text class="note" x="19" y="161">9 AM</text><rect class="box" x="62" y="147" width="137" height="25" rx="4"/>
+    <text x="70" y="164">Activity / time</text>
+    <text class="note" x="19" y="196">10 AM</text><rect class="box" x="62" y="176" width="137" height="31" rx="4"/>
+    <text x="70" y="195">Activity / time</text>
+    <text class="note" x="19" y="230">11 AM</text><rect class="box" x="62" y="211" width="137" height="28" rx="4"/>
+    <text x="70" y="230">Activity / time</text>
+    <text class="section" x="12" y="266">Due today</text>
+    <rect class="box" x="12" y="273" width="196" height="43" rx="8"/>
+    <text x="24" y="290">○ Task title</text><text class="note" x="38" y="307">Date/time · duration</text>
+  </g>
+
+  <g transform="translate(266 444)">
+    <use href="#phone"/>
+    <text class="heading" x="110" y="32" text-anchor="middle">To-do</text>
+    <text class="section" x="12" y="75">⌄ Category / pending count</text>
+    <rect class="box" x="12" y="86" width="196" height="81" rx="8"/>
+    <use href="#tasks" x="18" y="91"/>
+    <text class="section" x="12" y="188">⌄ Category / pending count</text>
+    <rect class="box" x="12" y="199" width="196" height="81" rx="8"/>
+    <use href="#tasks" x="18" y="204"/>
+    <text class="section" x="12" y="302">› Collapsed category</text>
+  </g>
+
+  <g transform="translate(516 444)">
+    <text class="heading" x="0" y="25">Reading these wireframes</text>
+    <text x="0" y="54">Boxes show content regions.</text>
+    <text x="0" y="78">The dock is shared by all pages.</text>
+    <text x="0" y="102">Plus opens the add-item sheet.</text>
+    <text x="0" y="126">Lists and card strips can scroll.</text>
+    <text x="0" y="150">To-do categories expand in place.</text>
+    <text class="note" x="0" y="189">Onboarding and form states are</text>
+    <text class="note" x="0" y="207">shown in the document's mockups</text>
+    <text class="note" x="0" y="225">and navigation diagram.</text>
+    <text class="note" x="0" y="264">These are reconstructed diagrams,</text>
+    <text class="note" x="0" y="282">not original hand-drawn sketches</text>
+    <text class="note" x="0" y="300">or screenshots of the running app.</text>
+  </g>
+  <text class="note" x="16" y="836">Momentum · Intended screen structure · October 4, 2026</text>
+</svg>
