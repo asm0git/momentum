@@ -58,6 +58,13 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
     _popupController.animateWith(_popupSpring(from: 0, to: 1));
   }
 
+  void _closePopup() {
+    if (!_isPopupOpen) return;
+    setState(() => _isPopupOpen = false);
+    _fabController.reverse();
+    _hidePopup();
+  }
+
   Future<void> _hidePopup() async {
     await _popupController.animateWith(_popupSpring(from: 1, to: 0));
     if (mounted && !_isPopupOpen) {
@@ -70,11 +77,7 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
 
   SpringSimulation _popupSpring({required double from, required double to}) {
     return SpringSimulation(
-      const SpringDescription(
-        mass: 1,
-        stiffness: 500,
-        damping: 28,
-      ),
+      const SpringDescription(mass: 1, stiffness: 500, damping: 28),
       from,
       to,
       0,
@@ -85,11 +88,12 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
 
-    return OverlayPortal.targetsRootOverlay(
+    return OverlayPortal(
       controller: _overlayController,
       overlayChildBuilder: (context) => Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
         child: _buildNavigationGroup(primary, showPopup: true),
       ),
       child: _isPopupVisible
@@ -105,7 +109,8 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
           left: 0,
           right: 0,
           bottom: 0,
-          height: AppSpacing.navigationDockHeight +
+          height:
+              AppSpacing.navigationDockHeight +
               AppSpacing.floatingGroupBottom +
               AppSpacing.sectionGap,
           child: ClipRect(
@@ -141,17 +146,21 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
           Positioned(
             left: AppSpacing.floatingGroupEdge,
             right: AppSpacing.floatingGroupEdge,
-            bottom: AppSpacing.navigationDockHeight +
+            bottom:
+                AppSpacing.navigationDockHeight +
                 AppSpacing.floatingGroupBottom +
                 AppSpacing.floatingGroupGap,
             child: AnimatedBuilder(
               animation: _popupController,
-              child: const AddItemPopup(
-                key: ValueKey('add-item-popup'),
+              child: AddItemPopup(
+                key: const ValueKey('add-item-popup'),
+                onSaved: (_) => _closePopup(),
+                onCancel: _closePopup,
               ),
               builder: (context, child) {
-                final progress =
-                    _popupController.value.clamp(0.0, 1.0).toDouble();
+                final progress = _popupController.value
+                    .clamp(0.0, 1.0)
+                    .toDouble();
                 return Opacity(
                   opacity: progress,
                   child: Transform.scale(
@@ -209,9 +218,9 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
                 selected: index == widget.selectedIndex,
                 primary: primary,
                 onPressed: () {
-                  Navigator.of(context).pushReplacementNamed(
-                    _items[index].route,
-                  );
+                  Navigator.of(
+                    context,
+                  ).pushReplacementNamed(_items[index].route);
                 },
               ),
             ),

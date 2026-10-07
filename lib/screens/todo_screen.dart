@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
-import '../data_models.dart';
 import '../navigation_destinations.dart';
+import '../state/planner_state.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/collapsible_category.dart';
 import '../widgets/primary_app_bar.dart';
@@ -16,10 +17,11 @@ class TodoScreen extends StatefulWidget {
 }
 
 class _TodoScreenState extends State<TodoScreen> {
-  late final List<TaskCategory> _categories = createMockCategories();
-
   @override
   Widget build(BuildContext context) {
+    final categories = context
+        .watch<PlannerState>()
+        .categoriesWithUnassignedItems;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const PrimaryAppBar(
@@ -30,11 +32,11 @@ class _TodoScreenState extends State<TodoScreen> {
         children: [
           ListView.separated(
             padding: const EdgeInsets.all(AppSpacing.md),
-            itemCount: _categories.length,
+            itemCount: categories.length,
             separatorBuilder: (context, index) =>
                 const SizedBox(height: AppSpacing.xxs),
             itemBuilder: (context, index) {
-              final category = _categories[index];
+              final category = categories[index];
               return CollapsibleCategory(
                 key: ValueKey(category.title),
                 title: category.title,
@@ -46,7 +48,7 @@ class _TodoScreenState extends State<TodoScreen> {
           ),
           Positioned.fill(
             child: FloatingNavigationGroup(
-              key: ValueKey('todo-navigation'),
+              key: const ValueKey('todo-navigation'),
               selectedIndex: AppDestination.todo.index,
             ),
           ),

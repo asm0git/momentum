@@ -11,6 +11,7 @@ class DayWidget extends StatelessWidget {
     required this.isSelected,
     this.categories = const [],
     this.onSelected,
+    this.compact = false,
   });
 
   final DateTime? date;
@@ -18,23 +19,24 @@ class DayWidget extends StatelessWidget {
   final bool isSelected;
   final List<TaskCategory> categories;
   final VoidCallback? onSelected;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final day = date;
     final textTheme = Theme.of(context).textTheme;
     final isToday = day != null && _sameDay(day, DateTime.now());
-    final circleSize = isToday
+    final circleSize = compact || isToday
         ? AppSpacing.calendarTodayCircleSize
         : AppSpacing.selectedIconContainerSize;
     final circleColor = isToday
-      ? AppColors.secondary
-      : isSelected
+        ? AppColors.secondary
+        : isSelected
         ? AppColors.primary
         : AppColors.transparent;
     final textColor = isToday || isSelected
-      ? AppColors.onPrimary
-      : isWeekend
+        ? AppColors.onPrimary
+        : isWeekend
         ? AppColors.disabled
         : AppColors.onSurface;
 
@@ -42,16 +44,16 @@ class DayWidget extends StatelessWidget {
       onTap: onSelected,
       child: Container(
         decoration: const BoxDecoration(
-          border: Border(
-            top: BorderSide(color: AppColors.calendarBorder),
-          ),
+          border: Border(top: BorderSide(color: AppColors.calendarBorder)),
         ),
-        padding: const EdgeInsets.only(top: AppSpacing.xxs),
+        padding: EdgeInsets.only(top: compact ? 0 : AppSpacing.xxs),
         child: Column(
           children: [
             SizedBox(
-              height: AppSpacing.selectedIconContainerSize,
-                child: day == null
+              height: compact
+                  ? AppSpacing.selectedIconContainerSize - AppSpacing.xs - 1
+                  : AppSpacing.selectedIconContainerSize,
+              child: day == null
                   ? null
                   : Center(
                       child: Container(
@@ -71,7 +73,7 @@ class DayWidget extends StatelessWidget {
                       ),
                     ),
             ),
-            Expanded(child: _buildCategoryGrid()),
+            if (!compact) Expanded(child: _buildCategoryGrid()),
           ],
         ),
       ),
@@ -113,14 +115,16 @@ class _CategoryCountPill extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(
-            'assets/img/categories/${category.iconName}.png',
-            width: 10,
-            height: 10,
-            color: AppColors.primary,
-            colorBlendMode: BlendMode.srcIn,
-          ),
-          const SizedBox(width: 2),
+          if (category.iconName.isNotEmpty) ...[
+            Image.asset(
+              'assets/img/categories/${category.iconName}.png',
+              width: 10,
+              height: 10,
+              color: AppColors.primary,
+              colorBlendMode: BlendMode.srcIn,
+            ),
+            const SizedBox(width: 2),
+          ],
           Text(
             '${category.items.whereType<Task>().length}',
             style: textTheme.labelSmall?.copyWith(color: AppColors.onSurface),

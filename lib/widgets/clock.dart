@@ -77,10 +77,7 @@ class _ClockState extends State<Clock> {
               child: GestureDetector(
                 onTap: _toggleTimer,
                 child: TweenAnimationBuilder<double>(
-                  tween: Tween<double>(
-                    begin: _previousProgress,
-                    end: progress,
-                  ),
+                  tween: Tween<double>(begin: _previousProgress, end: progress),
                   duration: const Duration(milliseconds: 900),
                   builder: (context, value, child) {
                     return CustomPaint(
@@ -130,7 +127,7 @@ class _ClockState extends State<Clock> {
                       duration: AppSpacing.fabAnimationDuration,
                       child: Text(
                         'Total focus time',
-                        style: textTheme.bodySmall?.copyWith(
+                        style: textTheme.labelMedium?.copyWith(
                           color: AppColors.primary,
                         ),
                       ),
@@ -153,11 +150,11 @@ class _ClockRingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final strokeWidth = AppSpacing.xs;
+    const strokeWidth = AppSpacing.xs;
     final radius = (size.shortestSide - strokeWidth) / 2;
     final center = size.center(Offset.zero);
     final bounds = Rect.fromCircle(center: center, radius: radius);
-    final startAngle = -math.pi / 2;
+    const startAngle = -math.pi / 2;
     final sweepAngle = 2 * math.pi * progress;
 
     final trackPaint = Paint()

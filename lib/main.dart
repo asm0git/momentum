@@ -9,6 +9,7 @@
 
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
 import 'navigation_destinations.dart';
@@ -17,12 +18,17 @@ import 'screens/calendar_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/timer_screen.dart';
 import 'screens/todo_screen.dart';
+import 'state/planner_state.dart';
+import 'widgets/planner_load_gate.dart';
 
 void main() {
   runApp(
     DevicePreview(
       enabled: true,
-      builder: (context) => const MyApp(),
+      builder: (context) => ChangeNotifierProvider(
+        create: (_) => PlannerState()..initialize(),
+        child: const MyApp(),
+      ),
     ),
   );
 }
@@ -37,6 +43,7 @@ class MyApp extends StatelessWidget {
       title: 'Momentum',
       debugShowCheckedModeBanner: false,
       theme: appTheme,
+      builder: (context, child) => PlannerLoadGate(child: child!),
       initialRoute: AppDestination.dashboard.route,
       onGenerateRoute: _buildRoute,
     );
@@ -74,10 +81,7 @@ class MyApp extends StatelessWidget {
     return null;
   }
 
-  MaterialPageRoute<void> _screenRoute(
-    Widget screen,
-    RouteSettings settings,
-  ) {
+  MaterialPageRoute<void> _screenRoute(Widget screen, RouteSettings settings) {
     return MaterialPageRoute<void>(
       settings: settings,
       builder: (context) => screen,

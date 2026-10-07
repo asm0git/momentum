@@ -5,10 +5,7 @@ import '../data_models.dart';
 
 // Compact category preview used in the dashboard's horizontal category strip.
 class DashboardCategoryCard extends StatelessWidget {
-  const DashboardCategoryCard({
-    super.key,
-    required this.category,
-  });
+  const DashboardCategoryCard({super.key, required this.category});
 
   final TaskCategory category;
 
@@ -69,7 +66,7 @@ class DashboardCategoryCard extends StatelessWidget {
                 '${category.pendingCount} pending',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: textTheme.bodySmall?.copyWith(
+                style: textTheme.labelMedium?.copyWith(
                   color: AppColors.secondary,
                 ),
               ),
@@ -77,11 +74,7 @@ class DashboardCategoryCard extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AppSpacing.xxs),
-        const Icon(
-          Icons.chevron_right,
-          color: AppColors.onSurface,
-          size: 20,
-        ),
+        const Icon(Icons.chevron_right, color: AppColors.onSurface, size: 20),
       ],
     );
   }
@@ -92,9 +85,7 @@ class DashboardCategoryCard extends StatelessWidget {
         'No upcoming tasks',
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
-        style: textTheme.bodySmall?.copyWith(
-          color: AppColors.onSurface,
-        ),
+        style: textTheme.labelMedium?.copyWith(color: AppColors.onSurface),
       );
     }
 
@@ -105,28 +96,27 @@ class DashboardCategoryCard extends StatelessWidget {
           item.item.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: textTheme.bodySmall?.copyWith(
-            color: AppColors.onSurface,
-          ),
+          style: textTheme.labelMedium?.copyWith(color: AppColors.onSurface),
         ),
         Text(
           _formatPreviewDate(item),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: textTheme.bodySmall?.copyWith(
-            color: AppColors.onSurface,
-          ),
+          style: textTheme.labelMedium?.copyWith(color: AppColors.onSurface),
         ),
       ],
     );
   }
 
   _UpcomingItem? _findUpcomingItem(DateTime now) {
-    final items = [
-      for (final item in category.items)
-        _UpcomingItem(item: item, scheduledDate: _scheduledDate(item)),
-    ]..sort((first, second) =>
-        first.scheduledDate.compareTo(second.scheduledDate));
+    final items =
+        [
+          for (final item in category.items)
+            _UpcomingItem(item: item, scheduledDate: _scheduledDate(item)),
+        ]..sort(
+          (first, second) =>
+              first.scheduledDate.compareTo(second.scheduledDate),
+        );
 
     return items.where((item) => item.scheduledDate.isAfter(now)).firstOrNull ??
         (items.isEmpty ? null : items.first);
@@ -171,14 +161,10 @@ class DashboardCategoryCard extends StatelessWidget {
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
     return '$weekday, $hour:$minute $period';
   }
-
 }
 
 class _UpcomingItem {
-  const _UpcomingItem({
-    required this.item,
-    required this.scheduledDate,
-  });
+  const _UpcomingItem({required this.item, required this.scheduledDate});
 
   final PlannerItem item;
   final DateTime scheduledDate;

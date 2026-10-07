@@ -16,6 +16,8 @@ class TaskListContainer extends StatelessWidget {
     this.maxVisibleItems = _maxVisibleTasks,
     this.appearanceType = TaskAppearanceType.withoutCategoryIcon,
     this.onChecked,
+    this.onItemTap,
+    this.onDelete,
   }) : assert(maxVisibleItems == null || maxVisibleItems >= 0);
 
   final List<PlannerItem> items;
@@ -25,12 +27,13 @@ class TaskListContainer extends StatelessWidget {
   final int? maxVisibleItems;
   final TaskAppearanceType appearanceType;
   final void Function(Task task, bool isChecked)? onChecked;
+  final ValueChanged<PlannerItem>? onItemTap;
+  final ValueChanged<PlannerItem>? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final visibleItems = [...items]
-      ..sort(_compareChronologically);
+    final visibleItems = [...items]..sort(_compareChronologically);
     final limitedItems = maxVisibleItems == null
         ? visibleItems
         : visibleItems.take(maxVisibleItems!).toList();
@@ -94,16 +97,20 @@ class TaskListContainer extends StatelessWidget {
               onChecked: onChecked == null
                   ? null
                   : (isChecked) => onChecked!(item, isChecked),
+              onTap: onItemTap == null ? null : () => onItemTap!(item),
+              onDelete: onDelete == null ? null : () => onDelete!(item),
             )
           : item is Event
-              ? TaskWidget.event(
-                  event: item,
-                  categoryIconName:
-                      appearanceType == TaskAppearanceType.withoutCategoryIcon
-                          ? null
-                          : iconName,
-                )
-              : Text(item.title, style: textTheme.bodyMedium),
+          ? TaskWidget.event(
+              event: item,
+              categoryIconName:
+                  appearanceType == TaskAppearanceType.withoutCategoryIcon
+                  ? null
+                  : iconName,
+              onTap: onItemTap == null ? null : () => onItemTap!(item),
+              onDelete: onDelete == null ? null : () => onDelete!(item),
+            )
+          : Text(item.title, style: textTheme.bodyMedium),
     );
   }
 }

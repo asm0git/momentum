@@ -19,10 +19,10 @@ class AiScreen extends StatelessWidget {
       ),
       body: Stack(
         children: [
-          SizedBox.expand(),
+          const SizedBox.expand(),
           Positioned.fill(
             child: FloatingNavigationGroup(
-              key: ValueKey('ai-navigation'),
+              key: const ValueKey('ai-navigation'),
               selectedIndex: AppDestination.ai.index,
             ),
           ),

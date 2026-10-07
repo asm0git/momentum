@@ -1,27 +1,122 @@
-// A widget test: it builds your app in memory and checks what is on screen.
-// Run them all with: flutter test
-//
-// You are not required to write more of these, but a project with a few real
-// tests reads very differently from one with none.
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:momentum/main.dart';
+import 'package:momentum/app_theme.dart';
+import 'package:momentum/data/database_helper.dart';
+import 'package:momentum/data/planner_repository.dart';
+import 'package:momentum/data_models.dart';
+import 'package:momentum/state/planner_state.dart';
+import 'package:provider/provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
-  testWidgets('home screen shows its title and counts taps', (tester) async {
-    // Build the app. Note we build MyApp directly, not the DevicePreview
-    // wrapper, because a test does not need the phone frame.
-    await tester.pumpWidget(const MyApp());
+  late Directory tempDirectory;
+  late DatabaseHelper databaseHelper;
+  late PlannerState planner;
 
-    expect(find.text('It works'), findsOneWidget);
-    expect(find.text('Taps: 0'), findsOneWidget);
+  setUpAll(() => sqfliteFfiInit());
 
-    // Tap the button, then let the widget rebuild.
-    await tester.tap(find.byType(FilledButton));
-    await tester.pump();
-
-    expect(find.text('Taps: 1'), findsOneWidget);
+  setUp(() async {
+    tempDirectory = await Directory.systemTemp.createTemp('momentum_widget_');
+    databaseHelper = DatabaseHelper.forTesting(
+      factory: databaseFactoryFfi,
+      databasePath: '${tempDirectory.path}/planner.db',
+      seedOnCreate: false,
+    );
+    planner = PlannerState(
+      repository: PlannerRepository(databaseHelper: databaseHelper),
+    );
+    await planner.initialize();
   });
+
+  tearDown(() async {
+    planner.dispose();
+    await databaseHelper.close();
+    await tempDirectory.delete(recursive: true);
+  });
+
+  testWidgets('shared changes rebuild Dashboard, Calendar, and To-Do views',
+      (tester) async {
+    await tester.pumpWidget(_app(planner, const _ReactivePlannerViews()));
+
+    final category = (await tester.runAsync(
+      () => planner.addCategory(
+        TaskCategory(title: 'School', iconName: 'school', items: []),
+      ),
+    ))!;
+    await tester.pump();
+    final task = (await tester.runAsync(
+      () => planner.saveTask(
+        Task(
+          categoryId: category.id,
+          title: 'Draft outline',
+          date: DateTime.now(),
+          time: const TimeOfDay(hour: 15, minute: 0),
+          estimatedDuration: const Duration(minutes: 30),
+          isChecked: false,
+          description: 'First pass',
+        ),
+      ),
+    ))!;
+    await tester.pump();
+    expect(find.text('Dashboard: Draft outline'), findsOneWidget);
+    expect(find.text('Calendar: Draft outline'), findsOneWidget);
+    expect(find.text('To-Do: Draft outline'), findsOneWidget);
+
+    task.title = 'Revise outline';
+    task.description = 'Second pass';
+    await tester.runAsync(() => planner.saveTask(task));
+    await tester.pump();
+    expect(find.text('Draft outline'), findsNothing);
+    expect(find.text('Dashboard: Revise outline'), findsOneWidget);
+    expect(find.text('Calendar: Revise outline'), findsOneWidget);
+    expect(find.text('To-Do: Revise outline'), findsOneWidget);
+
+    await tester.runAsync(() => planner.setTaskCompleted(task, true));
+    await tester.pump();
+    expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+
+    await tester.runAsync(() => planner.deleteItem(task));
+    await tester.pump();
+    expect(find.text('Dashboard: Revise outline'), findsNothing);
+    expect(find.text('Calendar: Revise outline'), findsNothing);
+    expect(find.text('To-Do: Revise outline'), findsNothing);
+  });
+}
+
+Widget _app(PlannerState planner, Widget child) =>
+    ChangeNotifierProvider<PlannerState>.value(
+      value: planner,
+      child: MaterialApp(theme: appTheme, home: child),
+    );
+
+class _ReactivePlannerViews extends StatelessWidget {
+  const _ReactivePlannerViews();
+
+  @override
+  Widget build(BuildContext context) {
+    final planner = context.watch<PlannerState>();
+    final task = planner.items.whereType<Task>().firstOrNull;
+    final title = task?.title ?? 'No tasks';
+
+    return Scaffold(
+      body: Column(
+        children: [
+          Text('Dashboard: $title'),
+          Text('Calendar: $title'),
+          Text('To-Do: $title'),
+          if (task != null)
+            Checkbox(
+              value: task.isChecked,
+              onChanged: (value) {
+                if (value != null) {
+                  context.read<PlannerState>().setTaskCompleted(task, value);
+                }
+              },
+            ),
+        ],
+      ),
+    );
+  }
 }

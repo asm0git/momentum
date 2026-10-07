@@ -20,7 +20,8 @@ class FocusPreset extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Container(
-      margin: margin ??
+      margin:
+          margin ??
           const EdgeInsets.symmetric(
             horizontal: AppSpacing.xs,
             vertical: AppSpacing.md,
@@ -46,15 +47,9 @@ class FocusPreset extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '$workMinutes minutes',
-                style: textTheme.titleMedium,
-              ),
-              
-              Text(
-                '$breakMinutes minutes rest',
-                style: textTheme.bodySmall,
-              ),
+              Text('$workMinutes minutes', style: textTheme.titleMedium),
+
+              Text('$breakMinutes minutes rest', style: textTheme.labelMedium),
             ],
           ),
           const SizedBox(width: AppSpacing.xs),

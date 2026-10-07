@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
 import '../data_models.dart';
 import '../navigation_destinations.dart';
+import '../state/planner_state.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/dashboard_category_card.dart';
 import '../widgets/focus_preset.dart';
+import '../widgets/item_actions.dart';
 import '../widgets/primary_app_bar.dart';
 import '../widgets/task_list_container.dart';
 import '../widgets/task_widget.dart';
@@ -57,7 +60,7 @@ class _ScreenBody extends StatelessWidget {
         ),
         Positioned.fill(
           child: FloatingNavigationGroup(
-            key: ValueKey('dashboard-navigation'),
+            key: const ValueKey('dashboard-navigation'),
             selectedIndex: AppDestination.dashboard.index,
           ),
         ),
@@ -67,7 +70,27 @@ class _ScreenBody extends StatelessWidget {
 
   Widget _buildDateTimeSection(BuildContext context) {
     final now = DateTime.now();
-    final nextItem = _findNextItem(createMockCategories(), now);
+    final planner = context.watch<PlannerState>();
+    final item = planner.nextUpcomingItem;
+    final category = item == null
+        ? null
+        : planner.categoriesWithUnassignedItems.firstWhere(
+            (candidate) => candidate.items.any(
+              (candidateItem) =>
+                  candidateItem.runtimeType == item.runtimeType &&
+                  candidateItem.id == item.id,
+            ),
+            orElse: () =>
+                TaskCategory(title: 'None', iconName: '', items: const []),
+          );
+    final nextItem = item == null || category == null
+        ? null
+        : _DashboardItem(
+            item: item,
+            category: category,
+            startTime: _dateTimeFor(item),
+            endTime: _endDateTimeFor(item),
+          );
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -81,9 +104,7 @@ class _ScreenBody extends StatelessWidget {
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
-              child: _buildDashboardComponent(
-                _buildUpNext(context, nextItem),
-              ),
+              child: _buildDashboardComponent(_buildUpNext(context, nextItem)),
             ),
           ],
         ),
@@ -136,9 +157,7 @@ class _ScreenBody extends StatelessWidget {
               time,
               maxLines: 1,
               softWrap: false,
-              style: textTheme.displayLarge?.copyWith(
-                color: AppColors.primary,
-              ),
+              style: textTheme.displayLarge?.copyWith(color: AppColors.primary),
             ),
           ),
         ),
@@ -155,10 +174,10 @@ class _ScreenBody extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Up next:',
-              style: textTheme.bodySmall?.copyWith(
-                color: AppColors.primary,
-              )),
+          Text(
+            'Up next:',
+            style: textTheme.labelMedium?.copyWith(color: AppColors.primary),
+          ),
           Text('No upcoming items', style: textStyle),
         ],
       );
@@ -174,7 +193,7 @@ class _ScreenBody extends StatelessWidget {
           children: [
             Text(
               'Up next:',
-              style: textTheme.bodySmall?.copyWith(color: AppColors.primary),
+              style: textTheme.labelMedium?.copyWith(color: AppColors.primary),
             ),
             Text(
               '${_formatTime(nextItem.startTime)} - '
@@ -183,18 +202,20 @@ class _ScreenBody extends StatelessWidget {
             ),
             Row(
               children: [
-                Image.asset(
-                  'assets/img/categories/${nextItem.category.iconName}.png',
-                  width: AppSpacing.navigationIconSize,
-                  height: AppSpacing.navigationIconSize,
-                  color: AppColors.primary,
-                  colorBlendMode: BlendMode.srcIn,
-                ),
-                const SizedBox(width: AppSpacing.xs),
+                if (nextItem.category.iconName.isNotEmpty) ...[
+                  Image.asset(
+                    'assets/img/categories/${nextItem.category.iconName}.png',
+                    width: AppSpacing.navigationIconSize,
+                    height: AppSpacing.navigationIconSize,
+                    color: AppColors.primary,
+                    colorBlendMode: BlendMode.srcIn,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                ],
                 Expanded(
                   child: Text(
                     nextItem.item.title,
-                    style: textTheme.bodySmall?.copyWith(
+                    style: textTheme.labelMedium?.copyWith(
                       color: AppColors.primary,
                     ),
                   ),
@@ -205,22 +226,6 @@ class _ScreenBody extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  _DashboardItem? _findNextItem(List<TaskCategory> categories, DateTime now) {
-    final items = [
-      for (final category in categories)
-        for (final item in category.items)
-          _DashboardItem(
-            item: item,
-            category: category,
-            startTime: _dateTimeFor(item),
-            endTime: _endDateTimeFor(item),
-          ),
-    ]..sort((first, second) => first.startTime.compareTo(second.startTime));
-
-    return items.where((item) => item.startTime.isAfter(now)).firstOrNull ??
-        (items.isEmpty ? null : items.first);
   }
 
   DateTime _dateTimeFor(PlannerItem item) {
@@ -241,9 +246,9 @@ class _ScreenBody extends StatelessWidget {
 
     final event = item as Event;
     return DateTime(
-      item.date.year,
-      item.date.month,
-      item.date.day,
+      event.endDate.year,
+      event.endDate.month,
+      event.endDate.day,
       event.end.hour,
       event.end.minute,
     );
@@ -266,25 +271,8 @@ class _ScreenBody extends StatelessWidget {
     return '$hour:$minute $period';
   }
 
-  Widget _buildSection(BuildContext context, [String? title]) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (title != null)
-          Text(
-            title,
-            textAlign: TextAlign.left,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-        Container(
-          constraints: const BoxConstraints(minHeight: 120),
-        ),
-      ],
-    );
-  }
-
   Widget _buildCategoriesSection(BuildContext context) {
-    final categories = createMockCategories();
+    final categories = context.watch<PlannerState>().categories;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -303,7 +291,8 @@ class _ScreenBody extends StatelessWidget {
                 for (var index = 0; index < categories.length; index++) ...[
                   DashboardCategoryCard(
                     key: ValueKey(
-                        'dashboard-category-${categories[index].title}'),
+                      'dashboard-category-${categories[index].title}',
+                    ),
                     category: categories[index],
                   ),
                   if (index < categories.length - 1)
@@ -318,13 +307,13 @@ class _ScreenBody extends StatelessWidget {
   }
 
   Widget _buildTodoSection(BuildContext context) {
+    final planner = context.watch<PlannerState>();
     final today = DateTime.now();
-    final tasks = [
-      for (final category in createMockCategories())
-        ...category.items.whereType<Task>().where(
-              (task) => _sameDay(task.date, today),
-            ),
-    ];
+    final tasks = planner.items
+        .whereType<Task>()
+        .where((task) => _sameDay(task.date, today))
+        .cast<PlannerItem>()
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -338,6 +327,9 @@ class _ScreenBody extends StatelessWidget {
         TaskListContainer(
           items: tasks,
           appearanceType: TaskAppearanceType.withoutCategoryIcon,
+          onChecked: (task, value) => planner.setTaskCompleted(task, value),
+          onItemTap: (item) => showItemEditor(context, item),
+          onDelete: (item) => confirmDeleteItem(context, item),
         ),
       ],
     );
@@ -353,7 +345,7 @@ class _ScreenBody extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: AppSpacing.xxs),
-        IntrinsicHeight(
+        const IntrinsicHeight(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -363,25 +355,25 @@ class _ScreenBody extends StatelessWidget {
                   breakMinutes: 5,
                   margin: EdgeInsets.zero,
                 ),
-                const SizedBox(width: AppSpacing.xs),
+                SizedBox(width: AppSpacing.xs),
                 FocusPreset(
                   workMinutes: 25,
                   breakMinutes: 2,
                   margin: EdgeInsets.zero,
                 ),
-                const SizedBox(width: AppSpacing.xs),
+                SizedBox(width: AppSpacing.xs),
                 FocusPreset(
                   workMinutes: 45,
                   breakMinutes: 10,
                   margin: EdgeInsets.zero,
                 ),
-                const SizedBox(width: AppSpacing.xs),
+                SizedBox(width: AppSpacing.xs),
                 FocusPreset(
                   workMinutes: 50,
                   breakMinutes: 10,
                   margin: EdgeInsets.zero,
                 ),
-                const SizedBox(width: AppSpacing.xs),
+                SizedBox(width: AppSpacing.xs),
                 FocusPreset(
                   workMinutes: 60,
                   breakMinutes: 15,

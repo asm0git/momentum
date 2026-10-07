@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
 import '../data_models.dart';
+import '../state/planner_state.dart';
+import 'item_actions.dart';
 import 'task_list_container.dart';
 import 'task_widget.dart';
 
@@ -26,15 +29,6 @@ class CollapsibleCategory extends StatefulWidget {
 
 class _CollapsibleCategoryState extends State<CollapsibleCategory> {
   bool _isExpanded = false;
-  late List<PlannerItem> _items = List.of(widget.items);
-
-  @override
-  void didUpdateWidget(covariant CollapsibleCategory oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.items != widget.items) {
-      _items = List.of(widget.items);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,15 +47,14 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.sm),
             child: Row(
-                children: [
-                  Icon(
-                    _isExpanded
-                        ? Icons.keyboard_arrow_down
-                        : Icons.chevron_right,
-                    color: AppColors.primary,
-                    size: AppSpacing.navigationIconSize,
-                  ),
-                  // const SizedBox(width: AppSpacing.xs),
+              children: [
+                Icon(
+                  _isExpanded ? Icons.keyboard_arrow_down : Icons.chevron_right,
+                  color: AppColors.primary,
+                  size: AppSpacing.navigationIconSize,
+                ),
+                // const SizedBox(width: AppSpacing.xs),
+                if (widget.iconName.isNotEmpty)
                   Image.asset(
                     'assets/img/categories/${widget.iconName}.png',
                     width: AppSpacing.navigationIconSize,
@@ -69,56 +62,44 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
                     color: AppColors.primary,
                     colorBlendMode: BlendMode.srcIn,
                   ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.titleMedium,
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.titleMedium,
+                      ),
+                      Text(
+                        widget.pendingLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.labelMedium?.copyWith(
+                          color: AppColors.secondary,
                         ),
-                        Text(
-                          '${_items.whereType<Task>().where((task) => !task.isChecked).length} pending',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: AppColors.secondary,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ],
             ),
           ),
         ),
         if (_isExpanded) ...[
           TaskListContainer(
-            items: _items,
+            items: widget.items,
             categoryIconName: widget.iconName,
             appearanceType: TaskAppearanceType.withoutCategoryIcon,
-            onChecked: _checkTask,
+            onChecked: (task, value) =>
+                context.read<PlannerState>().setTaskCompleted(task, value),
+            onItemTap: (item) => showItemEditor(context, item),
+            onDelete: (item) => confirmDeleteItem(context, item),
           ),
         ],
       ],
     );
-  }
-
-  void _checkTask(Task task, bool isChecked) {
-    setState(() {
-      task.isChecked = isChecked;
-      if (isChecked) {
-        _items
-          ..remove(task)
-          ..add(task);
-      } else {
-        _items
-          ..remove(task)
-          ..insert(0, task);
-      }
-    });
   }
 }

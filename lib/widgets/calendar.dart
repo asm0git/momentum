@@ -9,10 +9,14 @@ class CalendarWidget extends StatefulWidget {
     super.key,
     this.categories = const [],
     this.onDateSelected,
+    this.initialDate,
+    this.compact = false,
   });
 
   final List<TaskCategory> categories;
   final ValueChanged<DateTime>? onDateSelected;
+  final DateTime? initialDate;
+  final bool compact;
 
   @override
   State<CalendarWidget> createState() => _CalendarWidgetState();
@@ -33,13 +37,24 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     'November',
     'December',
   ];
-  static const _weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  static const _weekdayNames = [
+    'Sun',
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+  ];
 
-  late DateTime _visibleMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  late DateTime _visibleMonth = DateTime(
+    (widget.initialDate ?? DateTime.now()).year,
+    (widget.initialDate ?? DateTime.now()).month,
+  );
   late DateTime _selectedDay = DateTime(
-    DateTime.now().year,
-    DateTime.now().month,
-    DateTime.now().day,
+    (widget.initialDate ?? DateTime.now()).year,
+    (widget.initialDate ?? DateTime.now()).month,
+    (widget.initialDate ?? DateTime.now()).day,
   );
 
   void _changeMonth(int offset) {
@@ -82,14 +97,11 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           if (dayNumber < 1 || dayNumber > daysInMonth) {
             return null;
           }
-          return DateTime(
-            _visibleMonth.year,
-            _visibleMonth.month,
-            dayNumber,
-          );
+          return DateTime(_visibleMonth.year, _visibleMonth.month, dayNumber);
         }),
         selectedDay: _selectedDay,
-        categories: widget.categories,
+        categories: widget.compact ? const [] : widget.categories,
+        compact: widget.compact,
         onDaySelected: (day) {
           setState(() {
             _selectedDay = day;
@@ -100,6 +112,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     );
 
     return Column(
+      mainAxisSize: widget.compact ? MainAxisSize.min : MainAxisSize.max,
       children: [
         _CalendarHeader(
           monthName: _monthNames[_visibleMonth.month - 1],
@@ -107,7 +120,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           onPreviousMonth: () => _changeMonth(-1),
           onNextMonth: () => _changeMonth(1),
         ),
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: widget.compact ? AppSpacing.xs : AppSpacing.md),
         Row(
           children: [
             for (var index = 0; index < _weekdayNames.length; index++)
@@ -117,11 +130,11 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                   alignment: Alignment.center,
                   child: Text(
                     _weekdayNames[index],
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: index == 0 || index == 6
-                              ? AppColors.disabled
-                              : AppColors.onSurface,
-                        ),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: index == 0 || index == 6
+                          ? AppColors.disabled
+                          : AppColors.onSurface,
+                    ),
                   ),
                 ),
               ),
@@ -131,7 +144,12 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         Column(
           children: [
             for (final week in weeks)
-              SizedBox(height: AppSpacing.calendarDayHeight, child: week),
+              SizedBox(
+                height: widget.compact
+                    ? AppSpacing.selectedIconContainerSize - AppSpacing.xs
+                    : AppSpacing.calendarDayHeight,
+                child: week,
+              ),
           ],
         ),
       ],
@@ -156,35 +174,37 @@ class _CalendarHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Row(
-        children: [
-          _CalendarControl(
-            icon: Icons.chevron_left,
-            tooltip: 'Previous month',
-            onPressed: onPreviousMonth,
-          ),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  monthName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodyLarge?.copyWith(color: AppColors.primary),
+      children: [
+        _CalendarControl(
+          icon: Icons.chevron_left,
+          tooltip: 'Previous month',
+          onPressed: onPreviousMonth,
+        ),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                monthName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.bodyLarge?.copyWith(color: AppColors.primary),
+              ),
+              Text(
+                '$year',
+                style: textTheme.labelMedium?.copyWith(
+                  color: AppColors.primary,
                 ),
-                Text(
-                  '$year',
-                  style: textTheme.bodySmall?.copyWith(color: AppColors.primary),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          _CalendarControl(
-            icon: Icons.chevron_right,
-            tooltip: 'Next month',
-            onPressed: onNextMonth,
-          ),
-        ],
+        ),
+        _CalendarControl(
+          icon: Icons.chevron_right,
+          tooltip: 'Next month',
+          onPressed: onNextMonth,
+        ),
+      ],
     );
   }
 }

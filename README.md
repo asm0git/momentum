@@ -59,6 +59,9 @@ flutter run -d web-server --web-port 8080
 Then open http://localhost:8080. Requires Flutter (run `flutter --version` and
 put yours here).
 
+For Web database asset setup and the same-origin/port requirement for persistent
+browser data, see [Local database](docs/local-database.md).
+
 ### Environment variables
 
 This project reads its configuration from a `.env` file that is **not** in the

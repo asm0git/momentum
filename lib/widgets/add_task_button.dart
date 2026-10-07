@@ -21,10 +21,8 @@ class AddTaskButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: controller,
-      builder: (context, child) => Transform.rotate(
-        angle: controller.value * 3.14159 * 2,
-        child: child,
-      ),
+      builder: (context, child) =>
+          Transform.rotate(angle: controller.value * 3.14159 * 2, child: child),
       child: AnimatedContainer(
         duration: AppSpacing.fabAnimationDuration,
         decoration: BoxDecoration(

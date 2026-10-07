@@ -11,8 +11,6 @@ class AppColors {
   static const transparent = Colors.transparent;
   static const navigationBlurMaskStart = Colors.transparent;
   static const navigationBlurMaskEnd = Colors.black;
-  // A small nonzero tint keeps the backdrop filter composited without adding
-  // a visible overlay over the content beneath the navigation dock.
   static const navigationBlurTint = Color(0x12FFFFFF);
   static const popupScrim = Color(0x26000000);
   static const disabled = Color(0xFF94A3B8);
@@ -48,6 +46,7 @@ class AppSpacing {
   static const double floatingGroupGap = 12;
   static const double dashboardCategoryWidth = base * 20;
   static const double focusPresetWidth = base * 23;
+  static const double popupFieldHeight = 44;
 }
 
 class AppRadii {
@@ -56,6 +55,7 @@ class AppRadii {
   static const double navigationItem = AppSpacing.base * 1000;
   static const double popup = AppSpacing.base * 4;
   static const double focusPreset = AppSpacing.base * 3;
+  static const double estimatedDuration = 36;
 }
 
 final appTheme = ThemeData(
@@ -94,40 +94,35 @@ final appTheme = ThemeData(
       height: 1.2,
     ),
     bodyLarge: TextStyle(
-        fontFamily: 'SFProText',
-        fontSize: 24,
-        fontWeight: FontWeight.w600,
-        height: 1.2,
-        letterSpacing: -0.3),
+      fontFamily: 'SFProText',
+      fontSize: 24,
+      fontWeight: FontWeight.w600,
+      height: 1.2,
+      letterSpacing: -0.3,
+    ),
     bodyMedium: TextStyle(
-        fontFamily: 'SFProText',
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        letterSpacing: -0.6,
-        height: 1.2),
-    bodySmall: TextStyle(
-        fontFamily: 'SFProText',
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        letterSpacing: -0.4,
-        height: 1),
+      fontFamily: 'SFProText',
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -0.6,
+      height: 1.2,
+    ),
     labelMedium: TextStyle(
       fontFamily: 'SFProText',
       fontSize: 12,
       fontWeight: FontWeight.w500,
-      letterSpacing: -0.3,
+      letterSpacing: -0.4,
       height: 1,
     ),
     labelSmall: TextStyle(
-        fontFamily: 'SFProRounded',
-        fontSize: 10,
-        fontWeight: FontWeight.w500,
-        letterSpacing: -0.3,
-        height: 1)
+      fontFamily: 'SFProRounded',
+      fontSize: 10,
+      fontWeight: FontWeight.w500,
+      letterSpacing: -0.3,
+      height: 1,
+    ),
   ),
-  cardTheme: const CardThemeData(
-    margin: EdgeInsets.all(AppSpacing.sm),
-  ),
+  cardTheme: const CardThemeData(margin: EdgeInsets.all(AppSpacing.sm)),
   filledButtonTheme: FilledButtonThemeData(
     style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
   ),

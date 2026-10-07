@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
 import '../data_models.dart';
 import '../navigation_destinations.dart';
+import '../state/planner_state.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/clock.dart';
 import '../widgets/focus_preset.dart';
+import '../widgets/item_actions.dart';
 import '../widgets/primary_app_bar.dart';
 import '../widgets/task_list_container.dart';
 import '../widgets/task_widget.dart';
@@ -19,16 +22,19 @@ class TimerScreen extends StatefulWidget {
 }
 
 class _TimerScreenState extends State<TimerScreen> {
-  late final List<TaskCategory> _categories = createMockCategories();
-
   @override
   Widget build(BuildContext context) {
+    final planner = context.watch<PlannerState>();
     final today = DateTime.now();
     final dateLabel = MaterialLocalizations.of(context).formatMediumDate(today);
     final agendaIcons = {
-      for (final category in _categories)
-        for (final item in _todayTasks(category, today))
-          item: category.iconName,
+      for (final item in planner.items.whereType<Task>().where(
+        (task) => _isSameDay(task.date, today),
+      ))
+        item: planner.categories
+            .where((category) => category.id == item.categoryId)
+            .firstOrNull
+            ?.iconName,
     };
 
     return Scaffold(
@@ -63,14 +69,15 @@ class _TimerScreenState extends State<TimerScreen> {
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                           ),
-                          SingleChildScrollView(
+                          const SingleChildScrollView(
                             scrollDirection: Axis.horizontal,
                             child: Padding(
-                              padding: const EdgeInsets.only(
-                                left: AppSpacing.screenEdgePadding +
+                              padding: EdgeInsets.only(
+                                left:
+                                    AppSpacing.screenEdgePadding +
                                     AppSpacing.xxs,
                               ),
-                              child: const Row(
+                              child: Row(
                                 children: [
                                   FocusPreset(
                                     workMinutes: 30,
@@ -105,10 +112,7 @@ class _TimerScreenState extends State<TimerScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    const SizedBox(
-                      width: double.infinity,
-                      child: Clock(),
-                    ),
+                    const SizedBox(width: double.infinity, child: Clock()),
                     const SizedBox(height: AppSpacing.md),
                     Padding(
                       padding: const EdgeInsets.symmetric(
@@ -128,7 +132,12 @@ class _TimerScreenState extends State<TimerScreen> {
                               categoryIconForItem: (item) => agendaIcons[item],
                               maxVisibleItems: null,
                               appearanceType: TaskAppearanceType.checkable,
-                              onChecked: _checkTask,
+                              onChecked: (task, value) =>
+                                  planner.setTaskCompleted(task, value),
+                              onItemTap: (item) =>
+                                  showItemEditor(context, item),
+                              onDelete: (item) =>
+                                  confirmDeleteItem(context, item),
                             ),
                         ],
                       ),
@@ -140,7 +149,7 @@ class _TimerScreenState extends State<TimerScreen> {
           ),
           Positioned.fill(
             child: FloatingNavigationGroup(
-              key: ValueKey('timer-navigation'),
+              key: const ValueKey('timer-navigation'),
               selectedIndex: AppDestination.timer.index,
             ),
           ),
@@ -162,20 +171,6 @@ class _TimerScreenState extends State<TimerScreen> {
         ],
       ),
     );
-  }
-
-  List<PlannerItem> _todayTasks(TaskCategory category, DateTime today) {
-    return category.items
-        .where(
-          (item) => item is Task && _isSameDay(item.date, today),
-        )
-        .toList();
-  }
-
-  void _checkTask(Task task, bool isChecked) {
-    setState(() {
-      task.isChecked = isChecked;
-    });
   }
 
   bool _isSameDay(DateTime first, DateTime second) {
