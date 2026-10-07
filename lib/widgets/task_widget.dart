@@ -21,7 +21,6 @@ class TaskWidget extends StatelessWidget {
     this.appearanceType = TaskAppearanceType.checkable,
     this.onChecked,
     this.onTap,
-    this.onDelete,
   }) : assert(appearanceType != TaskAppearanceType.event),
        event = null;
 
@@ -30,7 +29,6 @@ class TaskWidget extends StatelessWidget {
     required this.event,
     this.categoryIconName,
     this.onTap,
-    this.onDelete,
   }) : task = null,
        appearanceType = TaskAppearanceType.event,
        onChecked = null;
@@ -41,7 +39,6 @@ class TaskWidget extends StatelessWidget {
   final TaskAppearanceType appearanceType;
   final ValueChanged<bool>? onChecked;
   final VoidCallback? onTap;
-  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +101,7 @@ class TaskWidget extends StatelessWidget {
             ),
           ),
         ),
-        if (includeCategoryIcon && categoryIconName != null) ...[
+        if (includeCategoryIcon && categoryIconName?.isNotEmpty == true) ...[
           const SizedBox(width: 8),
           Image.asset(
             'assets/img/categories/$categoryIconName.png',
@@ -119,15 +116,27 @@ class TaskWidget extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(task.title, style: titleStyle),
+                Text(
+                  task.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: titleStyle,
+                ),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      _formatDateTime(task.date, task.time),
-                      style: textTheme.labelMedium?.copyWith(color: textColor),
+                    Flexible(
+                      child: Text(
+                        _formatDateTime(task.date, task.time),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.labelMedium?.copyWith(
+                          color: textColor,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
                     Icon(
@@ -138,6 +147,8 @@ class TaskWidget extends StatelessWidget {
                     const SizedBox(width: AppSpacing.xs / 4),
                     Text(
                       _formatDuration(task.estimatedDuration),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: textTheme.labelMedium?.copyWith(color: textColor),
                     ),
                   ],
@@ -146,7 +157,6 @@ class TaskWidget extends StatelessWidget {
             ),
           ),
         ),
-        if (onDelete != null) _DeleteItemMenu(onSelected: onDelete!),
       ],
     );
   }
@@ -176,7 +186,7 @@ class TaskWidget extends StatelessWidget {
             ),
           ),
         ),
-        if (categoryIconName != null) ...[
+        if (categoryIconName?.isNotEmpty == true) ...[
           const SizedBox(width: AppSpacing.xs),
           Image.asset(
             'assets/img/categories/$categoryIconName.png',
@@ -206,7 +216,6 @@ class TaskWidget extends StatelessWidget {
             ),
           ),
         ),
-        if (onDelete != null) _DeleteItemMenu(onSelected: onDelete!),
       ],
     );
   }
@@ -270,24 +279,4 @@ class TaskWidget extends StatelessWidget {
     'November',
     'December',
   ];
-}
-
-class _DeleteItemMenu extends StatelessWidget {
-  const _DeleteItemMenu({required this.onSelected});
-
-  final VoidCallback onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      tooltip: 'Item actions',
-      onSelected: (value) {
-        if (value == 'delete') onSelected();
-      },
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'delete', child: Text('Delete')),
-      ],
-      icon: const Icon(Icons.more_horiz, color: AppColors.onSurface),
-    );
-  }
 }

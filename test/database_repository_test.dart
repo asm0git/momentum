@@ -106,6 +106,9 @@ void main() {
         TaskCategory(title: 'Work', iconName: 'work', items: []),
       );
       expect(category.id, isNotNull);
+      final destinationCategory = await repository.insertCategory(
+        TaskCategory(title: 'Personal', iconName: 'personal', items: []),
+      );
       category.title = 'Office';
       expect(await repository.updateCategory(category), isTrue);
       expect((await repository.getCategory(category.id!))?.title, 'Office');
@@ -123,6 +126,28 @@ void main() {
       task.description = 'Q4';
       expect(await repository.updateTask(task), isTrue);
       expect((await repository.getTask(task.id!))?.description, 'Q4');
+      task.categoryId = destinationCategory.id;
+      expect(await repository.updateTask(task), isTrue);
+      expect(
+        (await repository.getTask(task.id!))?.categoryId,
+        destinationCategory.id,
+      );
+      final categoriesWithItems = await repository.getCategoriesWithItems();
+      expect(
+        categoriesWithItems
+            .firstWhere((item) => item.id == category.id)
+            .items
+            .whereType<Task>(),
+        isEmpty,
+      );
+      expect(
+        categoriesWithItems
+            .firstWhere((item) => item.id == destinationCategory.id)
+            .items
+            .whereType<Task>()
+            .map((item) => item.id),
+        contains(task.id),
+      );
 
       final event = await repository.insertEvent(
         Event(
@@ -172,6 +197,7 @@ void main() {
       expect(await repository.deleteDailyPlan(plan.id!), isTrue);
       expect(await repository.deleteLinkedAccount(account.id!), isTrue);
       expect(await repository.deleteCategory(category.id!), isTrue);
+      expect(await repository.deleteCategory(destinationCategory.id!), isTrue);
       expect(await repository.getTasks(), isEmpty);
       expect(await repository.getEvents(), isEmpty);
     },
@@ -299,17 +325,18 @@ void main() {
         firstCategories.map((item) => item.title),
         containsAll(['School', 'Personal', 'Work', 'Gym']),
       );
-      expect(firstTasks, isNotEmpty);
+      expect(firstTasks, isEmpty);
       expect(firstEvents, isNotEmpty);
-      await repository.deleteTask(firstTasks.first.id!);
-      final countAfterDelete = (await repository.getTasks()).length;
+      await repository.deleteEvent(firstEvents.first.id!);
+      final eventCountAfterDelete = (await repository.getEvents()).length;
       await databaseHelper.close();
       databaseHelper = DatabaseHelper.forTesting(
         factory: databaseFactoryFfi,
         databasePath: p.join(tempDirectory.path, 'seed.db'),
       );
       repository = PlannerRepository(databaseHelper: databaseHelper);
-      expect((await repository.getTasks()).length, countAfterDelete);
+      expect(await repository.getTasks(), isEmpty);
+      expect((await repository.getEvents()).length, eventCountAfterDelete);
     },
   );
 }

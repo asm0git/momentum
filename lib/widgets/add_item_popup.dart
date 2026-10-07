@@ -4,6 +4,7 @@ import 'package:provider/provider.dart' hide Selector;
 import '../app_theme.dart';
 import '../data_models.dart';
 import '../state/planner_state.dart';
+import 'blurred_dialog.dart';
 import 'date_picker_dialog.dart';
 import 'estimated_duration_picker.dart';
 import 'selector.dart';
@@ -724,7 +725,7 @@ class _TitleCategoryFields extends StatelessWidget {
   }
 
   Future<void> _createCategory(BuildContext context) async {
-    final category = await showDialog<TaskCategory>(
+    final category = await showBlurredDialog<TaskCategory>(
       context: context,
       builder: (context) => const _NewCategoryDialog(),
     );

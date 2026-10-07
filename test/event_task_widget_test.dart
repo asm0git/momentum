@@ -6,6 +6,58 @@ import 'package:momentum/widgets/task_list_container.dart';
 import 'package:momentum/widgets/task_widget.dart';
 
 void main() {
+  testWidgets('No tasks appears only when the list contains no task', (
+    tester,
+  ) async {
+    final completedTask = Task(
+      title: 'Already complete',
+      date: DateTime.now(),
+      isChecked: true,
+      time: const TimeOfDay(hour: 9, minute: 0),
+      estimatedDuration: Duration.zero,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: Scaffold(body: TaskListContainer(items: [completedTask])),
+      ),
+    );
+    expect(find.text('No tasks.'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: const Scaffold(body: TaskListContainer(items: [])),
+      ),
+    );
+    expect(find.text('No tasks.'), findsOneWidget);
+  });
+
+  testWidgets('task rows in a task list stay compact', (tester) async {
+    final task = Task(
+      title: 'A task title long enough to wrap without the row limit',
+      date: DateTime.now(),
+      isChecked: false,
+      time: const TimeOfDay(hour: 9, minute: 0),
+      estimatedDuration: const Duration(minutes: 30),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: Scaffold(
+          body: TaskListContainer(items: [task], onDelete: (_) {}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rowHeight = tester.getSize(find.byType(TaskWidget)).height;
+    expect(rowHeight, lessThanOrEqualTo(40));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'combined agenda keeps every item and its category after sorting',
     (tester) async {

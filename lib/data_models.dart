@@ -81,8 +81,9 @@ class TaskCategory {
   String iconName;
   List<PlannerItem> items;
 
-  int get pendingCount =>
-      items.whereType<Task>().where((task) => !task.isChecked).length;
+  int get pendingCount => items
+      .where((item) => item is Event || (item is Task && !item.isChecked))
+      .length;
 }
 
 class DailyPlan {

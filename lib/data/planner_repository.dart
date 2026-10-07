@@ -64,13 +64,18 @@ class PlannerRepository {
   Future<bool> updateTask(Task task) async {
     if (task.id == null) return false;
     final db = await _databaseHelper.database;
-    return await db.update(
-          'tasks',
-          taskToMap(task),
-          where: 'id = ?',
-          whereArgs: [task.id],
-        ) >
-        0;
+    final values = taskToMap(task)..remove('id');
+    final updatedRows = await db.update(
+      'tasks',
+      values,
+      where: 'id = ?',
+      whereArgs: [task.id],
+    );
+    if (updatedRows == 0) return false;
+
+    // Confirm the category change reached storage before reporting success.
+    final savedTask = await getTask(task.id!);
+    return savedTask?.categoryId == task.categoryId;
   }
 
   Future<bool> deleteTask(int id) async {

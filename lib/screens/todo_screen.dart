@@ -19,9 +19,8 @@ class TodoScreen extends StatefulWidget {
 class _TodoScreenState extends State<TodoScreen> {
   @override
   Widget build(BuildContext context) {
-    final categories = context
-        .watch<PlannerState>()
-        .categoriesWithUnassignedItems;
+    final planner = context.watch<PlannerState>();
+    final categories = planner.categoriesWithUnassignedItems;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const PrimaryAppBar(
@@ -37,12 +36,15 @@ class _TodoScreenState extends State<TodoScreen> {
                 const SizedBox(height: AppSpacing.xxs),
             itemBuilder: (context, index) {
               final category = categories[index];
+              final items = planner.items
+                  .where((item) => item.categoryId == category.id)
+                  .toList();
               return CollapsibleCategory(
                 key: ValueKey(category.title),
                 title: category.title,
                 pendingLabel: '${category.pendingCount} pending',
                 iconName: category.iconName,
-                items: category.items,
+                items: items,
               );
             },
           ),

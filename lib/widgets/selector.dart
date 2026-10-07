@@ -39,7 +39,7 @@ class Selector extends StatelessWidget {
       overflow: TextOverflow.ellipsis,
       style: style,
     );
-    if (iconName == null) return labelWidget;
+    if (iconName == null || iconName.trim().isEmpty) return labelWidget;
 
     return Row(
       children: [

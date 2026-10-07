@@ -36,8 +36,9 @@ void main() {
     await tempDirectory.delete(recursive: true);
   });
 
-  testWidgets('shared changes rebuild Dashboard, Calendar, and To-Do views',
-      (tester) async {
+  testWidgets('shared changes rebuild Dashboard, Calendar, and To-Do views', (
+    tester,
+  ) async {
     await tester.pumpWidget(_app(planner, const _ReactivePlannerViews()));
 
     final category = (await tester.runAsync(
@@ -72,6 +73,29 @@ void main() {
     expect(find.text('Dashboard: Revise outline'), findsOneWidget);
     expect(find.text('Calendar: Revise outline'), findsOneWidget);
     expect(find.text('To-Do: Revise outline'), findsOneWidget);
+
+    final destination = (await tester.runAsync(
+      () => planner.addCategory(
+        TaskCategory(title: 'Personal', iconName: 'personal', items: []),
+      ),
+    ))!;
+    task.categoryId = destination.id;
+    final movedTask = (await tester.runAsync(() => planner.saveTask(task)))!;
+    await tester.pump();
+    expect(movedTask.categoryId, destination.id);
+    expect(
+      planner.categoriesWithUnassignedItems
+          .firstWhere((item) => item.id == category.id)
+          .pendingCount,
+      0,
+    );
+    expect(
+      planner.categoriesWithUnassignedItems
+          .firstWhere((item) => item.id == destination.id)
+          .pendingCount,
+      1,
+    );
+    expect(planner.items.whereType<Task>().single.categoryId, destination.id);
 
     await tester.runAsync(() => planner.setTaskCompleted(task, true));
     await tester.pump();

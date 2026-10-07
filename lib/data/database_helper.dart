@@ -46,14 +46,17 @@ class DatabaseHelper {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: (db, version) async {
           await _createSchema(db);
           if (seedOnCreate) await _seed(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
-          // Schema version 1 is the first released local database schema.
+          if (oldVersion < 2) {
+            // Start the task-storage check with an empty local task table.
+            await db.delete('tasks');
+          }
         },
       ),
     );
@@ -127,9 +130,7 @@ class DatabaseHelper {
       final categoryId = await db.insert('categories', categoryToMap(category));
       for (final item in category.items) {
         item.categoryId = categoryId;
-        if (item is Task) {
-          await db.insert('tasks', taskToMap(item));
-        } else if (item is Event) {
+        if (item is Event) {
           await db.insert('events', eventToMap(item));
         }
       }

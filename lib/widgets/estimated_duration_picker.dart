@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import 'blurred_dialog.dart';
 
 class EstimatedDurationPicker extends StatelessWidget {
   const EstimatedDurationPicker({
@@ -14,7 +15,7 @@ class EstimatedDurationPicker extends StatelessWidget {
   final ValueChanged<Duration> onChanged;
 
   Future<void> _showPicker(BuildContext context) async {
-    final duration = await showDialog<Duration>(
+    final duration = await showBlurredDialog<Duration>(
       context: context,
       builder: (_) => _EstimatedDurationDialog(initialDuration: value),
     );

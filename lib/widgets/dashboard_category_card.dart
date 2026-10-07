@@ -40,14 +40,17 @@ class DashboardCategoryCard extends StatelessWidget {
   Widget _buildHeading(BuildContext context, TextTheme textTheme) {
     return Row(
       children: [
-        Image.asset(
-          'assets/img/categories/${category.iconName}.png',
-          width: 20,
-          height: 20,
-          fit: BoxFit.contain,
-          color: AppColors.primary,
-          colorBlendMode: BlendMode.srcIn,
-        ),
+        if (category.iconName.trim().isNotEmpty)
+          Image.asset(
+            'assets/img/categories/${category.iconName}.png',
+            width: 20,
+            height: 20,
+            fit: BoxFit.contain,
+            color: AppColors.primary,
+            colorBlendMode: BlendMode.srcIn,
+          )
+        else
+          const SizedBox.square(dimension: 20),
         const SizedBox(width: AppSpacing.xs),
         Expanded(
           child: Column(
@@ -111,7 +114,9 @@ class DashboardCategoryCard extends StatelessWidget {
   _UpcomingItem? _findUpcomingItem(DateTime now) {
     final items =
         [
-          for (final item in category.items)
+          for (final item in category.items.whereType<Task>().where(
+            (task) => !task.isChecked,
+          ))
             _UpcomingItem(item: item, scheduledDate: _scheduledDate(item)),
         ]..sort(
           (first, second) =>

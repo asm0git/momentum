@@ -42,7 +42,7 @@ class AppSpacing {
   static const double addIconSize = base * 3;
   static const fabAnimationDuration = Duration(milliseconds: 240);
   static const double floatingGroupEdge = 20;
-  static const double floatingGroupBottom = 28;
+  static const double floatingGroupBottom = 8;
   static const double floatingGroupGap = 12;
   static const double dashboardCategoryWidth = base * 20;
   static const double focusPresetWidth = base * 23;
@@ -90,7 +90,7 @@ final appTheme = ThemeData(
       fontFamily: 'SFProDisplay',
       fontSize: 16,
       fontWeight: FontWeight.bold,
-      letterSpacing: -0.3,
+      letterSpacing: -0.6,
       height: 1.2,
     ),
     bodyLarge: TextStyle(
@@ -98,7 +98,7 @@ final appTheme = ThemeData(
       fontSize: 24,
       fontWeight: FontWeight.w600,
       height: 1.2,
-      letterSpacing: -0.3,
+      letterSpacing: -0.6,
     ),
     bodyMedium: TextStyle(
       fontFamily: 'SFProText',

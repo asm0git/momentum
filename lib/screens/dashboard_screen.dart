@@ -38,24 +38,26 @@ class _ScreenBody extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.screenEdgePadding,
-            AppSpacing.md,
-            AppSpacing.screenEdgePadding,
-            AppSpacing.navigationDockHeight + AppSpacing.sectionGap,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildDateTimeSection(context),
-              const SizedBox(height: AppSpacing.md),
-              _buildCategoriesSection(context),
-              const SizedBox(height: AppSpacing.md),
-              _buildTodoSection(context),
-              const SizedBox(height: AppSpacing.md),
-              _buildFocusSection(context),
-            ],
+        Positioned.fill(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.screenEdgePadding,
+              AppSpacing.md,
+              AppSpacing.screenEdgePadding,
+              AppSpacing.navigationDockHeight + AppSpacing.sectionGap,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildDateTimeSection(context),
+                const SizedBox(height: AppSpacing.md),
+                _buildCategoriesSection(context),
+                const SizedBox(height: AppSpacing.md),
+                _buildTodoSection(context),
+                const SizedBox(height: AppSpacing.md),
+                _buildFocusSection(context),
+              ],
+            ),
           ),
         ),
         Positioned.fill(

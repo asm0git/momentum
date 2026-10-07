@@ -103,10 +103,20 @@ class PlannerState extends ChangeNotifier {
       if (task.id == null) {
         await _repository.insertTask(task);
       } else {
-        await _repository.updateTask(task);
+        final updated = await _repository.updateTask(task);
+        if (!updated) {
+          throw StateError('The task was not updated in local storage.');
+        }
       }
     });
-    return task;
+    final savedTask = _items
+        .whereType<Task>()
+        .where((saved) => saved.id == task.id)
+        .firstOrNull;
+    if (savedTask == null) {
+      throw StateError('The saved task could not be reloaded.');
+    }
+    return savedTask;
   }
 
   Future<Event> saveEvent(Event event) async {

@@ -31,6 +31,20 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
   bool _isExpanded = false;
 
   @override
+  void initState() {
+    super.initState();
+    _isExpanded = _containsEvent(widget.items);
+  }
+
+  @override
+  void didUpdateWidget(covariant CollapsibleCategory oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_containsEvent(oldWidget.items) && _containsEvent(widget.items)) {
+      _isExpanded = true;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
@@ -102,4 +116,7 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
       ],
     );
   }
+
+  bool _containsEvent(List<PlannerItem> items) =>
+      items.any((item) => item is Event);
 }

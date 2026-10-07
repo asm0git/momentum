@@ -39,8 +39,7 @@ class WeekWidget extends StatelessWidget {
                   title: category.title,
                   iconName: category.iconName,
                   items: category.items
-                      .whereType<Task>()
-                      .where((task) => _sameDay(task.date, date))
+                      .where((item) => _sameDay(item.date, date))
                       .toList(),
                 ),
               )

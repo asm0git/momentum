@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import 'blurred_dialog.dart';
 
 Future<TimeOfDay?> showAppTimePickerDialog(
   BuildContext context, {
   required TimeOfDay initialTime,
 }) {
   const checkIcon = Icons.check;
-  return showTimePicker(
+  return showBlurredDialog<TimeOfDay>(
     context: context,
-    initialTime: initialTime,
-    confirmText: String.fromCharCode(checkIcon.codePoint),
-    builder: (context, child) {
-      final theme = Theme.of(context);
+    builder: (dialogContext) {
+      final theme = Theme.of(dialogContext);
       final timePickerTheme = theme.timePickerTheme;
       return TimePickerTheme(
         data: timePickerTheme.copyWith(
@@ -43,7 +42,10 @@ Future<TimeOfDay?> showAppTimePickerDialog(
                 : AppColors.onSurface,
           ),
         ),
-        child: child!,
+        child: TimePickerDialog(
+          initialTime: initialTime,
+          confirmText: String.fromCharCode(checkIcon.codePoint),
+        ),
       );
     },
   );

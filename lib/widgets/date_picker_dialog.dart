@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import 'blurred_dialog.dart';
 import 'calendar.dart';
 
 Future<DateTime?> showAppDatePickerDialog(
   BuildContext context, {
   required DateTime initialDate,
 }) {
-  return showDialog<DateTime>(
+  return showBlurredDialog<DateTime>(
     context: context,
     builder: (dialogContext) => Dialog(
       backgroundColor: AppColors.background,

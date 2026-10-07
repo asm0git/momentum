@@ -6,6 +6,7 @@ import '../app_theme.dart';
 import '../navigation_destinations.dart';
 import 'add_item_popup.dart';
 import 'add_task_button.dart';
+import 'blurred_dialog.dart';
 
 // Bottom navigation dock, add-task button, and expandable popup overlay.
 class FloatingNavigationGroup extends StatefulWidget {
@@ -103,6 +104,11 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
   }
 
   Widget _buildNavigationGroup(Color primary, {required bool showPopup}) {
+    final safeAreaBottom = MediaQuery.paddingOf(context).bottom;
+    final bottomOffset = safeAreaBottom > AppSpacing.floatingGroupBottom
+        ? safeAreaBottom
+        : AppSpacing.floatingGroupBottom;
+
     return Stack(
       children: [
         Positioned(
@@ -136,19 +142,15 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
           ),
         ),
         if (showPopup) ...[
-          Positioned.fill(
-            child: BackdropFilter(
-              key: const ValueKey('add-item-backdrop'),
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: const ColoredBox(color: AppColors.popupScrim),
-            ),
+          const Positioned.fill(
+            child: BlurredPopupBarrier(key: ValueKey('add-item-backdrop')),
           ),
           Positioned(
             left: AppSpacing.floatingGroupEdge,
             right: AppSpacing.floatingGroupEdge,
             bottom:
                 AppSpacing.navigationDockHeight +
-                AppSpacing.floatingGroupBottom +
+                bottomOffset +
                 AppSpacing.floatingGroupGap,
             child: AnimatedBuilder(
               animation: _popupController,
@@ -175,7 +177,7 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
         Positioned(
           left: AppSpacing.floatingGroupEdge,
           right: AppSpacing.floatingGroupEdge,
-          bottom: AppSpacing.floatingGroupBottom,
+          bottom: bottomOffset,
           child: SafeArea(
             top: false,
             bottom: false,

@@ -126,7 +126,7 @@ class _CategoryCountPill extends StatelessWidget {
             const SizedBox(width: 2),
           ],
           Text(
-            '${category.items.whereType<Task>().length}',
+            '${category.items.length}',
             style: textTheme.labelSmall?.copyWith(color: AppColors.onSurface),
           ),
         ],

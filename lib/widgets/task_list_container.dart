@@ -37,11 +37,22 @@ class TaskListContainer extends StatelessWidget {
     final limitedItems = maxVisibleItems == null
         ? visibleItems
         : visibleItems.take(maxVisibleItems!).toList();
+    final hasTasks = items.any((item) => item is Task);
     final taskContent = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var index = 0; index < limitedItems.length; index++)
           _buildTaskItem(context, index, textTheme, limitedItems),
+        if (!hasTasks) ...[
+          if (limitedItems.isNotEmpty) const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'No tasks.',
+              style: textTheme.bodyMedium?.copyWith(color: AppColors.onSurface),
+            ),
+          ),
+        ],
       ],
     );
 
@@ -85,32 +96,184 @@ class TaskListContainer extends StatelessWidget {
   ) {
     final item = visibleItems[index];
     final iconName = categoryIconForItem?.call(item) ?? categoryIconName;
+    final Widget itemWidget;
+    if (item is Task) {
+      itemWidget = TaskWidget(
+        task: item,
+        categoryIconName: iconName,
+        appearanceType: appearanceType,
+        onChecked: onChecked == null
+            ? null
+            : (isChecked) => onChecked!(item, isChecked),
+        onTap: onItemTap == null ? null : () => onItemTap!(item),
+      );
+    } else if (item is Event) {
+      itemWidget = TaskWidget.event(
+        event: item,
+        categoryIconName:
+            appearanceType == TaskAppearanceType.withoutCategoryIcon
+            ? null
+            : iconName,
+        onTap: onItemTap == null ? null : () => onItemTap!(item),
+      );
+    } else {
+      itemWidget = Text(item.title, style: textTheme.bodyMedium);
+    }
+
+    final supportsSwipeDelete = item is Task || item is Event;
+    final row = onDelete != null && supportsSwipeDelete
+        ? _SwipeToRevealDelete(
+            onDelete: () => onDelete!(item),
+            child: itemWidget,
+          )
+        : itemWidget;
+
     return Padding(
       padding: EdgeInsets.only(
         bottom: index == visibleItems.length - 1 ? 0 : AppSpacing.md,
       ),
-      child: item is Task
-          ? TaskWidget(
-              task: item,
-              categoryIconName: iconName,
-              appearanceType: appearanceType,
-              onChecked: onChecked == null
-                  ? null
-                  : (isChecked) => onChecked!(item, isChecked),
-              onTap: onItemTap == null ? null : () => onItemTap!(item),
-              onDelete: onDelete == null ? null : () => onDelete!(item),
-            )
-          : item is Event
-          ? TaskWidget.event(
-              event: item,
-              categoryIconName:
-                  appearanceType == TaskAppearanceType.withoutCategoryIcon
-                  ? null
-                  : iconName,
-              onTap: onItemTap == null ? null : () => onItemTap!(item),
-              onDelete: onDelete == null ? null : () => onDelete!(item),
-            )
-          : Text(item.title, style: textTheme.bodyMedium),
+      child: row,
+    );
+  }
+}
+
+class _SwipeToRevealDelete extends StatefulWidget {
+  const _SwipeToRevealDelete({required this.child, required this.onDelete});
+
+  static const actionWidth = 72.0;
+
+  final Widget child;
+  final VoidCallback onDelete;
+
+  @override
+  State<_SwipeToRevealDelete> createState() => _SwipeToRevealDeleteState();
+}
+
+class _SwipeToRevealDeleteState extends State<_SwipeToRevealDelete>
+    with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 180),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onHorizontalDragStart(DragStartDetails details) {
+    _controller.stop();
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    _controller.value =
+        (_controller.value -
+                details.delta.dx / _SwipeToRevealDelete.actionWidth)
+            .clamp(0.0, 1.0);
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    final velocity = details.velocity.pixelsPerSecond.dx;
+    if (velocity < -300 ||
+        (velocity.abs() <= 300 && _controller.value >= 0.35)) {
+      _controller.animateTo(1, curve: Curves.easeOutCubic);
+    } else {
+      _controller.animateBack(0, curve: Curves.easeInCubic);
+    }
+  }
+
+  void _onHorizontalDragCancel() {
+    _controller.animateBack(0, curve: Curves.easeInCubic);
+  }
+
+  void _delete() {
+    _controller.animateBack(0, curve: Curves.easeInCubic);
+    widget.onDelete();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final rowWidth = constraints.maxWidth;
+        final row = SizedBox(
+          width: rowWidth,
+          child: Stack(
+            children: [
+              const Positioned.fill(
+                child: ColoredBox(color: AppColors.surface),
+              ),
+              Positioned.fill(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: _SwipeToRevealDelete.actionWidth,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadii.popup),
+                        child: ColoredBox(
+                          color: AppColors.error,
+                          child: Semantics(
+                            button: true,
+                            label: 'Delete item',
+                            onTap: _delete,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _delete,
+                              child: const Center(
+                                child: Tooltip(
+                                  message: 'Delete item',
+                                  child: Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: AppColors.onPrimary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              AnimatedBuilder(
+                animation: _controller,
+                child: SizedBox(
+                  width: rowWidth,
+                  child: ColoredBox(
+                    color: AppColors.surface,
+                    child: widget.child,
+                  ),
+                ),
+                builder: (context, child) {
+                  return Transform.translate(
+                    offset: Offset(
+                      -_SwipeToRevealDelete.actionWidth * _controller.value,
+                      0,
+                    ),
+                    child: IgnorePointer(
+                      ignoring: _controller.value > 0.02,
+                      child: child,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: _onHorizontalDragStart,
+          onHorizontalDragUpdate: _onHorizontalDragUpdate,
+          onHorizontalDragEnd: _onHorizontalDragEnd,
+          onHorizontalDragCancel: _onHorizontalDragCancel,
+          child: ClipRect(child: row),
+        );
+      },
     );
   }
 }
