@@ -9,11 +9,13 @@ class FocusPreset extends StatelessWidget {
     this.workMinutes = 30,
     this.breakMinutes = 5,
     this.margin,
+    this.onPressed,
   });
 
   final int workMinutes;
   final int breakMinutes;
   final EdgeInsets? margin;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -26,39 +28,50 @@ class FocusPreset extends StatelessWidget {
             horizontal: AppSpacing.xs,
             vertical: AppSpacing.md,
           ),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadii.focusPreset),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Image.asset(
-            'assets/img/unselected/Timer.png',
-            width: AppSpacing.md,
-            height: AppSpacing.md,
-            fit: BoxFit.contain,
+      child: Material(
+        color: AppColors.transparent,
+        borderRadius: BorderRadius.circular(AppRadii.focusPreset),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadii.focusPreset),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/img/unselected/Timer.png',
+                  width: AppSpacing.md,
+                  height: AppSpacing.md,
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('$workMinutes minutes', style: textTheme.titleMedium),
+                    Text(
+                      '$breakMinutes minutes rest',
+                      style: textTheme.labelMedium,
+                    ),
+                  ],
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.onSurface,
+                  size: AppSpacing.navigationIconSize,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: AppSpacing.xs),
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('$workMinutes minutes', style: textTheme.titleMedium),
-
-              Text('$breakMinutes minutes rest', style: textTheme.labelMedium),
-            ],
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          const Icon(
-            Icons.chevron_right,
-            color: AppColors.onSurface,
-            size: AppSpacing.navigationIconSize,
-          ),
-        ],
+        ),
       ),
     );
   }

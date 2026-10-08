@@ -6,6 +6,7 @@ import 'package:momentum/app_theme.dart';
 import 'package:momentum/data/database_helper.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
+import 'package:momentum/screens/todo_screen.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -84,13 +85,13 @@ void main() {
     await tester.pump();
     expect(movedTask.categoryId, destination.id);
     expect(
-      planner.categoriesWithUnassignedItems
+      planner.categories
           .firstWhere((item) => item.id == category.id)
           .pendingCount,
       0,
     );
     expect(
-      planner.categoriesWithUnassignedItems
+      planner.categories
           .firstWhere((item) => item.id == destination.id)
           .pendingCount,
       1,
@@ -106,6 +107,81 @@ void main() {
     expect(find.text('Dashboard: Revise outline'), findsNothing);
     expect(find.text('Calendar: Revise outline'), findsNothing);
     expect(find.text('To-Do: Revise outline'), findsNothing);
+  });
+
+  testWidgets('event-only categories count and preview their event', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(planner, const _ReactivePlannerViews()));
+    final category = await tester.runAsync(
+      () => planner.addCategory(
+        TaskCategory(title: 'Events', iconName: 'event', items: []),
+      ),
+    );
+    final event = await tester.runAsync(() {
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      return planner.saveEvent(
+        Event(
+          categoryId: category!.id,
+          title: 'Conference',
+          date: DateTime(tomorrow.year, tomorrow.month, tomorrow.day),
+          start: const TimeOfDay(hour: 10, minute: 0),
+          end: const TimeOfDay(hour: 11, minute: 0),
+          isCurrent: false,
+          allDay: false,
+        ),
+      );
+    });
+    final savedEvent = event!;
+    await tester.pump();
+
+    expect(
+      planner.categories
+          .singleWhere((item) => item.id == category!.id)
+          .pendingCount,
+      1,
+    );
+    expect(planner.itemsForCategory(category!.id!).single, isA<Event>());
+    expect(
+      planner.nextUpcomingItemForCategory(category.id!, DateTime.now()),
+      isA<Event>().having((item) => item.title, 'title', savedEvent.title),
+    );
+    expect(
+      planner.nextUpcomingItem,
+      isA<Event>().having((item) => item.title, 'title', savedEvent.title),
+    );
+  });
+
+  testWidgets('To-Do shows stored categories and expands the selected one', (
+    tester,
+  ) async {
+    final category = await tester.runAsync(
+      () => planner.addCategory(
+        TaskCategory(title: 'Selected category', iconName: 'school', items: []),
+      ),
+    );
+    await tester.runAsync(() {
+      final tomorrow = DateTime.now().add(const Duration(days: 1));
+      return planner.saveTask(
+        Task(
+          categoryId: category!.id,
+          title: 'Visible task',
+          date: DateTime(tomorrow.year, tomorrow.month, tomorrow.day),
+          time: const TimeOfDay(hour: 9, minute: 0),
+          estimatedDuration: const Duration(minutes: 30),
+          isChecked: false,
+        ),
+      );
+    });
+
+    await tester.pumpWidget(
+      _app(planner, TodoScreen(initialCategoryId: category!.id)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Selected category'), findsOneWidget);
+    expect(find.text('Visible task'), findsOneWidget);
+    expect(find.text('None'), findsNothing);
   });
 }
 

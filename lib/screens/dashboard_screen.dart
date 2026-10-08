@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../app_theme.dart';
 import '../data_models.dart';
 import '../navigation_destinations.dart';
+import '../state/focus_timer_state.dart';
 import '../state/planner_state.dart';
 import '../widgets/bottom_navigation_bar.dart';
+import '../widgets/category_icon_picker.dart';
 import '../widgets/dashboard_category_card.dart';
 import '../widgets/focus_preset.dart';
 import '../widgets/item_actions.dart';
@@ -76,16 +78,10 @@ class _ScreenBody extends StatelessWidget {
     final item = planner.nextUpcomingItem;
     final category = item == null
         ? null
-        : planner.categoriesWithUnassignedItems.firstWhere(
-            (candidate) => candidate.items.any(
-              (candidateItem) =>
-                  candidateItem.runtimeType == item.runtimeType &&
-                  candidateItem.id == item.id,
-            ),
-            orElse: () =>
-                TaskCategory(title: 'None', iconName: '', items: const []),
-          );
-    final nextItem = item == null || category == null
+        : planner.categories
+              .where((candidate) => candidate.id == item.categoryId)
+              .firstOrNull;
+    final nextItem = item == null
         ? null
         : _DashboardItem(
             item: item,
@@ -204,13 +200,10 @@ class _ScreenBody extends StatelessWidget {
             ),
             Row(
               children: [
-                if (nextItem.category.iconName.isNotEmpty) ...[
-                  Image.asset(
-                    'assets/img/categories/${nextItem.category.iconName}.png',
-                    width: AppSpacing.navigationIconSize,
-                    height: AppSpacing.navigationIconSize,
-                    color: AppColors.primary,
-                    colorBlendMode: BlendMode.srcIn,
+                if (nextItem.category?.iconName.isNotEmpty == true) ...[
+                  CategoryIcon(
+                    iconName: nextItem.category!.iconName,
+                    size: AppSpacing.navigationIconSize,
                   ),
                   const SizedBox(width: AppSpacing.xs),
                 ],
@@ -274,7 +267,8 @@ class _ScreenBody extends StatelessWidget {
   }
 
   Widget _buildCategoriesSection(BuildContext context) {
-    final categories = context.watch<PlannerState>().categories;
+    final planner = context.watch<PlannerState>();
+    final categories = planner.categories;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -296,6 +290,29 @@ class _ScreenBody extends StatelessWidget {
                       'dashboard-category-${categories[index].title}',
                     ),
                     category: categories[index],
+                    nextItem: categories[index].id == null
+                        ? null
+                        : planner.nextUpcomingItemForCategory(
+                            categories[index].id!,
+                            DateTime.now(),
+                          ),
+                    pendingCount: categories[index].id == null
+                        ? 0
+                        : planner
+                              .itemsForCategory(categories[index].id!)
+                              .where(
+                                (item) =>
+                                    item is Event ||
+                                    (item is Task && !item.isChecked),
+                              )
+                              .length,
+                    onTap: () {
+                      final categoryId = categories[index].id;
+                      if (categoryId == null) return;
+                      Navigator.of(
+                        context,
+                      ).pushReplacementNamed('/todo', arguments: categoryId);
+                    },
                   ),
                   if (index < categories.length - 1)
                     const SizedBox(width: AppSpacing.xs),
@@ -311,11 +328,7 @@ class _ScreenBody extends StatelessWidget {
   Widget _buildTodoSection(BuildContext context) {
     final planner = context.watch<PlannerState>();
     final today = DateTime.now();
-    final tasks = planner.items
-        .whereType<Task>()
-        .where((task) => _sameDay(task.date, today))
-        .cast<PlannerItem>()
-        .toList();
+    final tasks = planner.itemsForDate(today).whereType<Task>().toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -330,7 +343,7 @@ class _ScreenBody extends StatelessWidget {
           items: tasks,
           appearanceType: TaskAppearanceType.withoutCategoryIcon,
           onChecked: (task, value) => planner.setTaskCompleted(task, value),
-          onItemTap: (item) => showItemEditor(context, item),
+          onItemTap: (item) => showItemEditor(context, planner.seriesFor(item)),
           onDelete: (item) => confirmDeleteItem(context, item),
         ),
       ],
@@ -347,7 +360,7 @@ class _ScreenBody extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: AppSpacing.xxs),
-        const IntrinsicHeight(
+        IntrinsicHeight(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -356,30 +369,35 @@ class _ScreenBody extends StatelessWidget {
                   workMinutes: 30,
                   breakMinutes: 5,
                   margin: EdgeInsets.zero,
+                  onPressed: () => _selectFocusPreset(context, 30, 5),
                 ),
-                SizedBox(width: AppSpacing.xs),
+                const SizedBox(width: AppSpacing.xs),
                 FocusPreset(
                   workMinutes: 25,
                   breakMinutes: 2,
                   margin: EdgeInsets.zero,
+                  onPressed: () => _selectFocusPreset(context, 25, 2),
                 ),
-                SizedBox(width: AppSpacing.xs),
+                const SizedBox(width: AppSpacing.xs),
                 FocusPreset(
                   workMinutes: 45,
                   breakMinutes: 10,
                   margin: EdgeInsets.zero,
+                  onPressed: () => _selectFocusPreset(context, 45, 10),
                 ),
-                SizedBox(width: AppSpacing.xs),
+                const SizedBox(width: AppSpacing.xs),
                 FocusPreset(
                   workMinutes: 50,
                   breakMinutes: 10,
                   margin: EdgeInsets.zero,
+                  onPressed: () => _selectFocusPreset(context, 50, 10),
                 ),
-                SizedBox(width: AppSpacing.xs),
+                const SizedBox(width: AppSpacing.xs),
                 FocusPreset(
                   workMinutes: 60,
                   breakMinutes: 15,
                   margin: EdgeInsets.zero,
+                  onPressed: () => _selectFocusPreset(context, 60, 15),
                 ),
               ],
             ),
@@ -392,12 +410,18 @@ class _ScreenBody extends StatelessWidget {
   Widget _buildDashboardComponent(Widget child) {
     return child;
   }
-}
 
-bool _sameDay(DateTime first, DateTime second) {
-  return first.year == second.year &&
-      first.month == second.month &&
-      first.day == second.day;
+  void _selectFocusPreset(
+    BuildContext context,
+    int workMinutes,
+    int breakMinutes,
+  ) {
+    context.read<FocusTimerState>().selectPreset(
+      workMinutes: workMinutes,
+      breakMinutes: breakMinutes,
+    );
+    Navigator.of(context).pushReplacementNamed('/timer');
+  }
 }
 
 class _DashboardItem {
@@ -409,7 +433,7 @@ class _DashboardItem {
   });
 
   final PlannerItem item;
-  final TaskCategory category;
+  final TaskCategory? category;
   final DateTime startTime;
   final DateTime endTime;
 }

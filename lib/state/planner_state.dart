@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../data/planner_repository.dart';
+import '../data/recurrence.dart';
 import '../data_models.dart';
 
 class PlannerState extends ChangeNotifier {
@@ -10,6 +11,7 @@ class PlannerState extends ChangeNotifier {
   final PlannerRepository _repository;
   List<TaskCategory> _categories = [];
   List<PlannerItem> _items = [];
+  Set<String> _taskOccurrenceCompletionKeys = {};
   bool _isLoading = true;
   Object? _error;
 
@@ -20,31 +22,62 @@ class PlannerState extends ChangeNotifier {
 
   PlannerItem? get nextUpcomingItem {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final upcoming =
-        _items.where((item) {
-          if (item is Task) {
-            return !item.isChecked && _scheduledDate(item).isAfter(now);
-          }
-          final event = item as Event;
-          return _scheduledDate(event).isAfter(now) ||
-              (event.allDay && _sameDay(event.date, today));
-        }).toList()..sort(
-          (first, second) =>
-              _scheduledDate(first).compareTo(_scheduledDate(second)),
-        );
-    return upcoming.isEmpty ? null : upcoming.first;
+    return _nextUpcomingFrom(_items, now);
   }
 
-  List<TaskCategory> get categoriesWithUnassignedItems {
-    final categories = List<TaskCategory>.from(_categories);
-    final unassigned = _items.where((item) => item.categoryId == null).toList();
-    if (unassigned.isNotEmpty) {
-      categories.add(
-        TaskCategory(title: 'None', iconName: '', items: unassigned),
+  PlannerItem? nextUpcomingItemForCategory(int categoryId, DateTime now) =>
+      _nextUpcomingFrom(
+        _items.where((item) => item.categoryId == categoryId),
+        now,
       );
+
+  List<PlannerItem> itemsForDate(DateTime date) => _itemsForRange(date, date);
+
+  List<PlannerItem> itemsForRange(DateTime firstDay, DateTime lastDay) =>
+      _itemsForRange(firstDay, lastDay);
+
+  /// Returns one visible row per category item. Recurring items are represented
+  /// by their next date, with task completion scoped to that occurrence.
+  List<PlannerItem> itemsForCategory(int categoryId) {
+    final today = dateOnly(DateTime.now());
+    final result = <PlannerItem>[];
+    for (final series in _items.where(
+      (item) => item.categoryId == categoryId,
+    )) {
+      if (!isRecurring(series)) {
+        result.add(series);
+        continue;
+      }
+      for (final occurrenceDate in recurrenceDatesInRange(
+        series,
+        from: today,
+        through: DateTime(9999, 12, 31),
+      )) {
+        final completed =
+            series is Task &&
+            series.id != null &&
+            _taskOccurrenceCompletionKeys.contains(
+              taskOccurrenceKey(series.id!, occurrenceDate),
+            );
+        if (completed) continue;
+        result.add(
+          occurrenceForDate(series, occurrenceDate, isCompleted: completed),
+        );
+        break;
+      }
     }
-    return categories;
+    result.sort(_compareItems);
+    return result;
+  }
+
+  /// Resolves a generated calendar occurrence to the saved series record.
+  PlannerItem seriesFor(PlannerItem occurrence) {
+    final id = occurrence.id;
+    if (id == null) return occurrence;
+    return _items.firstWhere(
+      (item) => item.runtimeType == occurrence.runtimeType && item.id == id,
+      orElse: () => occurrence,
+    );
   }
 
   Future<void> initialize() async {
@@ -66,8 +99,11 @@ class PlannerState extends ChangeNotifier {
   Future<void> _reloadSnapshot() async {
     final categories = await _repository.getCategoriesWithItems();
     final items = await _repository.getAllItems();
+    final occurrenceCompletions = await _repository
+        .getTaskOccurrenceCompletionKeys();
     _categories = categories;
     _items = items;
+    _taskOccurrenceCompletionKeys = occurrenceCompletions;
     _error = null;
   }
 
@@ -132,6 +168,15 @@ class PlannerState extends ChangeNotifier {
 
   Future<void> setTaskCompleted(Task task, bool isCompleted) =>
       _afterWrite(() async {
+        final occurrenceDate = task.occurrenceDate;
+        if (isRecurring(task) && task.id != null && occurrenceDate != null) {
+          await _repository.setTaskOccurrenceCompleted(
+            task.id!,
+            occurrenceDate,
+            isCompleted,
+          );
+          return;
+        }
         task.isChecked = isCompleted;
         await _repository.updateTask(task);
       });
@@ -154,6 +199,80 @@ class PlannerState extends ChangeNotifier {
 
   Future<List<Task>> getTasksForDate(DateTime date) =>
       _repository.getTasksForDate(date);
+
+  Future<int> getFocusSecondsForDate(DateTime date) =>
+      _repository.getFocusSecondsForDate(date);
+
+  Future<void> addFocusSeconds(DateTime date, int seconds) =>
+      _repository.addFocusSeconds(date, seconds);
+
+  List<PlannerItem> _itemsForRange(DateTime firstDay, DateTime lastDay) {
+    final from = dateOnly(firstDay);
+    final through = dateOnly(lastDay);
+    final result = <PlannerItem>[];
+    for (final series in _items) {
+      for (final occurrenceDate in recurrenceDatesInRange(
+        series,
+        from: from,
+        through: through,
+      )) {
+        final completed =
+            series is Task &&
+            series.id != null &&
+            _taskOccurrenceCompletionKeys.contains(
+              taskOccurrenceKey(series.id!, occurrenceDate),
+            );
+        result.add(
+          occurrenceForDate(series, occurrenceDate, isCompleted: completed),
+        );
+      }
+    }
+    result.sort(_compareItems);
+    return result;
+  }
+
+  PlannerItem? _nextUpcomingFrom(Iterable<PlannerItem> source, DateTime now) {
+    final today = dateOnly(now);
+    PlannerItem? next;
+    DateTime? nextAt;
+    for (final series in source) {
+      for (final occurrenceDate in recurrenceDatesInRange(
+        series,
+        from: today,
+        through: DateTime(9999, 12, 31),
+      )) {
+        final completed =
+            series is Task &&
+            (isRecurring(series)
+                ? series.id != null &&
+                      _taskOccurrenceCompletionKeys.contains(
+                        taskOccurrenceKey(series.id!, occurrenceDate),
+                      )
+                : series.isChecked);
+        if (completed) continue;
+        final occurrence = occurrenceForDate(
+          series,
+          occurrenceDate,
+          isCompleted: completed,
+        );
+        final startsAt = _scheduledDate(occurrence);
+        final allDayIsToday =
+            occurrence is Event &&
+            occurrence.allDay &&
+            _sameDay(occurrence.date, today);
+        if (startsAt.isBefore(now) && !allDayIsToday) continue;
+        if (nextAt == null || startsAt.isBefore(nextAt)) {
+          next = occurrence;
+          nextAt = startsAt;
+        }
+        break;
+      }
+    }
+    return next;
+  }
+
+  int _compareItems(PlannerItem first, PlannerItem second) =>
+      _scheduledDate(first).compareTo(_scheduledDate(second));
 
   DateTime _scheduledDate(PlannerItem item) {
     if (item is Task) {

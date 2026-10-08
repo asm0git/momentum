@@ -34,6 +34,14 @@ Map<String, Object?> taskToMap(Task task) => {
   'title': task.title,
   'description': task.description,
   'due': taskDateTime(task).toIso8601String(),
+  'repeat': task.repeat,
+  'repeat_until': task.repeatUntil == null
+      ? null
+      : DateTime(
+          task.repeatUntil!.year,
+          task.repeatUntil!.month,
+          task.repeatUntil!.day,
+        ).toIso8601String(),
   'estimated_duration_minutes': task.estimatedDuration.inMinutes,
   'priority': task.priority,
   'is_completed': task.isChecked ? 1 : 0,
@@ -52,6 +60,10 @@ Task taskFromMap(Map<String, Object?> map) {
     estimatedDuration: Duration(
       minutes: map['estimated_duration_minutes']! as int,
     ),
+    repeat: map['repeat'] as String? ?? 'Never',
+    repeatUntil: map['repeat_until'] == null
+        ? null
+        : DateTime.parse(map['repeat_until']! as String),
     isChecked: map['is_completed'] == 1,
     description: map['description'] as String? ?? '',
     priority: map['priority'] as int?,
@@ -70,6 +82,13 @@ Map<String, Object?> eventToMap(Event event) => {
   'is_all_day': event.allDay ? 1 : 0,
   'is_current': event.isCurrent ? 1 : 0,
   'repeat': event.repeat,
+  'repeat_until': event.repeatUntil == null
+      ? null
+      : DateTime(
+          event.repeatUntil!.year,
+          event.repeatUntil!.month,
+          event.repeatUntil!.day,
+        ).toIso8601String(),
   'notes': event.notes,
   'src_platform': event.srcPlatform,
   'external_id': event.externalId,
@@ -91,6 +110,9 @@ Event eventFromMap(Map<String, Object?> map) {
     location: map['location'] as String?,
     notes: map['notes'] as String? ?? '',
     repeat: map['repeat'] as String? ?? 'Never',
+    repeatUntil: map['repeat_until'] == null
+        ? null
+        : DateTime.parse(map['repeat_until']! as String),
     srcPlatform: map['src_platform'] as String?,
     externalId: map['external_id'] as String?,
   );

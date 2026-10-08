@@ -10,12 +10,14 @@ class CalendarWidget extends StatefulWidget {
     this.categories = const [],
     this.onDateSelected,
     this.initialDate,
+    this.minimumDate,
     this.compact = false,
   });
 
   final List<TaskCategory> categories;
   final ValueChanged<DateTime>? onDateSelected;
   final DateTime? initialDate;
+  final DateTime? minimumDate;
   final bool compact;
 
   @override
@@ -47,23 +49,33 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     'Sat',
   ];
 
-  late DateTime _visibleMonth = DateTime(
-    (widget.initialDate ?? DateTime.now()).year,
-    (widget.initialDate ?? DateTime.now()).month,
-  );
-  late DateTime _selectedDay = DateTime(
-    (widget.initialDate ?? DateTime.now()).year,
-    (widget.initialDate ?? DateTime.now()).month,
-    (widget.initialDate ?? DateTime.now()).day,
-  );
+  late DateTime _selectedDay = _initialSelection();
+  late DateTime _visibleMonth = DateTime(_selectedDay.year, _selectedDay.month);
+
+  DateTime _initialSelection() {
+    final selected = DateUtils.dateOnly(widget.initialDate ?? DateTime.now());
+    final minimum = widget.minimumDate == null
+        ? null
+        : DateUtils.dateOnly(widget.minimumDate!);
+    return minimum != null && selected.isBefore(minimum) ? minimum : selected;
+  }
 
   void _changeMonth(int offset) {
+    final nextMonth = DateTime(
+      _visibleMonth.year,
+      _visibleMonth.month + offset,
+    );
+    final minimum = widget.minimumDate == null
+        ? null
+        : DateUtils.dateOnly(widget.minimumDate!);
+    if (minimum != null &&
+        nextMonth.isBefore(DateTime(minimum.year, minimum.month))) {
+      return;
+    }
+
     late DateTime selectedDate;
     setState(() {
-      _visibleMonth = DateTime(
-        _visibleMonth.year,
-        _visibleMonth.month + offset,
-      );
+      _visibleMonth = nextMonth;
       final lastDay = DateTime(
         _visibleMonth.year,
         _visibleMonth.month + 1,
@@ -74,6 +86,9 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         _visibleMonth.month,
         _selectedDay.day.clamp(1, lastDay),
       );
+      if (minimum != null && selectedDate.isBefore(minimum)) {
+        selectedDate = minimum;
+      }
       _selectedDay = selectedDate;
     });
     widget.onDateSelected?.call(selectedDate);
@@ -101,6 +116,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         }),
         selectedDay: _selectedDay,
         categories: widget.compact ? const [] : widget.categories,
+        minimumDate: widget.minimumDate,
         compact: widget.compact,
         onDaySelected: (day) {
           setState(() {
@@ -110,6 +126,13 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         },
       ),
     );
+    final minimum = widget.minimumDate == null
+        ? null
+        : DateUtils.dateOnly(widget.minimumDate!);
+    final previousMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
+    final canGoToPreviousMonth =
+        minimum == null ||
+        !previousMonth.isBefore(DateTime(minimum.year, minimum.month));
 
     return Column(
       mainAxisSize: widget.compact ? MainAxisSize.min : MainAxisSize.max,
@@ -117,7 +140,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         _CalendarHeader(
           monthName: _monthNames[_visibleMonth.month - 1],
           year: _visibleMonth.year,
-          onPreviousMonth: () => _changeMonth(-1),
+          onPreviousMonth: canGoToPreviousMonth ? () => _changeMonth(-1) : null,
           onNextMonth: () => _changeMonth(1),
         ),
         SizedBox(height: widget.compact ? AppSpacing.xs : AppSpacing.md),
@@ -131,9 +154,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
                   child: Text(
                     _weekdayNames[index],
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: index == 0 || index == 6
-                          ? AppColors.disabled
-                          : AppColors.onSurface,
+                      color: AppColors.onSurface,
                     ),
                   ),
                 ),
@@ -167,7 +188,7 @@ class _CalendarHeader extends StatelessWidget {
 
   final String monthName;
   final int year;
-  final VoidCallback onPreviousMonth;
+  final VoidCallback? onPreviousMonth;
   final VoidCallback onNextMonth;
 
   @override
@@ -218,7 +239,7 @@ class _CalendarControl extends StatelessWidget {
 
   final IconData icon;
   final String tooltip;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

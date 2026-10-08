@@ -25,11 +25,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final planner = context.watch<PlannerState>();
-    final categories = planner.categoriesWithUnassignedItems;
+    final categories = planner.categories;
     final agendaIcons = {
-      for (final item in planner.items.where(
-        (item) => _sameDay(item.date, _selectedDate),
-      ))
+      for (final item in planner.itemsForDate(_selectedDate))
         item: categories
             .where((category) => category.id == item.categoryId)
             .firstOrNull
@@ -78,7 +76,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       appearanceType: TaskAppearanceType.checkable,
                       onChecked: (task, value) =>
                           planner.setTaskCompleted(task, value),
-                      onItemTap: (item) => showItemEditor(context, item),
+                      onItemTap: (item) =>
+                          showItemEditor(context, planner.seriesFor(item)),
                       onDelete: (item) => confirmDeleteItem(context, item),
                     ),
                 ],

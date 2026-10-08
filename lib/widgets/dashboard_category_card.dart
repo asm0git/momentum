@@ -2,35 +2,46 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 import '../data_models.dart';
+import 'category_icon_picker.dart';
 
 // Compact category preview used in the dashboard's horizontal category strip.
 class DashboardCategoryCard extends StatelessWidget {
-  const DashboardCategoryCard({super.key, required this.category});
+  const DashboardCategoryCard({
+    super.key,
+    required this.category,
+    required this.nextItem,
+    required this.onTap,
+    this.pendingCount,
+  });
 
   final TaskCategory category;
+  final PlannerItem? nextItem;
+  final VoidCallback onTap;
+  final int? pendingCount;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final upcomingItem = _findUpcomingItem(DateTime.now());
 
     return SizedBox(
       width: AppSpacing.dashboardCategoryWidth,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.surface,
+      child: Material(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadii.popup),
+        child: InkWell(
           borderRadius: BorderRadius.circular(AppRadii.popup),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeading(context, textTheme),
-              const SizedBox(height: AppSpacing.xs),
-              _buildUpcomingPreview(textTheme, upcomingItem),
-            ],
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeading(context, textTheme),
+                const SizedBox(height: AppSpacing.xs),
+                _buildUpcomingPreview(context, textTheme),
+              ],
+            ),
           ),
         ),
       ),
@@ -41,13 +52,10 @@ class DashboardCategoryCard extends StatelessWidget {
     return Row(
       children: [
         if (category.iconName.trim().isNotEmpty)
-          Image.asset(
-            'assets/img/categories/${category.iconName}.png',
-            width: 20,
-            height: 20,
+          CategoryIcon(
+            iconName: category.iconName,
+            size: 20,
             fit: BoxFit.contain,
-            color: AppColors.primary,
-            colorBlendMode: BlendMode.srcIn,
           )
         else
           const SizedBox.square(dimension: 20),
@@ -66,7 +74,7 @@ class DashboardCategoryCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${category.pendingCount} pending',
+                '${pendingCount ?? category.pendingCount} pending',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: textTheme.labelMedium?.copyWith(
@@ -82,10 +90,11 @@ class DashboardCategoryCard extends StatelessWidget {
     );
   }
 
-  Widget _buildUpcomingPreview(TextTheme textTheme, _UpcomingItem? item) {
+  Widget _buildUpcomingPreview(BuildContext context, TextTheme textTheme) {
+    final item = nextItem;
     if (item == null) {
       return Text(
-        'No upcoming tasks',
+        'No upcoming items',
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: textTheme.labelMedium?.copyWith(color: AppColors.onSurface),
@@ -96,13 +105,13 @@ class DashboardCategoryCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          item.item.title,
+          item.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: textTheme.labelMedium?.copyWith(color: AppColors.onSurface),
         ),
         Text(
-          _formatPreviewDate(item),
+          _formatPreviewDate(context, item),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: textTheme.labelMedium?.copyWith(color: AppColors.onSurface),
@@ -111,39 +120,7 @@ class DashboardCategoryCard extends StatelessWidget {
     );
   }
 
-  _UpcomingItem? _findUpcomingItem(DateTime now) {
-    final items =
-        [
-          for (final item in category.items.whereType<Task>().where(
-            (task) => !task.isChecked,
-          ))
-            _UpcomingItem(item: item, scheduledDate: _scheduledDate(item)),
-        ]..sort(
-          (first, second) =>
-              first.scheduledDate.compareTo(second.scheduledDate),
-        );
-
-    return items.where((item) => item.scheduledDate.isAfter(now)).firstOrNull ??
-        (items.isEmpty ? null : items.first);
-  }
-
-  DateTime _scheduledDate(PlannerItem item) {
-    final time = switch (item) {
-      Task task => task.time,
-      Event event => event.start,
-      _ => const TimeOfDay(hour: 0, minute: 0),
-    };
-
-    return DateTime(
-      item.date.year,
-      item.date.month,
-      item.date.day,
-      time.hour,
-      time.minute,
-    );
-  }
-
-  String _formatPreviewDate(_UpcomingItem item) {
+  String _formatPreviewDate(BuildContext context, PlannerItem item) {
     const weekdays = [
       'Monday',
       'Tuesday',
@@ -153,24 +130,13 @@ class DashboardCategoryCard extends StatelessWidget {
       'Saturday',
       'Sunday',
     ];
-    final date = item.scheduledDate;
-    final weekday = weekdays[date.weekday - 1];
-
-    if (item.item is Event && (item.item as Event).allDay) {
-      return weekday;
-    }
-
-    final time = TimeOfDay.fromDateTime(date);
+    final scheduledDate = item.date;
+    final weekday = weekdays[scheduledDate.weekday - 1];
+    if (item is Event && item.allDay) return weekday;
+    final time = item is Task ? item.time : (item as Event).start;
     final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
     return '$weekday, $hour:$minute $period';
   }
-}
-
-class _UpcomingItem {
-  const _UpcomingItem({required this.item, required this.scheduledDate});
-
-  final PlannerItem item;
-  final DateTime scheduledDate;
 }

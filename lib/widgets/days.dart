@@ -2,21 +2,22 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 import '../data_models.dart';
+import 'category_icon_picker.dart';
 
 class DayWidget extends StatelessWidget {
   const DayWidget({
     super.key,
     required this.date,
-    required this.isWeekend,
     required this.isSelected,
+    this.minimumDate,
     this.categories = const [],
     this.onSelected,
     this.compact = false,
   });
 
   final DateTime? date;
-  final bool isWeekend;
   final bool isSelected;
+  final DateTime? minimumDate;
   final List<TaskCategory> categories;
   final VoidCallback? onSelected;
   final bool compact;
@@ -26,22 +27,28 @@ class DayWidget extends StatelessWidget {
     final day = date;
     final textTheme = Theme.of(context).textTheme;
     final isToday = day != null && _sameDay(day, DateTime.now());
+    final isBeforeMinimumDate =
+        day != null &&
+        minimumDate != null &&
+        DateUtils.dateOnly(day).isBefore(DateUtils.dateOnly(minimumDate!));
     final circleSize = compact || isToday
         ? AppSpacing.calendarTodayCircleSize
         : AppSpacing.selectedIconContainerSize;
-    final circleColor = isToday
+    final circleColor = isBeforeMinimumDate
+        ? AppColors.transparent
+        : isToday
         ? AppColors.secondary
         : isSelected
         ? AppColors.primary
         : AppColors.transparent;
-    final textColor = isToday || isSelected
-        ? AppColors.onPrimary
-        : isWeekend
+    final textColor = isBeforeMinimumDate
         ? AppColors.disabled
+        : isToday || isSelected
+        ? AppColors.onPrimary
         : AppColors.onSurface;
 
     return InkWell(
-      onTap: onSelected,
+      onTap: isBeforeMinimumDate ? null : onSelected,
       child: Container(
         decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: AppColors.calendarBorder)),
@@ -116,13 +123,7 @@ class _CategoryCountPill extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (category.iconName.isNotEmpty) ...[
-            Image.asset(
-              'assets/img/categories/${category.iconName}.png',
-              width: 10,
-              height: 10,
-              color: AppColors.primary,
-              colorBlendMode: BlendMode.srcIn,
-            ),
+            CategoryIcon(iconName: category.iconName, size: 10),
             const SizedBox(width: 2),
           ],
           Text(

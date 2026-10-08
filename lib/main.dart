@@ -19,14 +19,21 @@ import 'screens/dashboard_screen.dart';
 import 'screens/timer_screen.dart';
 import 'screens/todo_screen.dart';
 import 'state/planner_state.dart';
+import 'state/focus_timer_state.dart';
 import 'widgets/planner_load_gate.dart';
 
 void main() {
   runApp(
     DevicePreview(
       enabled: true,
-      builder: (context) => ChangeNotifierProvider(
-        create: (_) => PlannerState()..initialize(),
+      builder: (context) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => PlannerState()..initialize()),
+          ChangeNotifierProxyProvider<PlannerState, FocusTimerState>(
+            create: (_) => FocusTimerState(),
+            update: (_, planner, timer) => timer!..attachPlannerState(planner),
+          ),
+        ],
         child: const MyApp(),
       ),
     ),
@@ -63,7 +70,12 @@ class MyApp extends StatelessWidget {
         );
       case '/todo':
         return _screenRoute(
-          const TodoScreen(key: ValueKey('todo-screen')),
+          TodoScreen(
+            key: const ValueKey('todo-screen'),
+            initialCategoryId: settings.arguments is int
+                ? settings.arguments! as int
+                : null,
+          ),
           settings,
         );
       case '/timer':

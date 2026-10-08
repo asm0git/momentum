@@ -7,6 +7,7 @@ import '../state/planner_state.dart';
 import 'blurred_dialog.dart';
 import 'date_picker_dialog.dart';
 import 'estimated_duration_picker.dart';
+import 'category_icon_picker.dart';
 import 'selector.dart';
 import 'time_picker_dialog.dart';
 
@@ -44,8 +45,10 @@ class _AddItemPopupState extends State<AddItemPopup> {
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now();
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
-  TimeOfDay _endTime = const TimeOfDay(hour: 9, minute: 0);
+  TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   String _repeat = 'Never';
+  DateTime? _repeatUntil;
+  String? _validationMessage;
 
   @override
   void initState() {
@@ -59,6 +62,8 @@ class _AddItemPopupState extends State<AddItemPopup> {
       _taskDeadline = item.date;
       _taskDeadlineTime = item.time;
       _taskEstimatedDuration = item.estimatedDuration;
+      _repeat = item.repeat;
+      _repeatUntil = item.repeatUntil;
       _notesController.text = item.description;
     } else if (item is Event) {
       _selectedType = _PopupItemType.event;
@@ -68,7 +73,9 @@ class _AddItemPopupState extends State<AddItemPopup> {
       _endDate = item.endDate;
       _endTime = item.end;
       _repeat = item.repeat;
+      _repeatUntil = item.repeatUntil;
       _eventNotesController.text = item.notes;
+      if (!_allDay) _normalizeEndDateTime();
     }
   }
 
@@ -79,6 +86,119 @@ class _AddItemPopupState extends State<AddItemPopup> {
     _notesController.dispose();
     super.dispose();
   }
+
+  void _setAllDay(bool value) {
+    setState(() {
+      _allDay = value;
+      if (value) {
+        _endDate = _dateOnly(_startDate);
+      } else {
+        _normalizeEndDateTime();
+      }
+    });
+  }
+
+  void _setAllDayDate(DateTime value) {
+    setState(() {
+      _startDate = _dateOnly(value);
+      _endDate = _startDate;
+      _clampRepeatUntil(_startDate);
+    });
+  }
+
+  void _setStartDate(DateTime value) {
+    setState(() {
+      _startDate = _dateOnly(value);
+      _clampRepeatUntil(_startDate);
+      if (_dateOnly(_endDate).isBefore(_startDate)) _endDate = _startDate;
+      _normalizeEndDateTime();
+    });
+  }
+
+  void _setStartTime(TimeOfDay value) {
+    setState(() {
+      _startTime = value;
+      _normalizeEndDateTime();
+    });
+  }
+
+  void _setEndDate(DateTime value) {
+    setState(() {
+      final selectedDate = _dateOnly(value);
+      _endDate = selectedDate.isBefore(_dateOnly(_startDate))
+          ? _dateOnly(_startDate)
+          : selectedDate;
+      _normalizeEndDateTime();
+    });
+  }
+
+  void _setEndTime(TimeOfDay value) {
+    setState(() {
+      _endTime = value;
+      _normalizeEndDateTime();
+    });
+  }
+
+  void _setTaskDeadline(DateTime value) {
+    setState(() {
+      _taskDeadline = _dateOnly(value);
+      _clampRepeatUntil(_taskDeadline);
+    });
+  }
+
+  void _setRepeat(String value) {
+    setState(() {
+      _repeat = value;
+      if (value == 'Never') _repeatUntil = null;
+    });
+  }
+
+  void _setRepeatUntil(DateTime? value) {
+    setState(() {
+      _repeatUntil = value == null
+          ? null
+          : _dateOnly(
+              value.isBefore(_repeatStartDate) ? _repeatStartDate : value,
+            );
+    });
+  }
+
+  void _clampRepeatUntil(DateTime repeatStart) {
+    final until = _repeatUntil;
+    if (until != null && _dateOnly(until).isBefore(repeatStart)) {
+      _repeatUntil = repeatStart;
+    }
+  }
+
+  DateTime get _repeatStartDate =>
+      _selectedType == _PopupItemType.task ? _taskDeadline : _startDate;
+
+  void _normalizeEndDateTime() {
+    if (_allDay) return;
+
+    final startsAt = DateTime(
+      _startDate.year,
+      _startDate.month,
+      _startDate.day,
+      _startTime.hour,
+      _startTime.minute,
+    );
+    final endsAt = DateTime(
+      _endDate.year,
+      _endDate.month,
+      _endDate.day,
+      _endTime.hour,
+      _endTime.minute,
+    );
+    if (!endsAt.isAfter(startsAt)) {
+      final earliestEnd = startsAt.add(const Duration(minutes: 1));
+      _endDate = _dateOnly(earliestEnd);
+      _endTime = TimeOfDay.fromDateTime(earliestEnd);
+    }
+  }
+
+  DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
 
   @override
   Widget build(BuildContext context) {
@@ -98,11 +218,22 @@ class _AddItemPopupState extends State<AddItemPopup> {
             if (widget.initialItem == null)
               _ItemTypeSelector(
                 selectedType: _selectedType,
-                onTypeChanged: (type) => setState(() => _selectedType = type),
+                onTypeChanged: (type) => setState(() {
+                  _selectedType = type;
+                  _clampRepeatUntil(
+                    type == _PopupItemType.task ? _taskDeadline : _startDate,
+                  );
+                  _validationMessage = null;
+                }),
               ),
             const SizedBox(height: AppSpacing.sm),
             _TitleCategoryFields(
               titleController: _titleController,
+              onTitleChanged: (_) {
+                if (_validationMessage != null) {
+                  setState(() => _validationMessage = null);
+                }
+              },
               selectedCategoryId: _selectedCategoryId,
               onCategoryChanged: (categoryId) =>
                   setState(() => _selectedCategoryId = categoryId),
@@ -111,23 +242,20 @@ class _AddItemPopupState extends State<AddItemPopup> {
               const SizedBox(height: AppSpacing.sm),
               _EventFields(
                 allDay: _allDay,
-                onAllDayChanged: (value) => setState(() => _allDay = value),
+                onAllDayChanged: _setAllDay,
                 startDate: _startDate,
-                onAllDayDateChanged: (value) => setState(() {
-                  _startDate = value;
-                  _endDate = value;
-                }),
-                onStartDateChanged: (value) =>
-                    setState(() => _startDate = value),
+                onAllDayDateChanged: _setAllDayDate,
+                onStartDateChanged: _setStartDate,
                 startTime: _startTime,
-                onStartTimeChanged: (value) =>
-                    setState(() => _startTime = value),
+                onStartTimeChanged: _setStartTime,
                 endDate: _endDate,
-                onEndDateChanged: (value) => setState(() => _endDate = value),
+                onEndDateChanged: _setEndDate,
                 endTime: _endTime,
-                onEndTimeChanged: (value) => setState(() => _endTime = value),
+                onEndTimeChanged: _setEndTime,
                 repeat: _repeat,
-                onRepeatChanged: (value) => setState(() => _repeat = value),
+                repeatUntil: _repeatUntil,
+                onRepeatChanged: _setRepeat,
+                onRepeatUntilChanged: _setRepeatUntil,
               ),
               const SizedBox(height: AppSpacing.sm),
               _NotesField(controller: _eventNotesController),
@@ -135,16 +263,23 @@ class _AddItemPopupState extends State<AddItemPopup> {
               const SizedBox(height: AppSpacing.sm),
               _TaskFields(
                 deadline: _taskDeadline,
-                onDeadlineChanged: (value) =>
-                    setState(() => _taskDeadline = value),
+                onDeadlineChanged: _setTaskDeadline,
                 deadlineTime: _taskDeadlineTime,
                 onDeadlineTimeChanged: (value) =>
                     setState(() => _taskDeadlineTime = value),
                 estimatedDuration: _taskEstimatedDuration,
                 onEstimatedDurationChanged: (value) =>
                     setState(() => _taskEstimatedDuration = value),
+                repeat: _repeat,
+                repeatUntil: _repeatUntil,
+                onRepeatChanged: _setRepeat,
+                onRepeatUntilChanged: _setRepeatUntil,
                 notesController: _notesController,
               ),
+            ],
+            if (_validationMessage != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _ValidationMessage(message: _validationMessage!),
             ],
             const SizedBox(height: AppSpacing.sm),
             Row(
@@ -179,6 +314,9 @@ class _AddItemPopupState extends State<AddItemPopup> {
   }
 
   Future<void> _save() async {
+    if (_validationMessage != null) {
+      setState(() => _validationMessage = null);
+    }
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       _showValidationError('Enter a title.');
@@ -199,6 +337,8 @@ class _AddItemPopupState extends State<AddItemPopup> {
           ),
           time: _taskDeadlineTime,
           estimatedDuration: _taskEstimatedDuration,
+          repeat: _repeat,
+          repeatUntil: _repeatUntil,
           isChecked: previous is Task ? previous.isChecked : false,
           description: _notesController.text.trim(),
           priority: previous is Task ? previous.priority : null,
@@ -210,24 +350,7 @@ class _AddItemPopupState extends State<AddItemPopup> {
         return;
       }
 
-      final startsAt = DateTime(
-        _startDate.year,
-        _startDate.month,
-        _startDate.day,
-        _allDay ? 0 : _startTime.hour,
-        _allDay ? 0 : _startTime.minute,
-      );
-      final endsAt = DateTime(
-        _endDate.year,
-        _endDate.month,
-        _endDate.day,
-        _allDay ? 0 : _endTime.hour,
-        _allDay ? 0 : _endTime.minute,
-      );
-      if (!_allDay && !endsAt.isAfter(startsAt)) {
-        _showValidationError('End time must be after start time.');
-        return;
-      }
+      _normalizeEndDateTime();
       final previous = widget.initialItem;
       final event = Event(
         id: previous is Event ? previous.id : null,
@@ -242,6 +365,7 @@ class _AddItemPopupState extends State<AddItemPopup> {
         location: previous is Event ? previous.location : null,
         notes: _eventNotesController.text.trim(),
         repeat: _repeat,
+        repeatUntil: _repeatUntil,
         srcPlatform: previous is Event ? previous.srcPlatform : null,
         externalId: previous is Event ? previous.externalId : null,
       );
@@ -253,9 +377,47 @@ class _AddItemPopupState extends State<AddItemPopup> {
   }
 
   void _showValidationError(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    if (!mounted) return;
+    setState(() => _validationMessage = message);
+  }
+}
+
+class _ValidationMessage extends StatelessWidget {
+  const _ValidationMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadii.focusPreset),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  message,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium!.copyWith(color: AppColors.error),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -273,7 +435,9 @@ class _EventFields extends StatelessWidget {
     required this.endTime,
     required this.onEndTimeChanged,
     required this.repeat,
+    required this.repeatUntil,
     required this.onRepeatChanged,
+    required this.onRepeatUntilChanged,
   });
 
   final bool allDay;
@@ -288,18 +452,20 @@ class _EventFields extends StatelessWidget {
   final TimeOfDay endTime;
   final ValueChanged<TimeOfDay> onEndTimeChanged;
   final String repeat;
+  final DateTime? repeatUntil;
   final ValueChanged<String> onRepeatChanged;
-
-  static const _repeatOptions = [
-    'Never',
-    'Every day',
-    'Every week',
-    'Every month',
-    'Every year',
-  ];
+  final ValueChanged<DateTime?> onRepeatUntilChanged;
 
   @override
   Widget build(BuildContext context) {
+    final minimumEndDateTime = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+      startTime.hour,
+      startTime.minute,
+    ).add(const Duration(minutes: 1));
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -354,37 +520,19 @@ class _EventFields extends StatelessWidget {
                 date: endDate,
                 time: endTime,
                 enabled: true,
+                minimumDate: startDate,
+                minimumDateTime: minimumEndDateTime,
                 onDateChanged: onEndDateChanged,
                 onTimeChanged: onEndTimeChanged,
               ),
             ],
             const SizedBox(height: AppSpacing.sm),
-            SizedBox(
-              height: AppSpacing.popupFieldHeight,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Repeat every',
-                      style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                  Selector(
-                    options: [
-                      for (final option in _repeatOptions)
-                        SelectorOption(value: option, label: option),
-                    ],
-                    selectedValue: repeat,
-                    placeholder: 'Repeat',
-                    alignment: AlignmentDirectional.centerEnd,
-                    onChanged: (value) {
-                      if (value != null) onRepeatChanged(value);
-                    },
-                  ),
-                ],
-              ),
+            _RepeatFields(
+              repeat: repeat,
+              repeatUntil: repeatUntil,
+              startDate: startDate,
+              onRepeatChanged: onRepeatChanged,
+              onRepeatUntilChanged: onRepeatUntilChanged,
             ),
           ],
         ),
@@ -401,6 +549,10 @@ class _TaskFields extends StatelessWidget {
     required this.onDeadlineTimeChanged,
     required this.estimatedDuration,
     required this.onEstimatedDurationChanged,
+    required this.repeat,
+    required this.repeatUntil,
+    required this.onRepeatChanged,
+    required this.onRepeatUntilChanged,
     required this.notesController,
   });
 
@@ -410,6 +562,10 @@ class _TaskFields extends StatelessWidget {
   final ValueChanged<TimeOfDay> onDeadlineTimeChanged;
   final Duration estimatedDuration;
   final ValueChanged<Duration> onEstimatedDurationChanged;
+  final String repeat;
+  final DateTime? repeatUntil;
+  final ValueChanged<String> onRepeatChanged;
+  final ValueChanged<DateTime?> onRepeatUntilChanged;
   final TextEditingController notesController;
 
   @override
@@ -437,6 +593,14 @@ class _TaskFields extends StatelessWidget {
                     onTimeChanged: onDeadlineTimeChanged,
                   ),
                 ),
+                const SizedBox(height: AppSpacing.sm),
+                _RepeatFields(
+                  repeat: repeat,
+                  repeatUntil: repeatUntil,
+                  startDate: deadline,
+                  onRepeatChanged: onRepeatChanged,
+                  onRepeatUntilChanged: onRepeatUntilChanged,
+                ),
               ],
             ),
           ),
@@ -448,6 +612,102 @@ class _TaskFields extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
         _NotesField(controller: notesController),
+      ],
+    );
+  }
+}
+
+class _RepeatFields extends StatelessWidget {
+  const _RepeatFields({
+    required this.repeat,
+    required this.repeatUntil,
+    required this.startDate,
+    required this.onRepeatChanged,
+    required this.onRepeatUntilChanged,
+  });
+
+  static const _repeatOptions = [
+    'Never',
+    'Every day',
+    'Every week',
+    'Every month',
+    'Every year',
+  ];
+
+  final String repeat;
+  final DateTime? repeatUntil;
+  final DateTime startDate;
+  final ValueChanged<String> onRepeatChanged;
+  final ValueChanged<DateTime?> onRepeatUntilChanged;
+
+  Future<void> _pickUntil(BuildContext context) async {
+    final selected = await showAppDatePickerDialog(
+      context,
+      initialDate: repeatUntil ?? startDate,
+      minimumDate: startDate,
+    );
+    if (selected != null) onRepeatUntilChanged(selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(
+      context,
+    ).textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.normal);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: AppSpacing.popupFieldHeight,
+          child: Row(
+            children: [
+              Expanded(child: Text('Repeat every', style: textStyle)),
+              Selector(
+                options: [
+                  for (final option in _repeatOptions)
+                    SelectorOption(value: option, label: option),
+                ],
+                selectedValue: repeat,
+                placeholder: 'Repeat',
+                alignment: AlignmentDirectional.centerEnd,
+                onChanged: (value) {
+                  if (value != null) onRepeatChanged(value);
+                },
+              ),
+            ],
+          ),
+        ),
+        if (repeat != 'Never') ...[
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: AppColors.onSurface.withValues(alpha: 0.12),
+          ),
+          SizedBox(
+            height: AppSpacing.popupFieldHeight,
+            child: Row(
+              children: [
+                Expanded(child: Text('Until', style: textStyle)),
+                _EventValueButton(
+                  value: repeatUntil == null
+                      ? 'No end date'
+                      : MaterialLocalizations.of(
+                          context,
+                        ).formatMediumDate(repeatUntil!),
+                  color: AppColors.onSurface,
+                  onPressed: () => _pickUntil(context),
+                ),
+                if (repeatUntil != null)
+                  IconButton(
+                    tooltip: 'Clear end date',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => onRepeatUntilChanged(null),
+                    icon: const Icon(Icons.close),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -496,6 +756,8 @@ class _EventDateTimeRow extends StatelessWidget {
     required this.enabled,
     required this.onDateChanged,
     required this.onTimeChanged,
+    this.minimumDate,
+    this.minimumDateTime,
   });
 
   final String label;
@@ -504,14 +766,28 @@ class _EventDateTimeRow extends StatelessWidget {
   final bool enabled;
   final ValueChanged<DateTime> onDateChanged;
   final ValueChanged<TimeOfDay> onTimeChanged;
+  final DateTime? minimumDate;
+  final DateTime? minimumDateTime;
 
   Future<void> _pickDate(BuildContext context) async {
-    final selected = await showAppDatePickerDialog(context, initialDate: date);
+    final selected = await showAppDatePickerDialog(
+      context,
+      initialDate: date,
+      minimumDate: minimumDate,
+    );
     if (selected != null) onDateChanged(selected);
   }
 
   Future<void> _pickTime(BuildContext context) async {
-    final selected = await showAppTimePickerDialog(context, initialTime: time);
+    final minimum = minimumDateTime;
+    final minimumTime = minimum != null && DateUtils.isSameDay(date, minimum)
+        ? TimeOfDay.fromDateTime(minimum)
+        : null;
+    final selected = await showAppTimePickerDialog(
+      context,
+      initialTime: time,
+      minimumTime: minimumTime,
+    );
     if (selected != null) onTimeChanged(selected);
   }
 
@@ -632,11 +908,13 @@ class _EventValueButton extends StatelessWidget {
 class _TitleCategoryFields extends StatelessWidget {
   const _TitleCategoryFields({
     required this.titleController,
+    required this.onTitleChanged,
     required this.selectedCategoryId,
     required this.onCategoryChanged,
   });
 
   final TextEditingController titleController;
+  final ValueChanged<String> onTitleChanged;
   final int? selectedCategoryId;
   final ValueChanged<int?> onCategoryChanged;
 
@@ -678,6 +956,7 @@ class _TitleCategoryFields extends StatelessWidget {
                   width: double.infinity,
                   child: TextField(
                     controller: titleController,
+                    onChanged: onTitleChanged,
                     style: inputStyle,
                     textAlignVertical: TextAlignVertical.center,
                     decoration: InputDecoration.collapsed(
@@ -752,8 +1031,8 @@ class _NewCategoryDialog extends StatefulWidget {
 
 class _NewCategoryDialogState extends State<_NewCategoryDialog> {
   final _controller = TextEditingController();
-  String _iconName = 'school';
-  static const _icons = ['school', 'personal', 'work', 'gym'];
+  String _iconName = 'mi_school';
+  String? _validationMessage;
 
   @override
   void dispose() {
@@ -763,45 +1042,136 @@ class _NewCategoryDialogState extends State<_NewCategoryDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final dialogWidth = (MediaQuery.sizeOf(context).width - 32)
+        .clamp(280.0, 400.0)
+        .toDouble();
+    final buttonRowWidth = dialogWidth - (AppSpacing.md * 2);
+    final fieldStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
+      fontWeight: FontWeight.normal,
+      color: AppColors.onSurface,
+    );
+    final hintStyle = fieldStyle.copyWith(
+      color: AppColors.onSurface.withValues(alpha: 0.55),
+    );
+
     return AlertDialog(
-      title: const Text('New category'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'Name'),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          DropdownButtonFormField<String>(
-            initialValue: _iconName,
-            decoration: const InputDecoration(labelText: 'Icon'),
-            items: [
-              for (final icon in _icons)
-                DropdownMenuItem(value: icon, child: Text(icon)),
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.md,
+      ),
+      backgroundColor: AppColors.background,
+      surfaceTintColor: AppColors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.popup),
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.md,
+        AppSpacing.md,
+        0,
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        AppSpacing.md,
+      ),
+      title: Text(
+        'New category',
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: AppColors.primary),
+      ),
+      content: SizedBox(
+        width: buttonRowWidth,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadii.popup),
+              ),
+              child: SizedBox(
+                height: AppSpacing.popupFieldHeight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                  ),
+                  child: Center(
+                    child: TextField(
+                      controller: _controller,
+                      autofocus: true,
+                      onChanged: (_) {
+                        if (_validationMessage != null) {
+                          setState(() => _validationMessage = null);
+                        }
+                      },
+                      style: fieldStyle,
+                      textAlignVertical: TextAlignVertical.center,
+                      decoration: InputDecoration.collapsed(
+                        hintText: 'Name',
+                        hintStyle: hintStyle,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            CategoryIconSelector(
+              selectedIconName: _iconName,
+              onChanged: (iconName) => setState(() => _iconName = iconName),
+            ),
+            if (_validationMessage != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              _ValidationMessage(message: _validationMessage!),
             ],
-            onChanged: (value) {
-              if (value != null) setState(() => _iconName = value);
-            },
-          ),
-        ],
+          ],
+        ),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.md,
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final title = _controller.text.trim();
-            if (title.isEmpty) return;
-            Navigator.pop(
-              context,
-              TaskCategory(title: title, iconName: _iconName, items: []),
-            );
-          },
-          child: const Text('Create'),
+        SizedBox(
+          width: buttonRowWidth,
+          child: Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                  onPressed: () {
+                    final title = _controller.text.trim();
+                    if (title.isEmpty) {
+                      setState(() => _validationMessage = 'Enter a name.');
+                      return;
+                    }
+                    Navigator.pop(
+                      context,
+                      TaskCategory(
+                        title: title,
+                        iconName: _iconName,
+                        items: [],
+                      ),
+                    );
+                  },
+                  child: const Text('Create'),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

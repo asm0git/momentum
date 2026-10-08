@@ -37,14 +37,12 @@ class TaskListContainer extends StatelessWidget {
     final limitedItems = maxVisibleItems == null
         ? visibleItems
         : visibleItems.take(maxVisibleItems!).toList();
-    final hasTasks = items.any((item) => item is Task);
     final taskContent = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var index = 0; index < limitedItems.length; index++)
           _buildTaskItem(context, index, textTheme, limitedItems),
-        if (!hasTasks) ...[
-          if (limitedItems.isNotEmpty) const SizedBox(height: AppSpacing.sm),
+        if (items.isEmpty) ...[
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -211,26 +209,40 @@ class _SwipeToRevealDeleteState extends State<_SwipeToRevealDelete>
                   children: [
                     SizedBox(
                       width: _SwipeToRevealDelete.actionWidth,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(AppRadii.popup),
-                        child: ColoredBox(
-                          color: AppColors.error,
-                          child: Semantics(
-                            button: true,
-                            label: 'Delete item',
-                            onTap: _delete,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _delete,
-                              child: const Center(
-                                child: Tooltip(
-                                  message: 'Delete item',
-                                  child: Icon(
-                                    Icons.delete_outline_rounded,
-                                    color: AppColors.onPrimary,
+                      child: Semantics(
+                        button: true,
+                        label: 'Delete item',
+                        onTap: _delete,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _delete,
+                          child: Center(
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                final diameter =
+                                    constraints.maxHeight <
+                                        _SwipeToRevealDelete.actionWidth
+                                    ? constraints.maxHeight
+                                    : _SwipeToRevealDelete.actionWidth;
+                                return SizedBox.square(
+                                  dimension: diameter,
+                                  child: const DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: AppColors.error,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Center(
+                                      child: Tooltip(
+                                        message: 'Delete item',
+                                        child: Icon(
+                                          Icons.delete_outline_rounded,
+                                          color: AppColors.onPrimary,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             ),
                           ),
                         ),

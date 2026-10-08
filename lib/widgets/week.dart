@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data_models.dart';
+import '../data/recurrence.dart';
 import 'days.dart';
 
 class WeekWidget extends StatelessWidget {
@@ -10,6 +11,7 @@ class WeekWidget extends StatelessWidget {
     required this.selectedDay,
     required this.categories,
     required this.onDaySelected,
+    this.minimumDate,
     this.compact = false,
   });
 
@@ -17,6 +19,7 @@ class WeekWidget extends StatelessWidget {
   final DateTime selectedDay;
   final List<TaskCategory> categories;
   final ValueChanged<DateTime> onDaySelected;
+  final DateTime? minimumDate;
   final bool compact;
 
   @override
@@ -34,25 +37,41 @@ class WeekWidget extends StatelessWidget {
     final dayCategories = date == null
         ? const <TaskCategory>[]
         : categories
-              .map(
-                (category) => TaskCategory(
+              .map((category) {
+                final items = <PlannerItem>[];
+                for (final item in category.items) {
+                  for (final occurrenceDate in recurrenceDatesInRange(
+                    item,
+                    from: date,
+                    through: date,
+                  )) {
+                    items.add(occurrenceForDate(item, occurrenceDate));
+                  }
+                }
+                return TaskCategory(
                   title: category.title,
                   iconName: category.iconName,
-                  items: category.items
-                      .where((item) => _sameDay(item.date, date))
-                      .toList(),
-                ),
-              )
+                  items: items,
+                );
+              })
               .where((category) => category.items.isNotEmpty)
               .toList();
     return DayWidget(
       date: date,
       categories: dayCategories,
-      isWeekend: index == 0 || index == 6,
+      minimumDate: minimumDate,
       isSelected: date != null && _sameDay(date, selectedDay),
       compact: compact,
-      onSelected: date == null ? null : () => onDaySelected(date),
+      onSelected: date == null || _isBeforeMinimum(date)
+          ? null
+          : () => onDaySelected(date),
     );
+  }
+
+  bool _isBeforeMinimum(DateTime date) {
+    final minimum = minimumDate;
+    return minimum != null &&
+        DateUtils.dateOnly(date).isBefore(DateUtils.dateOnly(minimum));
   }
 }
 

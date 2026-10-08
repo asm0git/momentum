@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:ui' as ui;
 
 import '../app_theme.dart';
 import '../navigation_destinations.dart';
 
 // Shared colored app bar shown at the top of every main screen.
 class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
-  const PrimaryAppBar({super.key, required this.destination});
+  const PrimaryAppBar({
+    super.key,
+    required this.destination,
+    this.isBlurred = false,
+  });
 
   final AppDestination destination;
+  final bool isBlurred;
 
   @override
   Size get preferredSize => const Size.fromHeight(AppSpacing.appBarHeight);
@@ -17,7 +23,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return AppBar(
+    final appBar = AppBar(
       centerTitle: true,
       toolbarHeight: AppSpacing.appBarHeight,
       title: Text(
@@ -35,6 +41,14 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
       ),
       systemOverlayStyle: SystemUiOverlayStyle.light,
+    );
+
+    if (!isBlurred) return appBar;
+    return ClipRect(
+      child: ImageFiltered(
+        imageFilter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+        child: appBar,
+      ),
     );
   }
 }

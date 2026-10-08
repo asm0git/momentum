@@ -1,70 +1,21 @@
-import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
-import 'package:flutter/material.dart';
-import '../app_theme.dart';
 
-// Interactive countdown clock displayed on the timer screen.
-class Clock extends StatefulWidget {
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../app_theme.dart';
+import '../state/focus_timer_state.dart';
+
+/// The timer face remains sharp while the surrounding timer page is blurred.
+class Clock extends StatelessWidget {
   const Clock({super.key});
 
   @override
-  State<Clock> createState() => _ClockState();
-}
-
-class _ClockState extends State<Clock> {
-  static const int _totalSeconds = 25 * 60;
-  int _remainingSeconds = _totalSeconds;
-  bool _isRunning = false;
-  Timer? _timer;
-  double _previousProgress = 1;
-
-  void _toggleTimer() {
-    if (_isRunning) {
-      _timer?.cancel();
-      setState(() {
-        _isRunning = false;
-      });
-    } else {
-      if (_remainingSeconds <= 0) {
-        _previousProgress = 0;
-        _remainingSeconds = _totalSeconds;
-      }
-      setState(() {
-        _isRunning = true;
-      });
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (_remainingSeconds > 0) {
-          setState(() {
-            _previousProgress = _remainingSeconds / _totalSeconds;
-            _remainingSeconds--;
-          });
-        } else {
-          timer.cancel();
-          setState(() {
-            _isRunning = false;
-          });
-        }
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String _formatTime(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remainingSecs = seconds % 60;
-    return '${minutes.toString().padLeft(2, '0')}:${remainingSecs.toString().padLeft(2, '0')}';
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final timer = context.watch<FocusTimerState>();
     final textTheme = Theme.of(context).textTheme;
-    final progress = _remainingSeconds / _totalSeconds;
+    final progress = timer.progress;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 60),
@@ -75,29 +26,26 @@ class _ClockState extends State<Clock> {
           children: [
             Positioned.fill(
               child: GestureDetector(
-                onTap: _toggleTimer,
+                onTap: timer.toggleRunning,
                 child: TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: _previousProgress, end: progress),
-                  duration: const Duration(milliseconds: 900),
-                  builder: (context, value, child) {
-                    return CustomPaint(
-                      painter: _ClockRingPainter(progress: value),
-                    );
-                  },
+                  tween: Tween<double>(begin: progress, end: progress),
+                  duration: const Duration(milliseconds: 450),
+                  builder: (context, value, child) =>
+                      CustomPaint(painter: _ClockRingPainter(progress: value)),
                 ),
               ),
             ),
             Center(
               child: GestureDetector(
-                onTap: _toggleTimer,
+                onTap: timer.toggleRunning,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     AnimatedOpacity(
-                      opacity: _isRunning ? 0.45 : 1,
+                      opacity: timer.isRunning ? 0.45 : 1,
                       duration: AppSpacing.fabAnimationDuration,
                       child: Text(
-                        _isRunning ? 'Tap to pause' : 'Tap to start',
+                        timer.isRunning ? 'Tap to pause' : 'Tap to start',
                         style: textTheme.bodyMedium?.copyWith(
                           color: AppColors.primary,
                         ),
@@ -105,17 +53,17 @@ class _ClockState extends State<Clock> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _formatTime(_remainingSeconds),
+                      _formatClock(timer.remainingSeconds),
                       style: textTheme.titleLarge?.copyWith(
                         color: AppColors.secondary,
                       ),
                     ),
                     const SizedBox(height: 0),
                     AnimatedOpacity(
-                      opacity: _isRunning ? 0.45 : 1,
+                      opacity: timer.isRunning ? 0.45 : 1,
                       duration: AppSpacing.fabAnimationDuration,
                       child: Text(
-                        '1:24:25',
+                        timer.phase == FocusPhase.work ? 'Focus' : 'Rest',
                         style: textTheme.bodyLarge?.copyWith(
                           color: AppColors.primary,
                         ),
@@ -123,13 +71,19 @@ class _ClockState extends State<Clock> {
                     ),
                     const SizedBox(height: 0),
                     AnimatedOpacity(
-                      opacity: _isRunning ? 0.45 : 1,
+                      opacity: timer.isRunning ? 0.45 : 1,
                       duration: AppSpacing.fabAnimationDuration,
                       child: Text(
-                        'Total focus time',
+                        'Total focus time today',
                         style: textTheme.labelMedium?.copyWith(
                           color: AppColors.primary,
                         ),
+                      ),
+                    ),
+                    Text(
+                      _formatTotal(timer.totalFocusSecondsToday),
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: AppColors.primary,
                       ),
                     ),
                   ],
@@ -140,6 +94,19 @@ class _ClockState extends State<Clock> {
         ),
       ),
     );
+  }
+
+  static String _formatClock(int seconds) {
+    final minutes = seconds ~/ 60;
+    final remainingSecs = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSecs.toString().padLeft(2, '0')}';
+  }
+
+  static String _formatTotal(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 }
 

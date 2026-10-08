@@ -46,16 +46,21 @@ class DatabaseHelper {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: (db, version) async {
           await _createSchema(db);
           if (seedOnCreate) await _seed(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
-          if (oldVersion < 2) {
-            // Start the task-storage check with an empty local task table.
-            await db.delete('tasks');
+          if (oldVersion < 3) {
+            // Preserve existing rows while adding recurring-item support.
+            await db.execute(
+              "ALTER TABLE tasks ADD COLUMN repeat TEXT NOT NULL DEFAULT 'Never'",
+            );
+            await db.execute('ALTER TABLE tasks ADD COLUMN repeat_until TEXT');
+            await db.execute('ALTER TABLE events ADD COLUMN repeat_until TEXT');
+            await _createOccurrenceAndFocusTables(db);
           }
         },
       ),
@@ -78,6 +83,8 @@ class DatabaseHelper {
         description TEXT NOT NULL DEFAULT '',
         due TEXT NOT NULL,
         estimated_duration_minutes INTEGER NOT NULL DEFAULT 0,
+        repeat TEXT NOT NULL DEFAULT 'Never',
+        repeat_until TEXT,
         priority INTEGER,
         is_completed INTEGER NOT NULL DEFAULT 0 CHECK (is_completed IN (0, 1)),
         src_platform TEXT,
@@ -96,6 +103,7 @@ class DatabaseHelper {
         is_all_day INTEGER NOT NULL DEFAULT 0 CHECK (is_all_day IN (0, 1)),
         is_current INTEGER NOT NULL DEFAULT 0 CHECK (is_current IN (0, 1)),
         repeat TEXT NOT NULL DEFAULT 'Never',
+        repeat_until TEXT,
         notes TEXT NOT NULL DEFAULT '',
         src_platform TEXT,
         external_id TEXT,
@@ -123,6 +131,24 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX idx_tasks_category ON tasks(category_id)');
     await db.execute('CREATE INDEX idx_events_start ON events(start_time)');
     await db.execute('CREATE INDEX idx_events_category ON events(category_id)');
+    await _createOccurrenceAndFocusTables(db);
+  }
+
+  Future<void> _createOccurrenceAndFocusTables(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE task_occurrence_completions (
+        task_id INTEGER NOT NULL,
+        occurrence_date TEXT NOT NULL,
+        PRIMARY KEY (task_id, occurrence_date),
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE focus_daily_totals (
+        focus_date TEXT PRIMARY KEY,
+        total_seconds INTEGER NOT NULL DEFAULT 0 CHECK (total_seconds >= 0)
+      )
+    ''');
   }
 
   Future<void> _seed(DatabaseExecutor db) async {

@@ -1,9 +1,11 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
-import '../data_models.dart';
 import '../navigation_destinations.dart';
+import '../state/focus_timer_state.dart';
 import '../state/planner_state.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/clock.dart';
@@ -25,12 +27,11 @@ class _TimerScreenState extends State<TimerScreen> {
   @override
   Widget build(BuildContext context) {
     final planner = context.watch<PlannerState>();
+    final focusTimer = context.watch<FocusTimerState>();
     final today = DateTime.now();
     final dateLabel = MaterialLocalizations.of(context).formatMediumDate(today);
     final agendaIcons = {
-      for (final item in planner.items.whereType<Task>().where(
-        (task) => _isSameDay(task.date, today),
-      ))
+      for (final item in planner.itemsForDate(today))
         item: planner.categories
             .where((category) => category.id == item.categoryId)
             .firstOrNull
@@ -39,9 +40,10 @@ class _TimerScreenState extends State<TimerScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const PrimaryAppBar(
-        key: ValueKey('timer-app-bar'),
+      appBar: PrimaryAppBar(
+        key: const ValueKey('timer-app-bar'),
         destination: AppDestination.timer,
+        isBlurred: focusTimer.isRunning,
       ),
       body: Stack(
         children: [
@@ -55,91 +57,80 @@ class _TimerScreenState extends State<TimerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.screenEdgePadding,
-                            ),
-                            child: Text(
-                              'Presets',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                          ),
-                          const SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Padding(
-                              padding: EdgeInsets.only(
-                                left:
-                                    AppSpacing.screenEdgePadding +
-                                    AppSpacing.xxs,
+                    _blurWhenRunning(
+                      focusTimer.isRunning,
+                      SizedBox(
+                        width: double.infinity,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.screenEdgePadding,
                               ),
-                              child: Row(
-                                children: [
-                                  FocusPreset(
-                                    workMinutes: 30,
-                                    breakMinutes: 5,
-                                    margin: EdgeInsets.all(AppSpacing.xxs),
-                                  ),
-                                  FocusPreset(
-                                    workMinutes: 25,
-                                    breakMinutes: 2,
-                                    margin: EdgeInsets.all(AppSpacing.xxs),
-                                  ),
-                                  FocusPreset(
-                                    workMinutes: 45,
-                                    breakMinutes: 10,
-                                    margin: EdgeInsets.all(AppSpacing.xxs),
-                                  ),
-                                  FocusPreset(
-                                    workMinutes: 50,
-                                    breakMinutes: 10,
-                                    margin: EdgeInsets.all(AppSpacing.xxs),
-                                  ),
-                                  FocusPreset(
-                                    workMinutes: 60,
-                                    breakMinutes: 15,
-                                    margin: EdgeInsets.all(AppSpacing.xxs),
-                                  ),
-                                ],
+                              child: Text(
+                                'Presets',
+                                style: Theme.of(context).textTheme.titleMedium,
                               ),
                             ),
-                          ),
-                        ],
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  left:
+                                      AppSpacing.screenEdgePadding +
+                                      AppSpacing.xxs,
+                                ),
+                                child: Row(
+                                  children: [
+                                    _preset(focusTimer, 30, 5),
+                                    _preset(focusTimer, 25, 2),
+                                    _preset(focusTimer, 45, 10),
+                                    _preset(focusTimer, 50, 10),
+                                    _preset(focusTimer, 60, 15),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     const SizedBox(width: double.infinity, child: Clock()),
                     const SizedBox(height: AppSpacing.md),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.screenEdgePadding,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Today, $dateLabel',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          if (agendaIcons.isNotEmpty)
-                            TaskListContainer(
-                              items: agendaIcons.keys.toList(),
-                              categoryIconForItem: (item) => agendaIcons[item],
-                              maxVisibleItems: null,
-                              appearanceType: TaskAppearanceType.checkable,
-                              onChecked: (task, value) =>
-                                  planner.setTaskCompleted(task, value),
-                              onItemTap: (item) =>
-                                  showItemEditor(context, item),
-                              onDelete: (item) =>
-                                  confirmDeleteItem(context, item),
+                    _blurWhenRunning(
+                      focusTimer.isRunning,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.screenEdgePadding,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Today, $dateLabel',
+                              style: Theme.of(context).textTheme.titleMedium,
                             ),
-                        ],
+                            const SizedBox(height: AppSpacing.xs),
+                            if (agendaIcons.isNotEmpty)
+                              TaskListContainer(
+                                items: agendaIcons.keys.toList(),
+                                categoryIconForItem: (item) =>
+                                    agendaIcons[item],
+                                maxVisibleItems: null,
+                                appearanceType: TaskAppearanceType.checkable,
+                                onChecked: (task, value) =>
+                                    planner.setTaskCompleted(task, value),
+                                onItemTap: (item) => showItemEditor(
+                                  context,
+                                  planner.seriesFor(item),
+                                ),
+                                onDelete: (item) =>
+                                    confirmDeleteItem(context, item),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -173,9 +164,23 @@ class _TimerScreenState extends State<TimerScreen> {
     );
   }
 
-  bool _isSameDay(DateTime first, DateTime second) {
-    return first.year == second.year &&
-        first.month == second.month &&
-        first.day == second.day;
-  }
+  Widget _preset(FocusTimerState timer, int workMinutes, int breakMinutes) =>
+      FocusPreset(
+        workMinutes: workMinutes,
+        breakMinutes: breakMinutes,
+        margin: const EdgeInsets.all(AppSpacing.xxs),
+        onPressed: () => timer.selectPreset(
+          workMinutes: workMinutes,
+          breakMinutes: breakMinutes,
+        ),
+      );
+
+  Widget _blurWhenRunning(bool isRunning, Widget child) => isRunning
+      ? ClipRect(
+          child: ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+            child: child,
+          ),
+        )
+      : child;
 }

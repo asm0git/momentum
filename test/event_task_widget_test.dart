@@ -4,8 +4,51 @@ import 'package:momentum/app_theme.dart';
 import 'package:momentum/data_models.dart';
 import 'package:momentum/widgets/task_list_container.dart';
 import 'package:momentum/widgets/task_widget.dart';
+import 'package:momentum/widgets/days.dart';
 
 void main() {
+  testWidgets('weekend calendar dates use the same normal text color', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: Scaffold(
+          body: SizedBox(
+            height: 100,
+            child: Row(
+              children: [
+                Expanded(
+                  child: DayWidget(
+                    date: DateTime(2026, 10, 10),
+                    isSelected: false,
+                    minimumDate: DateTime(2026, 10, 1),
+                  ),
+                ),
+                Expanded(
+                  child: DayWidget(
+                    date: DateTime(2026, 10, 11),
+                    isSelected: false,
+                    minimumDate: DateTime(2026, 10, 1),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      tester.widget<Text>(find.text('10')).style?.color,
+      AppColors.onSurface,
+    );
+    expect(
+      tester.widget<Text>(find.text('11')).style?.color,
+      AppColors.onSurface,
+    );
+  });
+
   testWidgets('No tasks appears only when the list contains no task', (
     tester,
   ) async {
@@ -32,6 +75,27 @@ void main() {
       ),
     );
     expect(find.text('No tasks.'), findsOneWidget);
+  });
+
+  testWidgets('event-only list suppresses the No tasks state', (tester) async {
+    final event = Event(
+      title: 'Event without tasks',
+      date: DateTime.now(),
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: Scaffold(body: TaskListContainer(items: [event])),
+      ),
+    );
+
+    expect(find.text('Event without tasks'), findsOneWidget);
+    expect(find.text('No tasks.'), findsNothing);
   });
 
   testWidgets('task rows in a task list stay compact', (tester) async {

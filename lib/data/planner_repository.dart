@@ -1,6 +1,9 @@
+import 'package:sqflite/sqflite.dart';
+
 import '../data_models.dart';
 import 'database_helper.dart';
 import 'model_serialization.dart';
+import 'recurrence.dart';
 
 class PlannerRepository {
   PlannerRepository({DatabaseHelper? databaseHelper})
@@ -204,81 +207,152 @@ class PlannerRepository {
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery('''
       SELECT 'task' AS item_type, id, category_id, title, description, due,
-        estimated_duration_minutes, priority, is_completed, src_platform,
-        external_id, NULL AS start_time, NULL AS end_time, NULL AS location,
-        NULL AS is_all_day, NULL AS is_current, NULL AS repeat, NULL AS notes
+        estimated_duration_minutes, repeat, repeat_until, priority,
+        is_completed, src_platform, external_id, NULL AS start_time,
+        NULL AS end_time, NULL AS location, NULL AS is_all_day,
+        NULL AS is_current, NULL AS notes
       FROM tasks
       UNION ALL
       SELECT 'event' AS item_type, id, category_id, title, NULL AS description,
-        NULL AS due, NULL AS estimated_duration_minutes, NULL AS priority,
-        NULL AS is_completed, src_platform, external_id, start_time, end_time,
-        location, is_all_day, is_current, repeat, notes
+        NULL AS due, NULL AS estimated_duration_minutes, repeat,
+        repeat_until, NULL AS priority, NULL AS is_completed,
+        src_platform, external_id, start_time, end_time, location, is_all_day,
+        is_current, notes
       FROM events
     ''');
     return rows.map(_itemFromUnionRow).toList();
   }
 
   Future<List<PlannerItem>> getItemsForDate(DateTime day) async {
-    final db = await _databaseHelper.database;
-    final start = DateTime(day.year, day.month, day.day).toIso8601String();
-    final end = DateTime(day.year, day.month, day.day + 1).toIso8601String();
-    final taskRows = await db.query(
-      'tasks',
-      where: 'due >= ? AND due < ?',
-      whereArgs: [start, end],
-      orderBy: 'due',
-    );
-    final eventRows = await db.query(
-      'events',
-      where: 'start_time >= ? AND start_time < ?',
-      whereArgs: [start, end],
-      orderBy: 'start_time',
-    );
-    final items = <PlannerItem>[
-      ...taskRows.map(taskFromMap),
-      ...eventRows.map(eventFromMap),
-    ]..sort(_compareItems);
+    final target = dateOnly(day);
+    final completionKeys = await getTaskOccurrenceCompletionKeys();
+    final items = <PlannerItem>[];
+    for (final series in await getAllItems()) {
+      for (final occurrenceDate in recurrenceDatesInRange(
+        series,
+        from: target,
+        through: target,
+      )) {
+        final completed =
+            series is Task &&
+            series.id != null &&
+            completionKeys.contains(
+              taskOccurrenceKey(series.id!, occurrenceDate),
+            );
+        items.add(
+          occurrenceForDate(series, occurrenceDate, isCompleted: completed),
+        );
+      }
+    }
+    items.sort(_compareItems);
     return items;
   }
 
-  Future<List<Task>> getTasksForDate(DateTime day) async {
+  Future<Set<String>> getTaskOccurrenceCompletionKeys() async {
     final db = await _databaseHelper.database;
-    final start = DateTime(day.year, day.month, day.day).toIso8601String();
-    final end = DateTime(day.year, day.month, day.day + 1).toIso8601String();
     final rows = await db.query(
-      'tasks',
-      where: 'due >= ? AND due < ?',
-      whereArgs: [start, end],
-      orderBy: 'due',
+      'task_occurrence_completions',
+      columns: ['task_id', 'occurrence_date'],
     );
-    return rows.map(taskFromMap).toList();
+    return {
+      for (final row in rows)
+        taskOccurrenceKey(
+          row['task_id']! as int,
+          DateTime.parse(row['occurrence_date']! as String),
+        ),
+    };
+  }
+
+  Future<void> setTaskOccurrenceCompleted(
+    int taskId,
+    DateTime date,
+    bool completed,
+  ) async {
+    final db = await _databaseHelper.database;
+    final occurrenceDate = dateOnly(date).toIso8601String();
+    if (completed) {
+      await db.insert('task_occurrence_completions', {
+        'task_id': taskId,
+        'occurrence_date': occurrenceDate,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    } else {
+      await db.delete(
+        'task_occurrence_completions',
+        where: 'task_id = ? AND occurrence_date = ?',
+        whereArgs: [taskId, occurrenceDate],
+      );
+    }
+  }
+
+  Future<int> getFocusSecondsForDate(DateTime date) async {
+    final db = await _databaseHelper.database;
+    final focusDate = dateOnly(date).toIso8601String();
+    final rows = await db.query(
+      'focus_daily_totals',
+      columns: ['total_seconds'],
+      where: 'focus_date = ?',
+      whereArgs: [focusDate],
+      limit: 1,
+    );
+    return rows.isEmpty ? 0 : rows.single['total_seconds']! as int;
+  }
+
+  Future<void> addFocusSeconds(DateTime date, int seconds) async {
+    if (seconds <= 0) return;
+    final db = await _databaseHelper.database;
+    await db.rawInsert(
+      '''
+      INSERT INTO focus_daily_totals (focus_date, total_seconds)
+      VALUES (?, ?)
+      ON CONFLICT(focus_date) DO UPDATE SET
+        total_seconds = total_seconds + excluded.total_seconds
+      ''',
+      [dateOnly(date).toIso8601String(), seconds],
+    );
+  }
+
+  Future<List<Task>> getTasksForDate(DateTime day) async {
+    return (await getItemsForDate(day)).whereType<Task>().toList();
   }
 
   Future<PlannerItem?> getNextUpcomingItem(DateTime now) async {
-    final db = await _databaseHelper.database;
-    final cutoff = now.toIso8601String();
-    final taskRows = await db.query(
-      'tasks',
-      where: 'is_completed = 0 AND due >= ?',
-      whereArgs: [cutoff],
-      orderBy: 'due',
-      limit: 1,
-    );
-    final eventRows = await db.query(
-      'events',
-      where:
-          'start_time >= ? OR (is_all_day = 1 AND date(start_time) = date(?))',
-      whereArgs: [cutoff, cutoff],
-      orderBy: 'start_time',
-      limit: 1,
-    );
-    Task? task = taskRows.isEmpty ? null : taskFromMap(taskRows.first);
-    Event? event = eventRows.isEmpty ? null : eventFromMap(eventRows.first);
-    if (task == null) return event;
-    if (event == null) return task;
-    return taskDateTime(task).isBefore(eventStartDateTime(event))
-        ? task
-        : event;
+    final completionKeys = await getTaskOccurrenceCompletionKeys();
+    PlannerItem? next;
+    DateTime? nextTime;
+    for (final series in await getAllItems()) {
+      for (final day in recurrenceDatesInRange(
+        series,
+        from: dateOnly(now),
+        through: DateTime(9999, 12, 31),
+      )) {
+        final isCompleted =
+            series is Task &&
+            series.id != null &&
+            (isRecurring(series)
+                ? completionKeys.contains(taskOccurrenceKey(series.id!, day))
+                : series.isChecked);
+        if (isCompleted) continue;
+        final occurrence = occurrenceForDate(
+          series,
+          day,
+          isCompleted: isCompleted,
+        );
+        final scheduled = occurrence is Task
+            ? taskDateTime(occurrence)
+            : eventStartDateTime(occurrence as Event);
+        final isCurrentAllDay =
+            occurrence is Event &&
+            occurrence.allDay &&
+            _sameDay(occurrence.date, now);
+        if (scheduled.isBefore(now) && !isCurrentAllDay) continue;
+        if (nextTime == null || scheduled.isBefore(nextTime)) {
+          next = occurrence;
+          nextTime = scheduled;
+        }
+        break;
+      }
+    }
+    return next;
   }
 
   Future<List<TaskCategory>> getCategoriesWithItems() async {
@@ -307,6 +381,8 @@ class PlannerRepository {
           'description',
           'due',
           'estimated_duration_minutes',
+          'repeat',
+          'repeat_until',
           'priority',
           'is_completed',
           'src_platform',
@@ -326,6 +402,7 @@ class PlannerRepository {
         'is_all_day',
         'is_current',
         'repeat',
+        'repeat_until',
         'notes',
         'src_platform',
         'external_id',
@@ -343,4 +420,9 @@ class PlannerRepository {
         : eventStartDateTime(second as Event);
     return firstTime.compareTo(secondTime);
   }
+
+  bool _sameDay(DateTime first, DateTime second) =>
+      first.year == second.year &&
+      first.month == second.month &&
+      first.day == second.day;
 }

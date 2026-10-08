@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/data/database_helper.dart';
 import 'package:momentum/data/model_serialization.dart';
 import 'package:momentum/data/planner_repository.dart';
+import 'package:momentum/data/recurrence.dart';
 import 'package:momentum/data_models.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -47,6 +48,8 @@ void main() {
       time: const TimeOfDay(hour: 9, minute: 25),
       estimatedDuration: const Duration(minutes: 65),
       isChecked: true,
+      repeat: 'Every week',
+      repeatUntil: DateTime(2026, 11, 7),
       description: 'Chapter 3',
       priority: 2,
       srcPlatform: 'local',
@@ -65,6 +68,7 @@ void main() {
       location: 'Room 2',
       notes: 'Bring notes',
       repeat: 'Every week',
+      repeatUntil: DateTime(2026, 11, 7),
       srcPlatform: 'local',
       externalId: 'event-1',
     );
@@ -88,10 +92,13 @@ void main() {
     expect(taskCopy.estimatedDuration, const Duration(minutes: 65));
     expect(taskCopy.isChecked, isTrue);
     expect(taskCopy.description, 'Chapter 3');
+    expect(taskCopy.repeat, 'Every week');
+    expect(taskCopy.repeatUntil, DateTime(2026, 11, 7));
     final eventCopy = eventFromMap(eventToMap(event));
     expect(eventStartDateTime(eventCopy), DateTime(2026, 10, 7, 23, 30));
     expect(eventEndDateTime(eventCopy), DateTime(2026, 10, 8, 0, 15));
     expect(eventCopy.repeat, 'Every week');
+    expect(eventCopy.repeatUntil, DateTime(2026, 11, 7));
     expect(dailyPlanFromMap(dailyPlanToMap(plan)).orderedTaskIds, [7, 10]);
     expect(
       linkedAccountFromMap(linkedAccountToMap(account)).apiToken,
@@ -308,6 +315,198 @@ void main() {
     expect((await repository.getTask(task.id!))?.categoryId, isNull);
     expect((await repository.getEvent(event.id!))?.categoryId, isNull);
   });
+
+  test('recurring task completion is stored per occurrence date', () async {
+    final task = await repository.insertTask(
+      Task(
+        title: 'Weekly review',
+        date: DateTime(2026, 10, 1),
+        time: const TimeOfDay(hour: 9, minute: 0),
+        estimatedDuration: const Duration(minutes: 30),
+        isChecked: false,
+        repeat: 'Every week',
+        repeatUntil: DateTime(2026, 10, 15),
+      ),
+    );
+
+    expect(
+      (await repository.getItemsForDate(DateTime(2026, 10, 8))).single,
+      isA<Task>().having(
+        (item) => item.occurrenceDate,
+        'occurrence date',
+        DateTime(2026, 10, 8),
+      ),
+    );
+    await repository.setTaskOccurrenceCompleted(
+      task.id!,
+      DateTime(2026, 10, 8),
+      true,
+    );
+    expect(
+      (await repository.getItemsForDate(DateTime(2026, 10, 8))).single,
+      isA<Task>().having((item) => item.isChecked, 'completed', isTrue),
+    );
+    expect(
+      (await repository.getItemsForDate(DateTime(2026, 10, 15))).single,
+      isA<Task>().having((item) => item.isChecked, 'completed', isFalse),
+    );
+    expect(await repository.getItemsForDate(DateTime(2026, 10, 16)), isEmpty);
+  });
+
+  test('recurrence expands through inclusive until and clamps month ends', () {
+    final daily = Task(
+      title: 'Daily',
+      date: DateTime(2026, 10, 1),
+      time: const TimeOfDay(hour: 8, minute: 0),
+      estimatedDuration: Duration.zero,
+      isChecked: false,
+      repeat: 'Every day',
+      repeatUntil: DateTime(2026, 10, 3),
+    );
+    expect(
+      recurrenceDatesInRange(
+        daily,
+        from: DateTime(2026, 10, 1),
+        through: DateTime(2026, 10, 4),
+      ),
+      [DateTime(2026, 10, 1), DateTime(2026, 10, 2), DateTime(2026, 10, 3)],
+    );
+
+    final weekly = Task(
+      title: 'Weekly',
+      date: DateTime(2026, 10, 1),
+      time: const TimeOfDay(hour: 9, minute: 0),
+      estimatedDuration: Duration.zero,
+      isChecked: false,
+      repeat: 'Every week',
+      repeatUntil: DateTime(2026, 10, 15),
+    );
+    expect(
+      recurrenceDatesInRange(
+        weekly,
+        from: DateTime(2026, 10, 1),
+        through: DateTime(2026, 10, 16),
+      ),
+      [DateTime(2026, 10, 1), DateTime(2026, 10, 8), DateTime(2026, 10, 15)],
+    );
+
+    final monthly = Event(
+      title: 'Monthly',
+      date: DateTime(2026, 1, 31),
+      start: const TimeOfDay(hour: 9, minute: 0),
+      end: const TimeOfDay(hour: 10, minute: 0),
+      isCurrent: false,
+      allDay: false,
+      repeat: 'Every month',
+      repeatUntil: DateTime(2026, 4, 30),
+    );
+    expect(
+      recurrenceDatesInRange(
+        monthly,
+        from: DateTime(2026, 1, 1),
+        through: DateTime(2026, 5, 1),
+      ),
+      [
+        DateTime(2026, 1, 31),
+        DateTime(2026, 2, 28),
+        DateTime(2026, 3, 31),
+        DateTime(2026, 4, 30),
+      ],
+    );
+
+    final yearly = Event(
+      title: 'Birthday',
+      date: DateTime(2024, 2, 29),
+      start: const TimeOfDay(hour: 0, minute: 0),
+      end: const TimeOfDay(hour: 0, minute: 0),
+      isCurrent: false,
+      allDay: true,
+      repeat: 'Every year',
+      repeatUntil: DateTime(2028, 2, 29),
+    );
+    expect(
+      recurrenceDatesInRange(
+        yearly,
+        from: DateTime(2024, 1, 1),
+        through: DateTime(2029, 1, 1),
+      ),
+      [
+        DateTime(2024, 2, 29),
+        DateTime(2025, 2, 28),
+        DateTime(2026, 2, 28),
+        DateTime(2027, 2, 28),
+        DateTime(2028, 2, 29),
+      ],
+    );
+  });
+
+  test(
+    'version 2 database migration preserves existing task and event data',
+    () async {
+      final path = p.join(tempDirectory.path, 'migration.db');
+      final oldDb = await databaseFactoryFfi.openDatabase(
+        path,
+        options: OpenDatabaseOptions(
+          version: 2,
+          onCreate: (db, version) async {
+            await db.execute('''CREATE TABLE categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            icon_name TEXT NOT NULL
+          )''');
+            await db.execute('''CREATE TABLE tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, category_id INTEGER,
+            title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '',
+            due TEXT NOT NULL, estimated_duration_minutes INTEGER NOT NULL DEFAULT 0,
+            priority INTEGER, is_completed INTEGER NOT NULL DEFAULT 0,
+            src_platform TEXT, external_id TEXT,
+            FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+          )''');
+            await db.execute('''CREATE TABLE events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, category_id INTEGER,
+            title TEXT NOT NULL, start_time TEXT NOT NULL, end_time TEXT NOT NULL,
+            location TEXT, is_all_day INTEGER NOT NULL DEFAULT 0,
+            is_current INTEGER NOT NULL DEFAULT 0,
+            repeat TEXT NOT NULL DEFAULT 'Never', notes TEXT NOT NULL DEFAULT '',
+            src_platform TEXT, external_id TEXT,
+            FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+          )''');
+            final categoryId = await db.insert('categories', {
+              'title': 'Saved',
+              'icon_name': 'school',
+            });
+            await db.insert('tasks', {
+              'category_id': categoryId,
+              'title': 'Keep me',
+              'description': 'Prior local task',
+              'due': DateTime(2026, 10, 9, 9).toIso8601String(),
+              'estimated_duration_minutes': 30,
+              'is_completed': 0,
+            });
+            await db.insert('events', {
+              'category_id': categoryId,
+              'title': 'Existing event',
+              'start_time': DateTime(2026, 10, 9, 10).toIso8601String(),
+              'end_time': DateTime(2026, 10, 9, 11).toIso8601String(),
+              'repeat': 'Never',
+            });
+          },
+        ),
+      );
+      await oldDb.close();
+
+      await databaseHelper.close();
+      databaseHelper = DatabaseHelper.forTesting(
+        factory: databaseFactoryFfi,
+        databasePath: path,
+        seedOnCreate: false,
+      );
+      repository = PlannerRepository(databaseHelper: databaseHelper);
+      expect((await repository.getTasks()).single.title, 'Keep me');
+      expect((await repository.getTasks()).single.repeat, 'Never');
+      expect((await repository.getEvents()).single.title, 'Existing event');
+    },
+  );
 
   test(
     'first-launch fixtures seed once and deleted data stays deleted',

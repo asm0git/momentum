@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import 'category_icon_picker.dart';
 
 class SelectorOption {
   const SelectorOption({required this.label, this.value, this.iconName});
@@ -43,13 +44,7 @@ class Selector extends StatelessWidget {
 
     return Row(
       children: [
-        Image.asset(
-          'assets/img/categories/$iconName.png',
-          width: 18,
-          height: 18,
-          color: AppColors.primary,
-          colorBlendMode: BlendMode.srcIn,
-        ),
+        CategoryIcon(iconName: iconName, size: 18),
         const SizedBox(width: AppSpacing.xs),
         Flexible(child: labelWidget),
       ],

@@ -23,6 +23,9 @@ class Task extends PlannerItem {
     required this.isChecked,
     required this.time,
     required this.estimatedDuration,
+    this.repeat = 'Never',
+    this.repeatUntil,
+    this.occurrenceDate,
     this.description = '',
     this.priority,
     this.srcPlatform,
@@ -32,6 +35,11 @@ class Task extends PlannerItem {
   bool isChecked;
   TimeOfDay time;
   Duration estimatedDuration;
+  String repeat;
+  DateTime? repeatUntil;
+  // Set only on a generated calendar/to-do instance of a recurring series.
+  // This value is not serialized into the tasks table.
+  DateTime? occurrenceDate;
   String description;
   int? priority;
   String? srcPlatform;
@@ -52,6 +60,8 @@ class Event extends PlannerItem {
     this.location,
     this.notes = '',
     this.repeat = 'Never',
+    this.repeatUntil,
+    this.occurrenceDate,
     this.srcPlatform,
     this.externalId,
   }) : endDate = endDate ?? date;
@@ -64,6 +74,9 @@ class Event extends PlannerItem {
   String? location;
   String notes;
   String repeat;
+  DateTime? repeatUntil;
+  // Set only on a generated calendar instance; the database stores the series.
+  DateTime? occurrenceDate;
   String? srcPlatform;
   String? externalId;
 }

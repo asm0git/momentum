@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app_theme.dart';
 import '../data_models.dart';
 import '../state/planner_state.dart';
+import 'category_icon_picker.dart';
 import 'item_actions.dart';
 import 'task_list_container.dart';
 import 'task_widget.dart';
@@ -16,12 +17,14 @@ class CollapsibleCategory extends StatefulWidget {
     required this.pendingLabel,
     required this.iconName,
     required this.items,
+    this.initiallyExpanded = false,
   });
 
   final String title;
   final String pendingLabel;
   final String iconName;
   final List<PlannerItem> items;
+  final bool initiallyExpanded;
 
   @override
   State<CollapsibleCategory> createState() => _CollapsibleCategoryState();
@@ -33,13 +36,16 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
   @override
   void initState() {
     super.initState();
-    _isExpanded = _containsEvent(widget.items);
+    _isExpanded = widget.initiallyExpanded || _containsEvent(widget.items);
   }
 
   @override
   void didUpdateWidget(covariant CollapsibleCategory oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_containsEvent(oldWidget.items) && _containsEvent(widget.items)) {
+      _isExpanded = true;
+    }
+    if (!oldWidget.initiallyExpanded && widget.initiallyExpanded) {
       _isExpanded = true;
     }
   }
@@ -69,12 +75,9 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
                 ),
                 // const SizedBox(width: AppSpacing.xs),
                 if (widget.iconName.isNotEmpty)
-                  Image.asset(
-                    'assets/img/categories/${widget.iconName}.png',
-                    width: AppSpacing.navigationIconSize,
-                    height: AppSpacing.navigationIconSize,
-                    color: AppColors.primary,
-                    colorBlendMode: BlendMode.srcIn,
+                  CategoryIcon(
+                    iconName: widget.iconName,
+                    size: AppSpacing.navigationIconSize,
                   ),
                 const SizedBox(width: AppSpacing.xs),
                 Expanded(
@@ -109,7 +112,10 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
             appearanceType: TaskAppearanceType.withoutCategoryIcon,
             onChecked: (task, value) =>
                 context.read<PlannerState>().setTaskCompleted(task, value),
-            onItemTap: (item) => showItemEditor(context, item),
+            onItemTap: (item) => showItemEditor(
+              context,
+              context.read<PlannerState>().seriesFor(item),
+            ),
             onDelete: (item) => confirmDeleteItem(context, item),
           ),
         ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 import '../data_models.dart';
+import 'category_icon_picker.dart';
 
 enum TaskAppearanceType {
   checkable,
@@ -103,12 +104,9 @@ class TaskWidget extends StatelessWidget {
         ),
         if (includeCategoryIcon && categoryIconName?.isNotEmpty == true) ...[
           const SizedBox(width: 8),
-          Image.asset(
-            'assets/img/categories/$categoryIconName.png',
-            width: AppSpacing.navigationIconSize,
-            height: AppSpacing.navigationIconSize,
-            color: AppColors.primary,
-            colorBlendMode: BlendMode.srcIn,
+          CategoryIcon(
+            iconName: categoryIconName!,
+            size: AppSpacing.navigationIconSize,
           ),
         ],
         const SizedBox(width: 8),
@@ -188,12 +186,10 @@ class TaskWidget extends StatelessWidget {
         ),
         if (categoryIconName?.isNotEmpty == true) ...[
           const SizedBox(width: AppSpacing.xs),
-          Image.asset(
-            'assets/img/categories/$categoryIconName.png',
-            width: AppSpacing.navigationIconSize,
-            height: AppSpacing.navigationIconSize,
+          CategoryIcon(
+            iconName: categoryIconName!,
+            size: AppSpacing.navigationIconSize,
             color: textColor,
-            colorBlendMode: BlendMode.srcIn,
           ),
         ],
         const SizedBox(width: AppSpacing.xs),

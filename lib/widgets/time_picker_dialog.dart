@@ -6,9 +6,18 @@ import 'blurred_dialog.dart';
 Future<TimeOfDay?> showAppTimePickerDialog(
   BuildContext context, {
   required TimeOfDay initialTime,
-}) {
+  TimeOfDay? minimumTime,
+}) async {
   const checkIcon = Icons.check;
-  return showBlurredDialog<TimeOfDay>(
+  final initialMinutes = initialTime.hour * 60 + initialTime.minute;
+  final minimumMinutes = minimumTime == null
+      ? null
+      : minimumTime.hour * 60 + minimumTime.minute;
+  final clampedInitialTime =
+      minimumMinutes != null && initialMinutes < minimumMinutes
+      ? minimumTime!
+      : initialTime;
+  final selected = await showBlurredDialog<TimeOfDay>(
     context: context,
     builder: (dialogContext) {
       final theme = Theme.of(dialogContext);
@@ -43,10 +52,14 @@ Future<TimeOfDay?> showAppTimePickerDialog(
           ),
         ),
         child: TimePickerDialog(
-          initialTime: initialTime,
+          initialTime: clampedInitialTime,
           confirmText: String.fromCharCode(checkIcon.codePoint),
         ),
       );
     },
   );
+  if (selected == null || minimumTime == null) return selected;
+
+  final selectedMinutes = selected.hour * 60 + selected.minute;
+  return selectedMinutes < minimumMinutes! ? minimumTime : selected;
 }
