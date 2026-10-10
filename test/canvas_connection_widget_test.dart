@@ -155,9 +155,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Disconnect'));
     await tester.pump();
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 100)),
-    );
+    await tester.runAsync(() async {
+      final timeout = DateTime.now().add(const Duration(seconds: 5));
+      while (planner.isCanvasConnected && DateTime.now().isBefore(timeout)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
     await tester.pumpAndSettle();
     expect(planner.isCanvasConnected, isFalse);
     expect(planner.items.whereType<Task>().single.title, 'Biology quiz');

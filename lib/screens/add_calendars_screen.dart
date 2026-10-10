@@ -59,66 +59,88 @@ class AddCalendarsScreen extends StatelessWidget {
                 fit: BoxFit.contain,
                 semanticLabel: 'Momentum',
               ),
-              const SizedBox(height: AppSpacing.lg),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppRadii.focusPreset),
-                ),
-                child: Column(
-                  children: [
-                    for (
-                      var index = 0;
-                      index < CalendarProvider.values.length;
-                      index++
-                    ) ...[
-                      _CalendarRow(
-                        provider: CalendarProvider.values[index],
-                        connected:
-                            planner
-                                .statusForProvider(
-                                  CalendarProvider.values[index],
-                                )
-                                ?.connected ==
-                            true,
-                        syncing: planner.isProviderSyncing(
-                          CalendarProvider.values[index],
+              Expanded(
+                child: Center(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Sync your calendars',
+                            style: Theme.of(context).textTheme.headlineLarge
+                                ?.copyWith(color: AppColors.primary),
+                          ),
                         ),
-                        hasError:
-                            planner.errorForProvider(
-                              CalendarProvider.values[index],
-                            ) !=
-                            null,
-                        onTap: () => Navigator.of(
-                          context,
-                        ).pushNamed(_routeFor(CalendarProvider.values[index])),
-                      ),
-                      if (index < CalendarProvider.values.length - 1)
-                        const Divider(
-                          height: 1,
-                          indent: AppSpacing.md + 28 + AppSpacing.md,
-                          endIndent: AppSpacing.md,
-                          color: AppColors.background,
+                        const SizedBox(height: AppSpacing.md),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(
+                              AppRadii.focusPreset,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              for (
+                                var index = 0;
+                                index < CalendarProvider.values.length;
+                                index++
+                              ) ...[
+                                _CalendarRow(
+                                  provider: CalendarProvider.values[index],
+                                  connected:
+                                      planner
+                                          .statusForProvider(
+                                            CalendarProvider.values[index],
+                                          )
+                                          ?.connected ==
+                                      true,
+                                  syncing: planner.isProviderSyncing(
+                                    CalendarProvider.values[index],
+                                  ),
+                                  hasError:
+                                      planner.errorForProvider(
+                                        CalendarProvider.values[index],
+                                      ) !=
+                                      null,
+                                  onTap: () => Navigator.of(context).pushNamed(
+                                    _routeFor(CalendarProvider.values[index]),
+                                  ),
+                                ),
+                                if (index < CalendarProvider.values.length - 1)
+                                  const Divider(
+                                    height: 1,
+                                    indent: AppSpacing.md + 28 + AppSpacing.md,
+                                    endIndent: AppSpacing.md,
+                                    color: AppColors.background,
+                                  ),
+                              ],
+                            ],
+                          ),
                         ),
-                    ],
-                  ],
-                ),
-              ),
-              if (callbackMessage != null) ...[
-                const SizedBox(height: AppSpacing.sm),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    callbackMessage,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: callbackError == null
-                          ? AppColors.primary
-                          : AppColors.error,
+                        if (callbackMessage != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              callbackMessage,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: callbackError == null
+                                        ? AppColors.primary
+                                        : AppColors.error,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
-              ],
-              const Spacer(),
+              ),
               Align(
                 alignment: Alignment.centerRight,
                 child: IconButton.filled(
@@ -177,7 +199,13 @@ class _CalendarRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(_iconFor(provider), color: AppColors.primary, size: 26),
+              Image.asset(
+                _iconAssetFor(provider),
+                width: 28,
+                height: 28,
+                fit: BoxFit.contain,
+                excludeFromSemantics: true,
+              ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
@@ -205,9 +233,9 @@ class _CalendarRow extends StatelessWidget {
     );
   }
 
-  IconData _iconFor(CalendarProvider provider) => switch (provider) {
-    CalendarProvider.canvas => Icons.school_outlined,
-    CalendarProvider.googleCalendar => Icons.calendar_month_outlined,
-    CalendarProvider.outlook => Icons.event_note_outlined,
+  String _iconAssetFor(CalendarProvider provider) => switch (provider) {
+    CalendarProvider.canvas => 'assets/img/import/canvas.png',
+    CalendarProvider.googleCalendar => 'assets/img/import/gcalendar.png',
+    CalendarProvider.outlook => 'assets/img/import/outlook.png',
   };
 }

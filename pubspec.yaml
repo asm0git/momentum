@@ -48,6 +48,9 @@ flutter:
     - assets/img/unselected/To-Do.png
     - assets/img/logo/logo_white.png
     - assets/img/logo/logo_purple.png
+    - assets/img/import/canvas.png
+    - assets/img/import/gcalendar.png
+    - assets/img/import/outlook.png
   fonts:
     - family: SFProDisplay
       fonts:
