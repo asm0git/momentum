@@ -27,6 +27,7 @@ import 'services/onboarding_preferences.dart';
 import 'state/planner_state.dart';
 import 'state/focus_timer_state.dart';
 import 'widgets/planner_load_gate.dart';
+import 'widgets/responsive_app_viewport.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,7 +66,9 @@ class MyApp extends StatelessWidget {
       title: 'Momentum',
       debugShowCheckedModeBanner: false,
       theme: appTheme,
-      builder: (context, child) => PlannerLoadGate(child: child!),
+      builder: (context, child) => ResponsiveAppViewport(
+        child: PlannerLoadGate(child: child!),
+      ),
       initialRoute: initialRoute,
       onGenerateRoute: _buildRoute,
     );
