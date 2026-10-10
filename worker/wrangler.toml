@@ -13,8 +13,11 @@ run_worker_first = ["/api/*"]
 [vars]
 ALLOWED_CANVAS_HOST = "canvas.example.edu"
 APP_ORIGIN = "https://momentum-canvas.aerith-catap.workers.dev"
+GOOGLE_CLIENT_ID = "967757945225-c3ubb0udqikkg024hl8nopeg2pe71oif.apps.googleusercontent.com"
 GOOGLE_REDIRECT_URI = "https://momentum-canvas.aerith-catap.workers.dev/api/google/oauth/callback"
 MICROSOFT_TENANT_ID = "common"
+# ...
+
 
 # These are edge rate limits for public OAuth and sync endpoints. Each counter
 # is local to a Cloudflare location and is an abuse guard, not billing metering.
