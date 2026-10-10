@@ -15,6 +15,8 @@ ALLOWED_CANVAS_HOST = "canvas.example.edu"
 APP_ORIGIN = "https://momentum-canvas.aerith-catap.workers.dev"
 GOOGLE_CLIENT_ID = "967757945225-c3ubb0udqikkg024hl8nopeg2pe71oif.apps.googleusercontent.com"
 GOOGLE_REDIRECT_URI = "https://momentum-canvas.aerith-catap.workers.dev/api/google/oauth/callback"
+MICROSOFT_CLIENT_ID = "659da61d-044d-4c4a-a9ee-cadd42c9400e"
+MICROSOFT_REDIRECT_URI = "https://momentum-canvas.aerith-catap.workers.dev/api/outlook/oauth/callback"
 MICROSOFT_TENANT_ID = "common"
 # ...
 

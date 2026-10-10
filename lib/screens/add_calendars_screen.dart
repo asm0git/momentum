@@ -5,6 +5,7 @@ import '../app_theme.dart';
 import '../data_models.dart';
 import '../services/onboarding_preferences.dart';
 import '../state/planner_state.dart';
+import '../widgets/pill_action_button.dart';
 
 class AddCalendarsScreen extends StatelessWidget {
   const AddCalendarsScreen({super.key, this.onboarding = false});
@@ -16,10 +17,24 @@ class AddCalendarsScreen extends StatelessWidget {
       await OnboardingPreferences.markComplete();
       if (!context.mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (_) => false);
-    } else if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
     } else {
-      Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (_) => false);
+      final navigator = Navigator.of(context);
+      if (!navigator.canPop()) {
+        navigator.pushNamedAndRemoveUntil('/dashboard', (_) => false);
+        return;
+      }
+
+      var foundPreviousScreen = false;
+      navigator.popUntil((route) {
+        if (route.settings.name == '/calendars') {
+          return !navigator.canPop();
+        }
+        foundPreviousScreen = true;
+        return true;
+      });
+      if (!foundPreviousScreen) {
+        navigator.pushNamedAndRemoveUntil('/dashboard', (_) => false);
+      }
     }
   }
 
@@ -67,10 +82,10 @@ class AddCalendarsScreen extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Align(
-                          alignment: Alignment.centerLeft,
+                          alignment: Alignment.center,
                           child: Text(
                             'Sync your calendars',
-                            style: Theme.of(context).textTheme.headlineLarge
+                            style: Theme.of(context).textTheme.bodyLarge
                                 ?.copyWith(color: AppColors.primary),
                           ),
                         ),
@@ -143,17 +158,10 @@ class AddCalendarsScreen extends StatelessWidget {
               ),
               Align(
                 alignment: Alignment.centerRight,
-                child: IconButton.filled(
-                  tooltip: onboarding
-                      ? 'Skip calendar setup and continue'
-                      : 'Return to Momentum',
+                child: PillActionButton(
+                  label: 'Skip',
                   onPressed: () => _continue(context),
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.onPrimary,
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                  ),
-                  icon: const Icon(Icons.chevron_right),
+                  trailingIcon: Icons.chevron_right,
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),

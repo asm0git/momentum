@@ -12,9 +12,17 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.destination,
     this.isBlurred = false,
     this.actions,
-  });
+  }) : title = null;
 
-  final AppDestination destination;
+  const PrimaryAppBar.withTitle({
+    super.key,
+    required this.title,
+    this.isBlurred = false,
+    this.actions,
+  }) : destination = null;
+
+  final AppDestination? destination;
+  final String? title;
   final bool isBlurred;
   final List<Widget>? actions;
 
@@ -29,7 +37,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
       centerTitle: true,
       toolbarHeight: AppSpacing.appBarHeight,
       title: Text(
-        destination.title,
+        title ?? destination!.title,
         style: theme.textTheme.headlineLarge?.copyWith(
           color: theme.colorScheme.onPrimary,
         ),

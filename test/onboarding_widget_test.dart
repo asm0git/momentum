@@ -81,7 +81,7 @@ void main() {
     expect(find.text('Outlook'), findsOneWidget);
   });
 
-  testWidgets('setup chevron skips linking and persists completion', (
+  testWidgets('Skip button skips linking and persists completion', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -91,7 +91,7 @@ void main() {
         routes: {'/dashboard': (_) => const Text('Dashboard ready')},
       ),
     );
-    await tester.tap(find.byTooltip('Skip calendar setup and continue'));
+    await tester.tap(find.text('Skip'));
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard ready'), findsOneWidget);
@@ -112,7 +112,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Google Calendar'), findsOneWidget);
-    expect(find.byTooltip('Return to Momentum'), findsOneWidget);
+    expect(find.text('Skip'), findsOneWidget);
   });
 }
 

@@ -13,6 +13,7 @@ class DayWidget extends StatelessWidget {
     this.categories = const [],
     this.onSelected,
     this.compact = false,
+    this.showTaskIndicators = true,
   });
 
   final DateTime? date;
@@ -21,6 +22,7 @@ class DayWidget extends StatelessWidget {
   final List<TaskCategory> categories;
   final VoidCallback? onSelected;
   final bool compact;
+  final bool showTaskIndicators;
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +82,18 @@ class DayWidget extends StatelessWidget {
                       ),
                     ),
             ),
-            if (!compact) Expanded(child: _buildCategoryGrid()),
+            if (!compact)
+              Expanded(
+                child: AnimatedOpacity(
+                  opacity: showTaskIndicators ? 1 : 0,
+                  duration: const Duration(milliseconds: 160),
+                  curve: Curves.easeInOut,
+                  child: IgnorePointer(
+                    ignoring: !showTaskIndicators,
+                    child: _buildCategoryGrid(),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

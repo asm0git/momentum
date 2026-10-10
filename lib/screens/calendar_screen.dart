@@ -1,12 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
+import '../calendar_view_mode.dart';
 import '../navigation_destinations.dart';
+import '../services/calendar_view_preferences.dart';
 import '../state/planner_state.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/calendar.dart';
+import '../widgets/calendar_resize_handle.dart';
 import '../widgets/item_actions.dart';
+import '../widgets/pill_action_button.dart';
 import '../widgets/primary_app_bar.dart';
 import '../widgets/task_list_container.dart';
 import '../widgets/task_widget.dart';
@@ -21,6 +27,39 @@ class CalendarScreen extends StatefulWidget {
 
 class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _selectedDate = _dateOnly(DateTime.now());
+  CalendarViewMode _calendarViewMode = CalendarViewMode.fullMonth;
+  bool _calendarViewModeChanged = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreCalendarViewMode();
+  }
+
+  Future<void> _restoreCalendarViewMode() async {
+    try {
+      final savedMode = await CalendarViewPreferences.load();
+      if (!mounted || _calendarViewModeChanged) return;
+      setState(() => _calendarViewMode = savedMode);
+    } catch (_) {
+      // Keep the full-month view if the saved preference cannot be read.
+    }
+  }
+
+  void _setCalendarViewMode(CalendarViewMode mode) {
+    if (_calendarViewMode == mode) return;
+    _calendarViewModeChanged = true;
+    setState(() => _calendarViewMode = mode);
+    unawaited(_saveCalendarViewMode(mode));
+  }
+
+  Future<void> _saveCalendarViewMode(CalendarViewMode mode) async {
+    try {
+      await CalendarViewPreferences.save(mode);
+    } catch (_) {
+      // Keep the changed view for this visit if storage is unavailable.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,27 +93,35 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 children: [
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton.icon(
+                    child: PillActionButton(
                       key: const ValueKey('calendar-add-calendars'),
+                      label: 'Add calendars',
                       onPressed: () =>
                           Navigator.of(context).pushNamed('/calendars'),
-                      icon: const Icon(Icons.add_link),
-                      label: Text(
-                        'Add calendars',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: AppColors.primary),
-                      ),
+                      leadingIcon: Icons.add_link,
                     ),
                   ),
-                  CalendarWidget(
-                    categories: categories,
-                    onDateSelected: (date) {
-                      setState(() {
-                        _selectedDate = _dateOnly(date);
-                      });
-                    },
+                  AnimatedSize(
+                    key: const ValueKey('calendar-animated-size'),
+                    duration: const Duration(milliseconds: 280),
+                    curve: Curves.easeInOutCubic,
+                    alignment: Alignment.topCenter,
+                    clipBehavior: Clip.hardEdge,
+                    child: CalendarWidget(
+                      categories: categories,
+                      viewMode: _calendarViewMode,
+                      onDateSelected: (date) {
+                        setState(() {
+                          _selectedDate = _dateOnly(date);
+                        });
+                      },
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.md),
+                  CalendarResizeHandle(
+                    mode: _calendarViewMode,
+                    fullMonthWeekCount: calendarMonthWeekCount(_selectedDate),
+                    onModeChanged: _setCalendarViewMode,
+                  ),
                   Text(
                     _sectionTitle,
                     style: Theme.of(

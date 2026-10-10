@@ -9,6 +9,8 @@ import '../services/canvas_oauth_redirect_stub.dart'
 import '../services/onboarding_preferences.dart';
 import '../state/planner_state.dart';
 import '../widgets/blurred_dialog.dart';
+import '../widgets/circular_icon_button.dart';
+import '../widgets/primary_app_bar.dart';
 
 class CalendarProviderConnectionScreen extends StatefulWidget {
   const CalendarProviderConnectionScreen({super.key, required this.provider});
@@ -224,11 +226,15 @@ class _CalendarProviderConnectionScreenState
   }
 
   Future<void> _backToSetup() async {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+      return;
+    }
+
     final complete = await OnboardingPreferences.isComplete();
     if (!mounted) return;
-    Navigator.of(
-      context,
-    ).pushReplacementNamed('/calendars', arguments: !complete);
+    navigator.pushReplacementNamed('/calendars', arguments: !complete);
   }
 
   @override
@@ -241,15 +247,26 @@ class _CalendarProviderConnectionScreenState
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(
-        centerTitle: true,
-        title: Text(widget.provider.title, style: textTheme.headlineLarge),
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.onPrimary,
-        elevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(AppRadii.appBarBottom),
+      appBar: PrimaryAppBar.withTitle(title: widget.provider.title),
+      bottomNavigationBar: SafeArea(
+        child: SizedBox(
+          height: AppSpacing.addIconSize + AppSpacing.md * 2 + AppSpacing.xs,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.screenEdgePadding,
+              0,
+              AppSpacing.screenEdgePadding,
+              AppSpacing.xs,
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: CircularIconButton(
+                backgroundColor: AppColors.secondary,
+                icon: Icons.chevron_left,
+                onPressed: _backToSetup,
+                tooltip: 'Back to calendars',
+              ),
+            ),
           ),
         ),
       ),
@@ -401,12 +418,6 @@ class _CalendarProviderConnectionScreenState
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.md),
-                TextButton.icon(
-                  onPressed: _backToSetup,
-                  icon: const Icon(Icons.arrow_back),
-                  label: const Text('Back to calendars'),
-                ),
               ],
             ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import 'circular_icon_button.dart';
 
 // Floating action button used to add a task from the bottom navigation area.
 class AddTaskButton extends StatelessWidget {
@@ -23,19 +24,12 @@ class AddTaskButton extends StatelessWidget {
       animation: controller,
       builder: (context, child) =>
           Transform.rotate(angle: controller.value * 3.14159 * 2, child: child),
-      child: AnimatedContainer(
+      child: CircularIconButton(
+        backgroundColor: isOpen ? AppColors.secondary : primary,
+        icon: Icons.add,
+        onPressed: onPressed,
+        tooltip: 'Add',
         duration: AppSpacing.fabAnimationDuration,
-        decoration: BoxDecoration(
-          color: isOpen ? AppColors.secondary : primary,
-          shape: BoxShape.circle,
-        ),
-        child: IconButton(
-          onPressed: onPressed,
-          icon: const Icon(Icons.add, color: AppColors.onPrimary),
-          iconSize: AppSpacing.addIconSize,
-          padding: const EdgeInsets.all(AppSpacing.md),
-          tooltip: 'Add',
-        ),
       ),
     );
   }

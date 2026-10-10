@@ -100,7 +100,7 @@ final appTheme = ThemeData(
       fontSize: 24,
       fontWeight: FontWeight.w600,
       height: 1.2,
-      letterSpacing: -0.6,
+      letterSpacing: -0.8,
     ),
     bodyMedium: TextStyle(
       fontFamily: 'SFProText',

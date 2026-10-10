@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
+import '../calendar_view_mode.dart';
 import '../data_models.dart';
 import 'week.dart';
 
@@ -12,6 +13,7 @@ class CalendarWidget extends StatefulWidget {
     this.initialDate,
     this.minimumDate,
     this.compact = false,
+    this.viewMode = CalendarViewMode.fullMonth,
   });
 
   final List<TaskCategory> categories;
@@ -19,6 +21,7 @@ class CalendarWidget extends StatefulWidget {
   final DateTime? initialDate;
   final DateTime? minimumDate;
   final bool compact;
+  final CalendarViewMode viewMode;
 
   @override
   State<CalendarWidget> createState() => _CalendarWidgetState();
@@ -96,36 +99,20 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final firstDay = DateTime(_visibleMonth.year, _visibleMonth.month);
-    final daysInMonth = DateTime(
-      _visibleMonth.year,
-      _visibleMonth.month + 1,
-      0,
-    ).day;
-    final leadingBlankDays = firstDay.weekday % 7;
-    final weekCount = ((leadingBlankDays + daysInMonth) / 7).ceil();
-    final weeks = List.generate(
-      weekCount,
-      (weekIndex) => WeekWidget(
-        days: List.generate(7, (dayIndex) {
-          final dayNumber = weekIndex * 7 + dayIndex - leadingBlankDays + 1;
-          if (dayNumber < 1 || dayNumber > daysInMonth) {
-            return null;
-          }
-          return DateTime(_visibleMonth.year, _visibleMonth.month, dayNumber);
-        }),
-        selectedDay: _selectedDay,
-        categories: widget.compact ? const [] : widget.categories,
-        minimumDate: widget.minimumDate,
-        compact: widget.compact,
-        onDaySelected: (day) {
-          setState(() {
-            _selectedDay = day;
-          });
-          widget.onDateSelected?.call(day);
-        },
-      ),
-    );
+    final mode = widget.compact ? CalendarViewMode.fullMonth : widget.viewMode;
+    final visibleWeeks = _visibleWeeks(mode);
+    final weeks = [
+      for (final days in visibleWeeks)
+        WeekWidget(
+          days: days,
+          selectedDay: _selectedDay,
+          categories: widget.compact ? const [] : widget.categories,
+          minimumDate: widget.minimumDate,
+          compact: widget.compact,
+          showTaskIndicators: !widget.compact && mode.showTaskIndicators,
+          onDaySelected: _selectDay,
+        ),
+    ];
     final minimum = widget.minimumDate == null
         ? null
         : DateUtils.dateOnly(widget.minimumDate!);
@@ -176,6 +163,62 @@ class _CalendarWidgetState extends State<CalendarWidget> {
       ],
     );
   }
+
+  List<List<DateTime?>> _visibleWeeks(CalendarViewMode mode) {
+    final visibleWeekCount = mode.visibleWeekCount;
+    if (visibleWeekCount != null) {
+      final firstWeekDay = _startOfWeek(_selectedDay);
+      return List.generate(
+        visibleWeekCount,
+        (weekIndex) => List.generate(
+          7,
+          (dayIndex) =>
+              firstWeekDay.add(Duration(days: weekIndex * 7 + dayIndex)),
+        ),
+      );
+    }
+
+    final firstDay = DateTime(_visibleMonth.year, _visibleMonth.month);
+    final daysInMonth = DateTime(
+      _visibleMonth.year,
+      _visibleMonth.month + 1,
+      0,
+    ).day;
+    final leadingBlankDays = firstDay.weekday % 7;
+    final weekCount = calendarMonthWeekCount(_visibleMonth);
+    return List.generate(
+      weekCount,
+      (weekIndex) => List.generate(7, (dayIndex) {
+        final dayNumber = weekIndex * 7 + dayIndex - leadingBlankDays + 1;
+        if (dayNumber < 1 || dayNumber > daysInMonth) return null;
+        return DateTime(_visibleMonth.year, _visibleMonth.month, dayNumber);
+      }),
+    );
+  }
+
+  void _selectDay(DateTime day) {
+    setState(() {
+      _selectedDay = day;
+      if (!widget.compact &&
+          widget.viewMode != CalendarViewMode.fullMonth &&
+          (day.year != _visibleMonth.year ||
+              day.month != _visibleMonth.month)) {
+        _visibleMonth = DateTime(day.year, day.month);
+      }
+    });
+    widget.onDateSelected?.call(day);
+  }
+
+  static DateTime _startOfWeek(DateTime date) {
+    return DateTime(date.year, date.month, date.day - (date.weekday % 7));
+  }
+}
+
+int calendarMonthWeekCount(DateTime date) {
+  final firstDay = DateTime(date.year, date.month);
+  final daysInMonth = DateTime(date.year, date.month + 1, 0).day;
+  final leadingBlankDays = firstDay.weekday % 7;
+  return ((leadingBlankDays + daysInMonth) / 7).ceil();
 }
 
 class _CalendarHeader extends StatelessWidget {

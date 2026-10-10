@@ -13,6 +13,7 @@ class WeekWidget extends StatelessWidget {
     required this.onDaySelected,
     this.minimumDate,
     this.compact = false,
+    this.showTaskIndicators = true,
   });
 
   final List<DateTime?> days;
@@ -21,6 +22,7 @@ class WeekWidget extends StatelessWidget {
   final ValueChanged<DateTime> onDaySelected;
   final DateTime? minimumDate;
   final bool compact;
+  final bool showTaskIndicators;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +64,7 @@ class WeekWidget extends StatelessWidget {
       minimumDate: minimumDate,
       isSelected: date != null && _sameDay(date, selectedDay),
       compact: compact,
+      showTaskIndicators: showTaskIndicators,
       onSelected: date == null || _isBeforeMinimum(date)
           ? null
           : () => onDaySelected(date),
