@@ -21,13 +21,20 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: AppColors.background,
       appBar: PrimaryAppBar(
-        key: ValueKey('dashboard-app-bar'),
+        key: const ValueKey('dashboard-app-bar'),
         destination: AppDestination.dashboard,
+        actions: [
+          IconButton(
+            tooltip: 'Add calendars',
+            icon: const Icon(Icons.calendar_month_outlined),
+            onPressed: () => Navigator.of(context).pushNamed('/calendars'),
+          ),
+        ],
       ),
-      body: _ScreenBody(),
+      body: const _ScreenBody(),
     );
   }
 }
@@ -194,8 +201,12 @@ class _ScreenBody extends StatelessWidget {
               style: textTheme.labelMedium?.copyWith(color: AppColors.primary),
             ),
             Text(
-              '${_formatTime(nextItem.startTime)} - '
-              '${_formatTime(nextItem.endTime)}',
+              nextItem.isAllDay
+                  ? MaterialLocalizations.of(
+                      context,
+                    ).formatMediumDate(nextItem.startTime)
+                  : '${_formatTime(nextItem.startTime)} - '
+                        '${_formatTime(nextItem.endTime)}',
               style: textTheme.titleMedium?.copyWith(color: AppColors.primary),
             ),
             Row(
@@ -436,4 +447,6 @@ class _DashboardItem {
   final TaskCategory? category;
   final DateTime startTime;
   final DateTime endTime;
+
+  bool get isAllDay => item is Event && (item as Event).allDay;
 }

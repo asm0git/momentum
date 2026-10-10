@@ -12,12 +12,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  http: ^1.6.0
+  web: ^1.1.1
   cupertino_icons: ^1.0.6
   device_preview: ^1.3.1
   path: ^1.9.1
   provider: ^6.1.5+1
   sqflite: ^2.4.2
   sqflite_common_ffi_web: ^1.2.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:
@@ -43,6 +46,8 @@ flutter:
     - assets/img/unselected/Home.png
     - assets/img/unselected/Timer.png
     - assets/img/unselected/To-Do.png
+    - assets/img/logo/logo_white.png
+    - assets/img/logo/logo_purple.png
   fonts:
     - family: SFProDisplay
       fonts:

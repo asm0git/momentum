@@ -10,6 +10,13 @@ void main() {
   testWidgets('weekend calendar dates use the same normal text color', (
     tester,
   ) async {
+    final now = DateTime.now();
+    final firstOfNextMonth = DateTime(now.year, now.month + 1, 1);
+    final daysUntilSaturday =
+        (DateTime.saturday - firstOfNextMonth.weekday + 7) % 7;
+    final saturday = firstOfNextMonth.add(Duration(days: daysUntilSaturday));
+    final sunday = saturday.add(const Duration(days: 1));
+
     await tester.pumpWidget(
       MaterialApp(
         theme: appTheme,
@@ -20,16 +27,16 @@ void main() {
               children: [
                 Expanded(
                   child: DayWidget(
-                    date: DateTime(2026, 10, 10),
+                    date: saturday,
                     isSelected: false,
-                    minimumDate: DateTime(2026, 10, 1),
+                    minimumDate: firstOfNextMonth,
                   ),
                 ),
                 Expanded(
                   child: DayWidget(
-                    date: DateTime(2026, 10, 11),
+                    date: sunday,
                     isSelected: false,
-                    minimumDate: DateTime(2026, 10, 1),
+                    minimumDate: firstOfNextMonth,
                   ),
                 ),
               ],
@@ -40,11 +47,11 @@ void main() {
     );
 
     expect(
-      tester.widget<Text>(find.text('10')).style?.color,
+      tester.widget<Text>(find.text('${saturday.day}')).style?.color,
       AppColors.onSurface,
     );
     expect(
-      tester.widget<Text>(find.text('11')).style?.color,
+      tester.widget<Text>(find.text('${sunday.day}')).style?.color,
       AppColors.onSurface,
     );
   });

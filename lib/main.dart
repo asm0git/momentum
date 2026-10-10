@@ -8,24 +8,36 @@
 // StatefulWidget, setState, Scaffold, AppBar, Column, Card, FilledButton.
 
 import 'package:device_preview/device_preview.dart';
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
-import 'navigation_destinations.dart';
+import 'data_models.dart';
 import 'screens/ai_screen.dart';
 import 'screens/calendar_screen.dart';
+import 'screens/add_calendars_screen.dart';
+import 'screens/canvas_connection_screen.dart';
+import 'screens/calendar_provider_connection_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/timer_screen.dart';
 import 'screens/todo_screen.dart';
+import 'screens/welcome_screen.dart';
+import 'services/onboarding_preferences.dart';
 import 'state/planner_state.dart';
 import 'state/focus_timer_state.dart';
 import 'widgets/planner_load_gate.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final completed = await OnboardingPreferences.isComplete();
+  final initialRoute = resolveStartupRoute(
+    setupComplete: completed,
+    location: Uri.base,
+  );
   runApp(
     DevicePreview(
-      enabled: true,
+      enabled: !kReleaseMode,
       builder: (context) => MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => PlannerState()..initialize()),
@@ -34,7 +46,7 @@ void main() {
             update: (_, planner, timer) => timer!..attachPlannerState(planner),
           ),
         ],
-        child: const MyApp(),
+        child: MyApp(initialRoute: initialRoute, firstRun: !completed),
       ),
     ),
   );
@@ -42,7 +54,10 @@ void main() {
 
 // App shell that provides theme, routing, and the initial screen.
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.initialRoute, required this.firstRun});
+
+  final String initialRoute;
+  final bool firstRun;
 
   @override
   Widget build(BuildContext context) {
@@ -51,13 +66,15 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: appTheme,
       builder: (context, child) => PlannerLoadGate(child: child!),
-      initialRoute: AppDestination.dashboard.route,
+      initialRoute: initialRoute,
       onGenerateRoute: _buildRoute,
     );
   }
 
   Route<void>? _buildRoute(RouteSettings settings) {
     switch (settings.name) {
+      case '/welcome':
+        return _screenRoute(const WelcomeScreen(), settings);
       case '/dashboard':
         return _screenRoute(
           const DashboardScreen(key: ValueKey('dashboard-screen')),
@@ -86,6 +103,31 @@ class MyApp extends StatelessWidget {
       case '/ai':
         return _screenRoute(
           const AiScreen(key: ValueKey('ai-screen')),
+          settings,
+        );
+      case '/calendars':
+        return _screenRoute(
+          AddCalendarsScreen(
+            onboarding: settings.arguments is bool
+                ? settings.arguments! as bool
+                : firstRun,
+          ),
+          settings,
+        );
+      case '/canvas':
+        return _screenRoute(const CanvasConnectionScreen(), settings);
+      case '/google':
+        return _screenRoute(
+          const CalendarProviderConnectionScreen(
+            provider: CalendarProvider.googleCalendar,
+          ),
+          settings,
+        );
+      case '/outlook':
+        return _screenRoute(
+          const CalendarProviderConnectionScreen(
+            provider: CalendarProvider.outlook,
+          ),
           settings,
         );
     }

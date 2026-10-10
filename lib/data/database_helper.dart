@@ -46,7 +46,7 @@ class DatabaseHelper {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 3,
+        version: 6,
         onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: (db, version) async {
           await _createSchema(db);
@@ -61,6 +61,46 @@ class DatabaseHelper {
             await db.execute('ALTER TABLE tasks ADD COLUMN repeat_until TEXT');
             await db.execute('ALTER TABLE events ADD COLUMN repeat_until TEXT');
             await _createOccurrenceAndFocusTables(db);
+          }
+          if (oldVersion < 4) {
+            await _migrateLinkedAccountsV4(db);
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS idx_tasks_source ON tasks(src_platform, external_id)',
+            );
+            await db.execute(
+              'CREATE INDEX IF NOT EXISTS idx_events_source ON events(src_platform, external_id)',
+            );
+            await db.execute('''
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_canvas_task_external_id
+              ON tasks(external_id)
+              WHERE src_platform = 'canvas' AND external_id IS NOT NULL
+            ''');
+            await db.execute('''
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_canvas_event_external_id
+              ON events(external_id)
+              WHERE src_platform = 'canvas' AND external_id IS NOT NULL
+            ''');
+          }
+          if (oldVersion < 5) {
+            await db.execute('''
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_imported_task_provider_id
+              ON tasks(src_platform, external_id)
+              WHERE src_platform IN ('canvas', 'google', 'outlook')
+                AND external_id IS NOT NULL
+            ''');
+            await db.execute('''
+              CREATE UNIQUE INDEX IF NOT EXISTS idx_imported_event_provider_id
+              ON events(src_platform, external_id)
+              WHERE src_platform IN ('canvas', 'google', 'outlook')
+                AND external_id IS NOT NULL
+            ''');
+          }
+          if (oldVersion < 6) {
+            await db.delete(
+              'events',
+              where: 'title = ?',
+              whereArgs: ["Janisa's Birthday"],
+            );
           }
         },
       ),
@@ -122,16 +162,95 @@ class DatabaseHelper {
       CREATE TABLE linked_accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         platform_name TEXT NOT NULL,
-        account_email TEXT NOT NULL,
-        api_token TEXT NOT NULL,
-        last_sync_time TEXT
+        account_name TEXT NOT NULL,
+        account_email TEXT,
+        provider_url TEXT,
+        remote_user_id TEXT,
+        category_id INTEGER,
+        last_sync_time TEXT,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
       )
     ''');
     await db.execute('CREATE INDEX idx_tasks_due ON tasks(due)');
     await db.execute('CREATE INDEX idx_tasks_category ON tasks(category_id)');
     await db.execute('CREATE INDEX idx_events_start ON events(start_time)');
     await db.execute('CREATE INDEX idx_events_category ON events(category_id)');
+    await db.execute(
+      'CREATE INDEX idx_tasks_source ON tasks(src_platform, external_id)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_events_source ON events(src_platform, external_id)',
+    );
+    await db.execute('''
+      CREATE UNIQUE INDEX idx_canvas_task_external_id
+      ON tasks(external_id)
+      WHERE src_platform = 'canvas' AND external_id IS NOT NULL
+    ''');
+    await db.execute('''
+      CREATE UNIQUE INDEX idx_canvas_event_external_id
+      ON events(external_id)
+      WHERE src_platform = 'canvas' AND external_id IS NOT NULL
+    ''');
+    await db.execute('''
+      CREATE UNIQUE INDEX idx_imported_task_provider_id
+      ON tasks(src_platform, external_id)
+      WHERE src_platform IN ('google', 'outlook') AND external_id IS NOT NULL
+    ''');
+    await db.execute('''
+      CREATE UNIQUE INDEX idx_imported_event_provider_id
+      ON events(src_platform, external_id)
+      WHERE src_platform IN ('google', 'outlook') AND external_id IS NOT NULL
+    ''');
     await _createOccurrenceAndFocusTables(db);
+  }
+
+  Future<void> _migrateLinkedAccountsV4(DatabaseExecutor db) async {
+    final tables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'linked_accounts'",
+    );
+    if (tables.isEmpty) {
+      await db.execute('''
+        CREATE TABLE linked_accounts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          platform_name TEXT NOT NULL,
+          account_name TEXT NOT NULL,
+          account_email TEXT,
+          provider_url TEXT,
+          remote_user_id TEXT,
+          category_id INTEGER,
+          last_sync_time TEXT,
+          FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+        )
+      ''');
+      return;
+    }
+
+    // Copy account metadata, but intentionally discard the legacy plaintext
+    // credential column. Every old connection must be authorized again.
+    await db.execute(
+      'ALTER TABLE linked_accounts RENAME TO linked_accounts_v3',
+    );
+    await db.execute('''
+      CREATE TABLE linked_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        platform_name TEXT NOT NULL,
+        account_name TEXT NOT NULL,
+        account_email TEXT,
+        provider_url TEXT,
+        remote_user_id TEXT,
+        category_id INTEGER,
+        last_sync_time TEXT,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+      )
+    ''');
+    await db.execute('''
+      INSERT INTO linked_accounts
+        (id, platform_name, account_name, account_email, last_sync_time)
+      SELECT id, platform_name, COALESCE(account_email, 'Linked account'),
+        account_email, last_sync_time
+      FROM linked_accounts_v3
+    ''');
+    await db.execute('DROP TABLE linked_accounts_v3');
   }
 
   Future<void> _createOccurrenceAndFocusTables(DatabaseExecutor db) async {
@@ -156,7 +275,9 @@ class DatabaseHelper {
       final categoryId = await db.insert('categories', categoryToMap(category));
       for (final item in category.items) {
         item.categoryId = categoryId;
-        if (item is Event) {
+        if (item is Task) {
+          await db.insert('tasks', taskToMap(item));
+        } else if (item is Event) {
           await db.insert('events', eventToMap(item));
         }
       }

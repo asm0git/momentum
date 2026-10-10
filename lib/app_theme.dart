@@ -45,6 +45,7 @@ class AppSpacing {
   static const double floatingGroupBottom = 8;
   static const double floatingGroupGap = 12;
   static const double dashboardCategoryWidth = base * 20;
+  static const double dashboardCategoryPreviewHeight = 24;
   static const double focusPresetWidth = base * 23;
   static const double popupFieldHeight = 44;
 }
@@ -85,6 +86,7 @@ final appTheme = ThemeData(
       fontFamily: 'SFProDisplay',
       fontSize: 64,
       fontWeight: FontWeight.bold,
+      letterSpacing: -0.6,
     ),
     titleMedium: TextStyle(
       fontFamily: 'SFProDisplay',
@@ -111,7 +113,7 @@ final appTheme = ThemeData(
       fontFamily: 'SFProText',
       fontSize: 12,
       fontWeight: FontWeight.w500,
-      letterSpacing: -0.4,
+      letterSpacing: -0.6,
       height: 1,
     ),
     labelSmall: TextStyle(

@@ -235,8 +235,10 @@ class _AddItemPopupState extends State<AddItemPopup> {
                 }
               },
               selectedCategoryId: _selectedCategoryId,
-              onCategoryChanged: (categoryId) =>
-                  setState(() => _selectedCategoryId = categoryId),
+              onCategoryChanged: (categoryId) => setState(() {
+                _selectedCategoryId = categoryId;
+                if (categoryId != null) _validationMessage = null;
+              }),
             ),
             if (_selectedType == _PopupItemType.event) ...[
               const SizedBox(height: AppSpacing.sm),
@@ -283,26 +285,30 @@ class _AddItemPopupState extends State<AddItemPopup> {
             ],
             const SizedBox(height: AppSpacing.sm),
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
-                  onPressed: widget.onCancel,
-                  child: const Text('Cancel'),
+                Expanded(
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      textStyle: _itemTypeTextStyle(context),
+                    ),
+                    onPressed: widget.onCancel,
+                    child: const Text('Cancel'),
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
-                FilledButton(
-                  // The app-wide FilledButton minimum width is infinite so
-                  // buttons stretch when given bounded width. This action sits
-                  // in a Row, which lays out each child with an unbounded
-                  // horizontal constraint, so give this button a finite width.
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(64, 48),
-                  ),
-                  onPressed: _save,
-                  child: Text(
-                    widget.initialItem == null
-                        ? 'Add ${_selectedType == _PopupItemType.task ? 'Task' : 'Event'}'
-                        : 'Save changes',
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      textStyle: _itemTypeTextStyle(context),
+                    ),
+                    onPressed: _save,
+                    child: Text(
+                      widget.initialItem == null
+                          ? 'Add ${_selectedType == _PopupItemType.task ? 'Task' : 'Event'}'
+                          : 'Save changes',
+                    ),
                   ),
                 ),
               ],
@@ -320,6 +326,10 @@ class _AddItemPopupState extends State<AddItemPopup> {
     final title = _titleController.text.trim();
     if (title.isEmpty) {
       _showValidationError('Enter a title.');
+      return;
+    }
+    if (_selectedCategoryId == null) {
+      _showValidationError('Select a category to continue.');
       return;
     }
     final state = context.read<PlannerState>();
@@ -472,7 +482,10 @@ class _EventFields extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadii.popup),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.xxs,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -578,22 +591,22 @@ class _TaskFields extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadii.popup),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xxs,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  height: AppSpacing.popupFieldHeight,
-                  child: _EventDateTimeRow(
-                    label: 'Deadline',
-                    date: deadline,
-                    time: deadlineTime,
-                    enabled: true,
-                    onDateChanged: onDeadlineChanged,
-                    onTimeChanged: onDeadlineTimeChanged,
-                  ),
+                _EventDateTimeRow(
+                  label: 'Deadline',
+                  date: deadline,
+                  time: deadlineTime,
+                  enabled: true,
+                  onDateChanged: onDeadlineChanged,
+                  onTimeChanged: onDeadlineTimeChanged,
                 ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.xxs),
                 _RepeatFields(
                   repeat: repeat,
                   repeatUntil: repeatUntil,
@@ -729,7 +742,10 @@ class _NotesField extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadii.popup),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.xxs,
+        ),
         child: TextField(
           controller: controller,
           minLines: 5,
@@ -945,7 +961,10 @@ class _TitleCategoryFields extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadii.popup),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.xxs,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1045,7 +1064,6 @@ class _NewCategoryDialogState extends State<_NewCategoryDialog> {
     final dialogWidth = (MediaQuery.sizeOf(context).width - 32)
         .clamp(280.0, 400.0)
         .toDouble();
-    final buttonRowWidth = dialogWidth - (AppSpacing.md * 2);
     final fieldStyle = Theme.of(context).textTheme.bodyMedium!.copyWith(
       fontWeight: FontWeight.normal,
       color: AppColors.onSurface,
@@ -1054,126 +1072,125 @@ class _NewCategoryDialogState extends State<_NewCategoryDialog> {
       color: AppColors.onSurface.withValues(alpha: 0.55),
     );
 
-    return AlertDialog(
-      insetPadding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.md,
-      ),
+    return Dialog(
+      insetPadding: const EdgeInsets.all(AppSpacing.md),
       backgroundColor: AppColors.background,
       surfaceTintColor: AppColors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadii.popup),
       ),
-      titlePadding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.md,
-        AppSpacing.md,
-        0,
-      ),
-      contentPadding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.md,
-        AppSpacing.md,
-      ),
-      title: Text(
-        'New category',
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: AppColors.primary),
-      ),
-      content: SizedBox(
-        width: buttonRowWidth,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(AppRadii.popup),
+      child: SizedBox(
+        width: dialogWidth,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'New category',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: AppColors.primary),
               ),
-              child: SizedBox(
-                height: AppSpacing.popupFieldHeight,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                  ),
-                  child: Center(
-                    child: TextField(
-                      controller: _controller,
-                      autofocus: true,
-                      onChanged: (_) {
-                        if (_validationMessage != null) {
-                          setState(() => _validationMessage = null);
-                        }
-                      },
-                      style: fieldStyle,
-                      textAlignVertical: TextAlignVertical.center,
-                      decoration: InputDecoration.collapsed(
-                        hintText: 'Name',
-                        hintStyle: hintStyle,
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(AppRadii.popup),
+                      ),
+                      child: SizedBox(
+                        height: AppSpacing.popupFieldHeight,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
+                          ),
+                          child: Center(
+                            child: SizedBox(
+                              height: 28,
+                              child: TextField(
+                                controller: _controller,
+                                autofocus: true,
+                                onChanged: (_) {
+                                  if (_validationMessage != null) {
+                                    setState(
+                                      () => _validationMessage = null,
+                                    );
+                                  }
+                                },
+                                style: fieldStyle,
+                                textAlignVertical: TextAlignVertical.center,
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.zero,
+                                  border: InputBorder.none,
+                                  hintText: 'Name',
+                                  hintStyle: hintStyle,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: AppSpacing.sm),
+                  CategoryIconSelector(
+                    selectedIconName: _iconName,
+                    onChanged: (iconName) =>
+                        setState(() => _iconName = iconName),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            CategoryIconSelector(
-              selectedIconName: _iconName,
-              onChanged: (iconName) => setState(() => _iconName = iconName),
-            ),
-            if (_validationMessage != null) ...[
-              const SizedBox(height: AppSpacing.sm),
-              _ValidationMessage(message: _validationMessage!),
-            ],
-          ],
-        ),
-      ),
-      actionsPadding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        0,
-        AppSpacing.md,
-        AppSpacing.md,
-      ),
-      actions: [
-        SizedBox(
-          width: buttonRowWidth,
-          child: Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: FilledButton(
-                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                  onPressed: () {
-                    final title = _controller.text.trim();
-                    if (title.isEmpty) {
-                      setState(() => _validationMessage = 'Enter a name.');
-                      return;
-                    }
-                    Navigator.pop(
-                      context,
-                      TaskCategory(
-                        title: title,
-                        iconName: _iconName,
-                        items: [],
+              if (_validationMessage != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _ValidationMessage(message: _validationMessage!),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        minimumSize: const Size(0, 48),
                       ),
-                    );
-                  },
-                  child: const Text('Create'),
-                ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
+                      onPressed: () {
+                        final title = _controller.text.trim();
+                        if (title.isEmpty) {
+                          setState(() => _validationMessage = 'Enter a name.');
+                          return;
+                        }
+                        Navigator.pop(
+                          context,
+                          TaskCategory(
+                            title: title,
+                            iconName: _iconName,
+                            items: [],
+                          ),
+                        );
+                      },
+                      child: const Text('Create'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1211,8 +1228,7 @@ class _ItemTypeSelector extends StatelessWidget {
                   child: Center(
                     child: Text(
                       type == _PopupItemType.event ? 'Event' : 'Task',
-                      style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                        fontWeight: FontWeight.normal,
+                      style: _itemTypeTextStyle(context).copyWith(
                         color: type == selectedType
                             ? AppColors.onPrimary
                             : AppColors.primary,
@@ -1227,3 +1243,8 @@ class _ItemTypeSelector extends StatelessWidget {
     );
   }
 }
+
+TextStyle _itemTypeTextStyle(BuildContext context) =>
+    Theme.of(context).textTheme.bodyMedium!.copyWith(
+      fontWeight: FontWeight.normal,
+    );

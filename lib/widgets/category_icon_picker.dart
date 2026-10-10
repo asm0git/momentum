@@ -145,47 +145,28 @@ class CategoryIconSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(AppRadii.popup),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadii.popup),
-        onTap: () async {
-          final selected = await showBlurredDialog<String>(
-            context: context,
-            builder: (context) =>
-                _CategoryIconGridDialog(selectedIconName: selectedIconName),
-          );
-          if (selected != null && context.mounted) onChanged(selected);
-        },
-        child: SizedBox(
-          height: AppSpacing.popupFieldHeight,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: Row(
-              children: [
-                Icon(
-                  categoryIconData[selectedIconName] ?? Icons.category,
-                  size: 18,
-                  color: AppColors.primary,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    categoryIconLabel(selectedIconName),
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                      fontWeight: FontWeight.normal,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ),
-                const Icon(
-                  Icons.unfold_more_rounded,
-                  size: 18,
-                  color: AppColors.primary,
-                ),
-              ],
+    return Tooltip(
+      message: 'Choose icon',
+      child: Material(
+        color: AppColors.surface,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () async {
+            final selected = await showBlurredDialog<String>(
+              context: context,
+              builder: (context) =>
+                  _CategoryIconGridDialog(selectedIconName: selectedIconName),
+            );
+            if (selected != null && context.mounted) onChanged(selected);
+          },
+          child: SizedBox(
+            width: AppSpacing.popupFieldHeight,
+            height: AppSpacing.popupFieldHeight,
+            child: Icon(
+              categoryIconData[selectedIconName] ?? Icons.category,
+              size: 20,
+              color: AppColors.primary,
             ),
           ),
         ),
@@ -205,7 +186,12 @@ class _CategoryIconGridDialog extends StatelessWidget {
     final dialogWidth = (screenWidth - AppSpacing.md * 2)
         .clamp(0.0, 460.0)
         .toDouble();
-    final gridSize = dialogWidth - AppSpacing.md * 2;
+    const columnCount = 9;
+    final gridWidth = dialogWidth - AppSpacing.md * 2;
+    final rowCount = (categoryIconData.length / columnCount).ceil();
+    final tileExtent =
+        (gridWidth - AppSpacing.xxs * (columnCount - 1)) / columnCount;
+    final gridHeight = rowCount * tileExtent + AppSpacing.xxs * (rowCount - 1);
 
     return Dialog(
       insetPadding: const EdgeInsets.all(AppSpacing.md),
@@ -227,14 +213,16 @@ class _CategoryIconGridDialog extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
-              SizedBox.square(
-                dimension: gridSize,
+              const SizedBox(height: AppSpacing.sm),
+              SizedBox(
+                width: gridWidth,
+                height: gridHeight,
                 child: GridView.builder(
                   itemCount: categoryIconData.length,
+                  padding: EdgeInsets.zero,
                   physics: const NeverScrollableScrollPhysics(),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 9,
+                    crossAxisCount: columnCount,
                     crossAxisSpacing: AppSpacing.xxs,
                     mainAxisSpacing: AppSpacing.xxs,
                   ),

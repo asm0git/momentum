@@ -7,6 +7,7 @@ import '../navigation_destinations.dart';
 import '../state/planner_state.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/collapsible_category.dart';
+import '../widgets/item_actions.dart';
 import '../widgets/primary_app_bar.dart';
 
 // To-do screen containing the expandable task categories.
@@ -88,6 +89,10 @@ class _TodoScreenState extends State<TodoScreen> {
                 iconName: category.iconName,
                 items: items,
                 initiallyExpanded: categoryId == widget.initialCategoryId,
+                onDeleteCategory: categoryId == null
+                    ? null
+                    : () =>
+                          confirmDeleteCategory(context, category, categories),
               );
             },
           ),

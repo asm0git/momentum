@@ -92,31 +92,45 @@ class DashboardCategoryCard extends StatelessWidget {
 
   Widget _buildUpcomingPreview(BuildContext context, TextTheme textTheme) {
     final item = nextItem;
-    if (item == null) {
-      return Text(
-        'No upcoming items',
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: textTheme.labelMedium?.copyWith(color: AppColors.onSurface),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          item.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.labelMedium?.copyWith(color: AppColors.onSurface),
-        ),
-        Text(
-          _formatPreviewDate(context, item),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.labelMedium?.copyWith(color: AppColors.onSurface),
-        ),
-      ],
+    return SizedBox(
+      height: AppSpacing.dashboardCategoryPreviewHeight,
+      child: item == null
+          ? Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'No upcoming items',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.labelMedium?.copyWith(
+                  color: AppColors.onSurface,
+                ),
+              ),
+            )
+          : Align(
+              alignment: Alignment.centerLeft,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: AppColors.onSurface,
+                    ),
+                ),
+                Text(
+                  _formatPreviewDate(context, item),
+                  maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: AppColors.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 

@@ -1,5 +1,29 @@
 import 'package:flutter/material.dart';
 
+enum CalendarProvider {
+  canvas,
+  googleCalendar,
+  outlook;
+
+  String get key => switch (this) {
+    CalendarProvider.canvas => 'canvas',
+    CalendarProvider.googleCalendar => 'google',
+    CalendarProvider.outlook => 'outlook',
+  };
+
+  String get title => switch (this) {
+    CalendarProvider.canvas => 'Canvas',
+    CalendarProvider.googleCalendar => 'Google Calendar',
+    CalendarProvider.outlook => 'Outlook',
+  };
+
+  String get categoryIcon => switch (this) {
+    CalendarProvider.canvas => 'mi_school',
+    CalendarProvider.googleCalendar ||
+    CalendarProvider.outlook => 'mi_calendar_month',
+  };
+}
+
 abstract class PlannerItem {
   PlannerItem({
     this.id,
@@ -99,6 +123,8 @@ class TaskCategory {
       .length;
 }
 
+enum CategoryDeleteDisposition { deleteItems, moveItems }
+
 class DailyPlan {
   DailyPlan({
     this.id,
@@ -117,14 +143,76 @@ class LinkedAccount {
   LinkedAccount({
     this.id,
     required this.platformName,
-    required this.accountEmail,
-    required this.apiToken,
+    required this.accountName,
+    this.accountEmail,
+    this.providerUrl,
+    this.remoteUserId,
+    this.categoryId,
     this.lastSyncTime,
   });
 
   int? id;
   String platformName;
-  String accountEmail;
-  String apiToken;
+  String accountName;
+  String? accountEmail;
+  String? providerUrl;
+  String? remoteUserId;
+  int? categoryId;
   DateTime? lastSyncTime;
+}
+
+class CanvasTaskImport {
+  const CanvasTaskImport({
+    required this.externalId,
+    required this.title,
+    required this.due,
+    this.description = '',
+  });
+
+  final String externalId;
+  final String title;
+  final DateTime due;
+  final String description;
+}
+
+class CanvasEventImport {
+  const CanvasEventImport({
+    required this.externalId,
+    required this.title,
+    required this.start,
+    required this.end,
+    this.allDay = false,
+    this.description = '',
+    this.location,
+  });
+
+  final String externalId;
+  final String title;
+  final DateTime start;
+  final DateTime end;
+  final bool allDay;
+  final String description;
+  final String? location;
+}
+
+class CanvasSyncPayload {
+  const CanvasSyncPayload({
+    required this.accountName,
+    required this.accountEmail,
+    required this.remoteUserId,
+    required this.providerUrl,
+    required this.syncedAt,
+    required this.tasks,
+    required this.events,
+    this.providerName = 'canvas',
+  });
+
+  final String accountName;
+  final String? accountEmail;
+  final String remoteUserId;
+  final String providerUrl;
+  final DateTime syncedAt;
+  final List<CanvasTaskImport> tasks;
+  final List<CanvasEventImport> events;
+  final String providerName;
 }

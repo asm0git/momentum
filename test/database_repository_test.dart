@@ -81,8 +81,11 @@ void main() {
     final account = LinkedAccount(
       id: 10,
       platformName: 'Calendar',
+      accountName: 'Planner',
       accountEmail: 'a@example.test',
-      apiToken: 'stored-locally',
+      providerUrl: 'https://calendar.example.test',
+      remoteUserId: 'remote-1',
+      categoryId: 4,
       lastSyncTime: DateTime(2026, 10, 7, 8, 30),
     );
 
@@ -100,10 +103,9 @@ void main() {
     expect(eventCopy.repeat, 'Every week');
     expect(eventCopy.repeatUntil, DateTime(2026, 11, 7));
     expect(dailyPlanFromMap(dailyPlanToMap(plan)).orderedTaskIds, [7, 10]);
-    expect(
-      linkedAccountFromMap(linkedAccountToMap(account)).apiToken,
-      'stored-locally',
-    );
+    final accountCopy = linkedAccountFromMap(linkedAccountToMap(account));
+    expect(accountCopy.accountName, 'Planner');
+    expect(accountCopy.providerUrl, 'https://calendar.example.test');
   });
 
   test(
@@ -188,8 +190,8 @@ void main() {
       final account = await repository.insertLinkedAccount(
         LinkedAccount(
           platformName: 'Calendar',
+          accountName: 'Planner',
           accountEmail: 'planner@example.test',
-          apiToken: 'token',
         ),
       );
       account.lastSyncTime = DateTime(2026, 10, 7, 9);
@@ -203,10 +205,86 @@ void main() {
       expect(await repository.deleteEvent(event.id!), isTrue);
       expect(await repository.deleteDailyPlan(plan.id!), isTrue);
       expect(await repository.deleteLinkedAccount(account.id!), isTrue);
-      expect(await repository.deleteCategory(category.id!), isTrue);
-      expect(await repository.deleteCategory(destinationCategory.id!), isTrue);
+      expect(
+        await repository.deleteCategory(
+          category.id!,
+          disposition: CategoryDeleteDisposition.deleteItems,
+        ),
+        isTrue,
+      );
+      expect(
+        await repository.deleteCategory(
+          destinationCategory.id!,
+          disposition: CategoryDeleteDisposition.deleteItems,
+        ),
+        isTrue,
+      );
       expect(await repository.getTasks(), isEmpty);
       expect(await repository.getEvents(), isEmpty);
+    },
+  );
+
+  test(
+    'provider calendar sync upserts imported events without duplicates',
+    () async {
+      final firstSync = CanvasSyncPayload(
+        accountName: 'Student Calendar',
+        accountEmail: 'student@example.test',
+        remoteUserId: 'google-user-4',
+        providerUrl: '',
+        syncedAt: DateTime(2026, 10, 9, 10),
+        tasks: const [],
+        events: [
+          CanvasEventImport(
+            externalId: 'primary:event-19',
+            title: 'Study group',
+            start: DateTime(2026, 10, 12, 9),
+            end: DateTime(2026, 10, 12, 10),
+            description: 'Review chapter 4',
+            location: 'Library',
+          ),
+        ],
+        providerName: 'google',
+      );
+      final account = await repository.applyCalendarSync(firstSync);
+      final initialEvents = (await repository.getAllItems())
+          .whereType<Event>()
+          .toList();
+      expect(account.platformName, 'google');
+      expect(account.categoryId, isNotNull);
+      expect(initialEvents, hasLength(1));
+      expect(initialEvents.single.categoryId, account.categoryId);
+
+      await repository.applyCalendarSync(
+        CanvasSyncPayload(
+          accountName: 'Student Calendar',
+          accountEmail: 'student@example.test',
+          remoteUserId: 'google-user-4',
+          providerUrl: '',
+          syncedAt: DateTime(2026, 10, 9, 11),
+          tasks: const [],
+          events: [
+            CanvasEventImport(
+              externalId: 'primary:event-19',
+              title: 'Study group moved',
+              start: DateTime(2026, 10, 12, 11),
+              end: DateTime(2026, 10, 12, 12),
+              description: 'Updated agenda',
+              location: 'Room 2',
+            ),
+          ],
+          providerName: 'google',
+        ),
+      );
+
+      final refreshedEvents = (await repository.getAllItems())
+          .whereType<Event>()
+          .toList();
+      expect(refreshedEvents, hasLength(1));
+      expect(refreshedEvents.single.id, initialEvents.single.id);
+      expect(refreshedEvents.single.title, 'Study group moved');
+      expect(refreshedEvents.single.notes, 'Updated agenda');
+      expect(refreshedEvents.single.location, 'Room 2');
     },
   );
 
@@ -285,36 +363,432 @@ void main() {
     },
   );
 
-  test('deleting a category unassigns its tasks and events', () async {
-    final category = await repository.insertCategory(
-      TaskCategory(title: 'Gym', iconName: 'gym', items: []),
+  test(
+    'deleting a category also deletes its tasks, events, and completions',
+    () async {
+      final category = await repository.insertCategory(
+        TaskCategory(title: 'Gym', iconName: 'gym', items: []),
+      );
+      final task = await repository.insertTask(
+        Task(
+          categoryId: category.id,
+          title: 'Workout',
+          date: DateTime(2026, 10, 7),
+          time: const TimeOfDay(hour: 17, minute: 0),
+          estimatedDuration: const Duration(hours: 1),
+          isChecked: false,
+          repeat: 'Every week',
+        ),
+      );
+      final occurrenceDate = DateTime(2026, 10, 14);
+      await repository.setTaskOccurrenceCompleted(
+        task.id!,
+        occurrenceDate,
+        true,
+      );
+      final event = await repository.insertEvent(
+        Event(
+          categoryId: category.id,
+          title: 'Class',
+          date: DateTime(2026, 10, 7),
+          start: const TimeOfDay(hour: 18, minute: 0),
+          end: const TimeOfDay(hour: 19, minute: 0),
+          isCurrent: false,
+          allDay: false,
+        ),
+      );
+
+      expect(
+        await repository.deleteCategory(
+          category.id!,
+          disposition: CategoryDeleteDisposition.deleteItems,
+        ),
+        isTrue,
+      );
+      expect(await repository.getCategory(category.id!), isNull);
+      expect(await repository.getTask(task.id!), isNull);
+      expect(await repository.getEvent(event.id!), isNull);
+      expect(await repository.getTaskOccurrenceCompletionKeys(), isEmpty);
+    },
+  );
+
+  test(
+    'moving category contents preserves tasks, events, and recurrence',
+    () async {
+      final source = await repository.insertCategory(
+        TaskCategory(title: 'Gym', iconName: 'gym', items: []),
+      );
+      final destination = await repository.insertCategory(
+        TaskCategory(title: 'Health', iconName: 'health', items: []),
+      );
+      final task = await repository.insertTask(
+        Task(
+          categoryId: source.id,
+          title: 'Workout',
+          date: DateTime(2026, 10, 7),
+          time: const TimeOfDay(hour: 17, minute: 0),
+          estimatedDuration: const Duration(hours: 1),
+          isChecked: false,
+          repeat: 'Every week',
+          repeatUntil: DateTime(2026, 12, 1),
+        ),
+      );
+      await repository.setTaskOccurrenceCompleted(
+        task.id!,
+        DateTime(2026, 10, 14),
+        true,
+      );
+      final event = await repository.insertEvent(
+        Event(
+          categoryId: source.id,
+          title: 'Class',
+          date: DateTime(2026, 10, 7),
+          start: const TimeOfDay(hour: 18, minute: 0),
+          end: const TimeOfDay(hour: 19, minute: 0),
+          isCurrent: false,
+          allDay: false,
+          repeat: 'Every month',
+          repeatUntil: DateTime(2027, 1, 1),
+        ),
+      );
+
+      expect(
+        await repository.deleteCategory(
+          source.id!,
+          disposition: CategoryDeleteDisposition.moveItems,
+          destinationCategoryId: destination.id,
+        ),
+        isTrue,
+      );
+
+      final movedTask = await repository.getTask(task.id!);
+      final movedEvent = await repository.getEvent(event.id!);
+      expect(movedTask?.categoryId, destination.id);
+      expect(movedTask?.repeat, 'Every week');
+      expect(movedTask?.repeatUntil, DateTime(2026, 12, 1));
+      expect(movedEvent?.categoryId, destination.id);
+      expect(movedEvent?.repeat, 'Every month');
+      expect(movedEvent?.repeatUntil, DateTime(2027, 1, 1));
+      expect(await repository.getTaskOccurrenceCompletionKeys(), {
+        taskOccurrenceKey(task.id!, DateTime(2026, 10, 14)),
+      });
+      expect((await repository.getCategory(destination.id!))?.title, 'Health');
+    },
+  );
+
+  test(
+    'Canvas sync upserts stable IDs and keeps local task completion',
+    () async {
+      final first = CanvasSyncPayload(
+        accountName: 'Canvas Student',
+        accountEmail: 'student@example.test',
+        remoteUserId: '42',
+        providerUrl: 'https://canvas.example.test',
+        syncedAt: DateTime(2026, 10, 7, 9),
+        tasks: [
+          CanvasTaskImport(
+            externalId: 'assignment:course_8:3',
+            title: 'Essay',
+            due: DateTime(2026, 10, 8, 17),
+            description: 'First description',
+          ),
+        ],
+        events: [
+          CanvasEventImport(
+            externalId: 'event:99',
+            title: 'Lecture',
+            start: DateTime(2026, 10, 9, 10),
+            end: DateTime(2026, 10, 9, 11),
+            location: 'Room A',
+          ),
+        ],
+      );
+      final account = await repository.applyCanvasSync(first);
+      final task = (await repository.getTasks()).single;
+      final event = (await repository.getEvents()).single;
+      expect(account.categoryId, isNotNull);
+      expect(
+        (await repository.getCategory(account.categoryId!))?.iconName,
+        'mi_school',
+      );
+      expect(task.srcPlatform, 'canvas');
+      expect(task.externalId, 'assignment:course_8:3');
+      expect(event.externalId, 'event:99');
+      task.isChecked = true;
+      await repository.updateTask(task);
+
+      await repository.applyCanvasSync(
+        CanvasSyncPayload(
+          accountName: 'Canvas Student',
+          accountEmail: 'student@example.test',
+          remoteUserId: '42',
+          providerUrl: 'https://canvas.example.test',
+          syncedAt: DateTime(2026, 10, 7, 10),
+          tasks: [
+            CanvasTaskImport(
+              externalId: 'assignment:course_8:3',
+              title: 'Essay updated',
+              due: DateTime(2026, 10, 10, 17),
+              description: 'Updated description',
+            ),
+          ],
+          events: first.events,
+        ),
+      );
+      final tasksAfterSync = await repository.getTasks();
+      final eventsAfterSync = await repository.getEvents();
+      expect(tasksAfterSync, hasLength(1));
+      expect(tasksAfterSync.single.id, task.id);
+      expect(tasksAfterSync.single.title, 'Essay updated');
+      expect(tasksAfterSync.single.isChecked, isTrue);
+      expect(tasksAfterSync.single.date, DateTime(2026, 10, 10));
+      expect(eventsAfterSync, hasLength(1));
+      expect(eventsAfterSync.single.id, event.id);
+    },
+  );
+
+  test(
+    'a failed Canvas batch leaves stored records and sync metadata intact',
+    () async {
+      final baseline = CanvasSyncPayload(
+        accountName: 'Canvas Student',
+        accountEmail: null,
+        remoteUserId: '42',
+        providerUrl: 'https://canvas.example.test',
+        syncedAt: DateTime(2026, 10, 7, 9),
+        tasks: [
+          CanvasTaskImport(
+            externalId: 'assignment:course_8:3',
+            title: 'Original title',
+            due: DateTime(2026, 10, 8, 17),
+          ),
+        ],
+        events: const [],
+      );
+      final account = await repository.applyCanvasSync(baseline);
+      final db = await databaseHelper.database;
+      await db.execute('''
+      CREATE TRIGGER reject_canvas_record BEFORE INSERT ON tasks
+      WHEN NEW.title = 'Reject this row'
+      BEGIN SELECT RAISE(ABORT, 'test sync failure'); END
+    ''');
+
+      await expectLater(
+        repository.applyCanvasSync(
+          CanvasSyncPayload(
+            accountName: 'Canvas Student',
+            accountEmail: null,
+            remoteUserId: '42',
+            providerUrl: 'https://canvas.example.test',
+            syncedAt: DateTime(2026, 10, 7, 10),
+            tasks: [
+              CanvasTaskImport(
+                externalId: 'assignment:course_8:3',
+                title: 'Changed title',
+                due: DateTime(2026, 10, 10, 17),
+              ),
+              CanvasTaskImport(
+                externalId: 'assignment:course_8:4',
+                title: 'Reject this row',
+                due: DateTime(2026, 10, 11, 17),
+              ),
+            ],
+            events: const [],
+          ),
+        ),
+        throwsA(isA<DatabaseException>()),
+      );
+
+      expect((await repository.getTasks()).single.title, 'Original title');
+      expect(
+        (await repository.getLinkedAccount(account.id!))?.lastSyncTime,
+        DateTime(2026, 10, 7, 9),
+      );
+    },
+  );
+
+  test(
+    'v3 to v4 migration preserves planner rows and removes local token',
+    () async {
+      final legacyPath = p.join(tempDirectory.path, 'legacy_v3.db');
+      final legacy = await databaseFactoryFfi.openDatabase(
+        legacyPath,
+        options: OpenDatabaseOptions(
+          version: 3,
+          onCreate: (db, version) async {
+            await db.execute('''
+            CREATE TABLE categories (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              title TEXT NOT NULL UNIQUE,
+              icon_name TEXT NOT NULL
+            )
+          ''');
+            await db.execute('''
+            CREATE TABLE tasks (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              category_id INTEGER, title TEXT NOT NULL, description TEXT NOT NULL,
+              due TEXT NOT NULL, estimated_duration_minutes INTEGER NOT NULL,
+              repeat TEXT NOT NULL DEFAULT 'Never', repeat_until TEXT,
+              priority INTEGER, is_completed INTEGER NOT NULL,
+              src_platform TEXT, external_id TEXT
+            )
+          ''');
+            await db.execute('''
+            CREATE TABLE events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, category_id INTEGER,
+              title TEXT NOT NULL, start_time TEXT NOT NULL, end_time TEXT NOT NULL,
+              location TEXT, is_all_day INTEGER NOT NULL, is_current INTEGER NOT NULL,
+              repeat TEXT NOT NULL DEFAULT 'Never', repeat_until TEXT,
+              notes TEXT NOT NULL DEFAULT '', src_platform TEXT, external_id TEXT
+            )
+          ''');
+            await db.execute('''
+            CREATE TABLE linked_accounts (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              platform_name TEXT NOT NULL, account_email TEXT NOT NULL,
+              api_token TEXT NOT NULL, last_sync_time TEXT
+            )
+          ''');
+            await db.insert('categories', {
+              'id': 1,
+              'title': 'School',
+              'icon_name': 'mi_school',
+            });
+            await db.insert('tasks', {
+              'id': 2,
+              'category_id': 1,
+              'title': 'Keep task',
+              'description': '',
+              'due': '2026-10-08T09:00:00',
+              'estimated_duration_minutes': 0,
+              'repeat': 'Never',
+              'is_completed': 0,
+            });
+            await db.insert('events', {
+              'id': 3,
+              'category_id': 1,
+              'title': 'Keep event',
+              'start_time': '2026-10-08T10:00:00',
+              'end_time': '2026-10-08T11:00:00',
+              'is_all_day': 0,
+              'is_current': 0,
+              'repeat': 'Never',
+              'notes': '',
+            });
+            await db.insert('linked_accounts', {
+              'id': 4,
+              'platform_name': 'canvas',
+              'account_email': 'student@example.test',
+              'api_token': 'plaintext-secret-that-must-be-dropped',
+              'last_sync_time': '2026-10-08T08:00:00',
+            });
+          },
+        ),
+      );
+      await legacy.close();
+
+      final migratedHelper = DatabaseHelper.forTesting(
+        factory: databaseFactoryFfi,
+        databasePath: legacyPath,
+        seedOnCreate: false,
+      );
+      final migratedDb = await migratedHelper.database;
+      final tasks = await migratedDb.query('tasks');
+      final events = await migratedDb.query('events');
+      final categories = await migratedDb.query('categories');
+      final columns = await migratedDb.rawQuery(
+        'PRAGMA table_info(linked_accounts)',
+      );
+      final accounts = await migratedDb.query('linked_accounts');
+      expect(tasks.single['title'], 'Keep task');
+      expect(events.single['title'], 'Keep event');
+      expect(categories.single['title'], 'School');
+      expect(columns.map((row) => row['name']), isNot(contains('api_token')));
+      expect(accounts.single['account_email'], 'student@example.test');
+      expect(accounts.single['provider_url'], isNull);
+      await migratedHelper.close();
+    },
+  );
+
+  test('invalid category move leaves source data unchanged', () async {
+    final source = await repository.insertCategory(
+      TaskCategory(title: 'Source', iconName: 'source', items: []),
     );
     final task = await repository.insertTask(
       Task(
-        categoryId: category.id,
-        title: 'Workout',
+        categoryId: source.id,
+        title: 'Preserved',
         date: DateTime(2026, 10, 7),
-        time: const TimeOfDay(hour: 17, minute: 0),
-        estimatedDuration: const Duration(hours: 1),
+        time: const TimeOfDay(hour: 9, minute: 0),
+        estimatedDuration: const Duration(minutes: 30),
         isChecked: false,
       ),
     );
-    final event = await repository.insertEvent(
-      Event(
-        categoryId: category.id,
-        title: 'Class',
-        date: DateTime(2026, 10, 7),
-        start: const TimeOfDay(hour: 18, minute: 0),
-        end: const TimeOfDay(hour: 19, minute: 0),
-        isCurrent: false,
-        allDay: false,
-      ),
-    );
 
-    expect(await repository.deleteCategory(category.id!), isTrue);
-    expect((await repository.getTask(task.id!))?.categoryId, isNull);
-    expect((await repository.getEvent(event.id!))?.categoryId, isNull);
+    await expectLater(
+      repository.deleteCategory(
+        source.id!,
+        disposition: CategoryDeleteDisposition.moveItems,
+        destinationCategoryId: 9999,
+      ),
+      throwsStateError,
+    );
+    expect((await repository.getTask(task.id!))?.categoryId, source.id);
+    expect(await repository.getCategory(source.id!), isNotNull);
   });
+
+  test(
+    'category move transaction rolls back all item changes on failure',
+    () async {
+      final source = await repository.insertCategory(
+        TaskCategory(title: 'Source', iconName: 'source', items: []),
+      );
+      final destination = await repository.insertCategory(
+        TaskCategory(title: 'Destination', iconName: 'destination', items: []),
+      );
+      final task = await repository.insertTask(
+        Task(
+          categoryId: source.id,
+          title: 'Preserved task',
+          date: DateTime(2026, 10, 7),
+          time: const TimeOfDay(hour: 9, minute: 0),
+          estimatedDuration: const Duration(minutes: 30),
+          isChecked: false,
+        ),
+      );
+      final event = await repository.insertEvent(
+        Event(
+          categoryId: source.id,
+          title: 'Preserved event',
+          date: DateTime(2026, 10, 7),
+          start: const TimeOfDay(hour: 10, minute: 0),
+          end: const TimeOfDay(hour: 11, minute: 0),
+          isCurrent: false,
+          allDay: false,
+        ),
+      );
+      final db = await databaseHelper.database;
+      await db.execute('''
+      CREATE TRIGGER fail_event_category_move
+      BEFORE UPDATE OF category_id ON events
+      BEGIN
+        SELECT RAISE(ABORT, 'test rollback');
+      END
+    ''');
+
+      await expectLater(
+        repository.deleteCategory(
+          source.id!,
+          disposition: CategoryDeleteDisposition.moveItems,
+          destinationCategoryId: destination.id,
+        ),
+        throwsA(anything),
+      );
+      expect((await repository.getTask(task.id!))?.categoryId, source.id);
+      expect((await repository.getEvent(event.id!))?.categoryId, source.id);
+      expect(await repository.getCategory(source.id!), isNotNull);
+    },
+  );
 
   test('recurring task completion is stored per occurrence date', () async {
     final task = await repository.insertTask(
@@ -508,34 +982,35 @@ void main() {
     },
   );
 
-  test(
-    'first-launch fixtures seed once and deleted data stays deleted',
-    () async {
-      await databaseHelper.close();
-      databaseHelper = DatabaseHelper.forTesting(
-        factory: databaseFactoryFfi,
-        databasePath: p.join(tempDirectory.path, 'seed.db'),
-      );
-      repository = PlannerRepository(databaseHelper: databaseHelper);
-      final firstCategories = await repository.getCategories();
-      final firstTasks = await repository.getTasks();
-      final firstEvents = await repository.getEvents();
-      expect(
-        firstCategories.map((item) => item.title),
-        containsAll(['School', 'Personal', 'Work', 'Gym']),
-      );
-      expect(firstTasks, isEmpty);
-      expect(firstEvents, isNotEmpty);
-      await repository.deleteEvent(firstEvents.first.id!);
-      final eventCountAfterDelete = (await repository.getEvents()).length;
-      await databaseHelper.close();
-      databaseHelper = DatabaseHelper.forTesting(
-        factory: databaseFactoryFfi,
-        databasePath: p.join(tempDirectory.path, 'seed.db'),
-      );
-      repository = PlannerRepository(databaseHelper: databaseHelper);
-      expect(await repository.getTasks(), isEmpty);
-      expect((await repository.getEvents()).length, eventCountAfterDelete);
-    },
-  );
+  test('first-launch fixtures seed categories without planner items', () async {
+    await databaseHelper.close();
+    databaseHelper = DatabaseHelper.forTesting(
+      factory: databaseFactoryFfi,
+      databasePath: p.join(tempDirectory.path, 'seed.db'),
+    );
+    repository = PlannerRepository(databaseHelper: databaseHelper);
+    final firstCategories = await repository.getCategories();
+    final firstTasks = await repository.getTasks();
+    final firstEvents = await repository.getEvents();
+    expect(
+      firstCategories.map((item) => item.title),
+      containsAll(['School', 'Personal', 'Work', 'Gym']),
+    );
+    expect(firstTasks, isEmpty);
+    // Starter categories are intentional, while items remain empty so a
+    // clean install exercises the user's own storage flow.
+    expect(firstEvents, isEmpty);
+    await databaseHelper.close();
+    databaseHelper = DatabaseHelper.forTesting(
+      factory: databaseFactoryFfi,
+      databasePath: p.join(tempDirectory.path, 'seed.db'),
+    );
+    repository = PlannerRepository(databaseHelper: databaseHelper);
+    expect(
+      (await repository.getCategories()).map((item) => item.title),
+      containsAll(['School', 'Personal', 'Work', 'Gym']),
+    );
+    expect(await repository.getTasks(), isEmpty);
+    expect(await repository.getEvents(), isEmpty);
+  });
 }

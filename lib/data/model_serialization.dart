@@ -153,16 +153,22 @@ DailyPlan dailyPlanFromMap(Map<String, Object?> map) => DailyPlan(
 Map<String, Object?> linkedAccountToMap(LinkedAccount account) => {
   if (account.id != null) 'id': account.id,
   'platform_name': account.platformName,
+  'account_name': account.accountName,
   'account_email': account.accountEmail,
-  'api_token': account.apiToken,
+  'provider_url': account.providerUrl,
+  'remote_user_id': account.remoteUserId,
+  'category_id': account.categoryId,
   'last_sync_time': account.lastSyncTime?.toIso8601String(),
 };
 
 LinkedAccount linkedAccountFromMap(Map<String, Object?> map) => LinkedAccount(
   id: map['id'] as int?,
   platformName: map['platform_name']! as String,
-  accountEmail: map['account_email']! as String,
-  apiToken: map['api_token']! as String,
+  accountName: map['account_name'] as String? ?? 'Linked account',
+  accountEmail: map['account_email'] as String?,
+  providerUrl: map['provider_url'] as String?,
+  remoteUserId: map['remote_user_id'] as String?,
+  categoryId: map['category_id'] as int?,
   lastSyncTime: map['last_sync_time'] == null
       ? null
       : DateTime.parse(map['last_sync_time']! as String),

@@ -44,6 +44,7 @@ class Clock extends StatelessWidget {
                     AnimatedOpacity(
                       opacity: timer.isRunning ? 0.45 : 1,
                       duration: AppSpacing.fabAnimationDuration,
+                      curve: Curves.easeInOutCubic,
                       child: Text(
                         timer.isRunning ? 'Tap to pause' : 'Tap to start',
                         style: textTheme.bodyMedium?.copyWith(
@@ -62,6 +63,7 @@ class Clock extends StatelessWidget {
                     AnimatedOpacity(
                       opacity: timer.isRunning ? 0.45 : 1,
                       duration: AppSpacing.fabAnimationDuration,
+                      curve: Curves.easeInOutCubic,
                       child: Text(
                         timer.phase == FocusPhase.work ? 'Focus' : 'Rest',
                         style: textTheme.bodyLarge?.copyWith(
@@ -70,20 +72,21 @@ class Clock extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 0),
+                    Text(
+                      _formatTotal(timer.totalFocusSecondsToday),
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
                     AnimatedOpacity(
                       opacity: timer.isRunning ? 0.45 : 1,
                       duration: AppSpacing.fabAnimationDuration,
+                      curve: Curves.easeInOutCubic,
                       child: Text(
                         'Total focus time today',
                         style: textTheme.labelMedium?.copyWith(
                           color: AppColors.primary,
                         ),
-                      ),
-                    ),
-                    Text(
-                      _formatTotal(timer.totalFocusSecondsToday),
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: AppColors.primary,
                       ),
                     ),
                   ],

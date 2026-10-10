@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:flutter/physics.dart';
+
+import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 import '../navigation_destinations.dart';
@@ -29,12 +29,20 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
   );
   late final AnimationController _popupController = AnimationController(
     vsync: this,
+    duration: const Duration(milliseconds: 340),
+    reverseDuration: const Duration(milliseconds: 320),
+  );
+  late final CurvedAnimation _popupAnimation = CurvedAnimation(
+    parent: _popupController,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
   );
   bool _isPopupOpen = false;
   bool _isPopupVisible = false;
 
   @override
   void dispose() {
+    _popupAnimation.dispose();
     _fabController.dispose();
     _popupController.dispose();
     super.dispose();
@@ -56,7 +64,7 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
     });
     _overlayController.show();
     _fabController.forward();
-    _popupController.animateWith(_popupSpring(from: 0, to: 1));
+    _popupController.forward();
   }
 
   void _closePopup() {
@@ -67,22 +75,13 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
   }
 
   Future<void> _hidePopup() async {
-    await _popupController.animateWith(_popupSpring(from: 1, to: 0));
+    await _popupController.reverse();
     if (mounted && !_isPopupOpen) {
       _overlayController.hide();
       setState(() {
         _isPopupVisible = false;
       });
     }
-  }
-
-  SpringSimulation _popupSpring({required double from, required double to}) {
-    return SpringSimulation(
-      const SpringDescription(mass: 1, stiffness: 500, damping: 28),
-      from,
-      to,
-      0,
-    );
   }
 
   @override
@@ -142,8 +141,17 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
           ),
         ),
         if (showPopup) ...[
-          const Positioned.fill(
-            child: BlurredPopupBarrier(key: ValueKey('add-item-backdrop')),
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _popupAnimation,
+              builder: (context, child) => Opacity(
+                opacity: _popupAnimation.value,
+                child: child,
+              ),
+              child: const BlurredPopupBarrier(
+                key: ValueKey('add-item-backdrop'),
+              ),
+            ),
           ),
           Positioned(
             left: AppSpacing.floatingGroupEdge,
@@ -153,20 +161,20 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
                 bottomOffset +
                 AppSpacing.floatingGroupGap,
             child: AnimatedBuilder(
-              animation: _popupController,
+              animation: _popupAnimation,
               child: AddItemPopup(
                 key: const ValueKey('add-item-popup'),
                 onSaved: (_) => _closePopup(),
                 onCancel: _closePopup,
               ),
               builder: (context, child) {
-                final progress = _popupController.value
-                    .clamp(0.0, 1.0)
-                    .toDouble();
-                return Opacity(
-                  opacity: progress,
-                  child: Transform.scale(
-                    scale: 0.92 + (0.08 * progress),
+                return FadeTransition(
+                  opacity: _popupAnimation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.06),
+                      end: Offset.zero,
+                    ).animate(_popupAnimation),
                     child: child,
                   ),
                 );

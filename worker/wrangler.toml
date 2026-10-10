@@ -1,0 +1,56 @@
+name = "momentum-canvas"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "../build/web"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# Send API and OAuth navigation routes through the Worker before the SPA fallback.
+run_worker_first = ["/api/*"]
+
+[vars]
+# Match the Canvas instance whose approved OAuth developer key is configured.
+ALLOWED_CANVAS_HOST = "canvas.example.edu"
+# Set this to the deployed Momentum origin. OAuth callback redirects here.
+APP_ORIGIN = "http://localhost:8787"
+MICROSOFT_TENANT_ID = "common"
+
+# These are edge rate limits for public OAuth and sync endpoints. Each counter
+# is local to a Cloudflare location and is an abuse guard, not billing metering.
+[[ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "2026101001"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+[[ratelimits]]
+name = "OAUTH_RATE_LIMITER"
+namespace_id = "2026101002"
+
+  [ratelimits.simple]
+  limit = 12
+  period = 60
+
+[[ratelimits]]
+name = "SYNC_RATE_LIMITER"
+namespace_id = "2026101003"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+[triggers]
+# Delete expired OAuth states and sessions every day (UTC).
+crons = ["0 3 * * *"]
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "momentum-canvas"
+database_id = "cc97e431-bdc2-45cc-8a75-4592bdfbc3a8"
+migrations_dir = "migrations"

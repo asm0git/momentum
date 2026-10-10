@@ -52,6 +52,20 @@ class _CalendarScreenState extends State<CalendarScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      key: const ValueKey('calendar-add-calendars'),
+                      onPressed: () =>
+                          Navigator.of(context).pushNamed('/calendars'),
+                      icon: const Icon(Icons.add_link),
+                      label: Text(
+                        'Add calendars',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: AppColors.primary),
+                      ),
+                    ),
+                  ),
                   CalendarWidget(
                     categories: categories,
                     onDateSelected: (date) {

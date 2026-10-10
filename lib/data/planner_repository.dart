@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../data_models.dart';
@@ -41,9 +42,60 @@ class PlannerRepository {
         0;
   }
 
-  Future<bool> deleteCategory(int id) async {
+  Future<bool> deleteCategory(
+    int id, {
+    required CategoryDeleteDisposition disposition,
+    int? destinationCategoryId,
+  }) async {
     final db = await _databaseHelper.database;
-    return await db.delete('categories', where: 'id = ?', whereArgs: [id]) > 0;
+    return db.transaction((txn) async {
+      final sourceRows = await txn.query(
+        'categories',
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      if (sourceRows.isEmpty) return false;
+
+      if (disposition == CategoryDeleteDisposition.moveItems) {
+        final destinationId = destinationCategoryId;
+        if (destinationId == null || destinationId == id) {
+          throw ArgumentError.value(
+            destinationCategoryId,
+            'destinationCategoryId',
+            'Choose a different existing category.',
+          );
+        }
+        final destinationRows = await txn.query(
+          'categories',
+          columns: ['id'],
+          where: 'id = ?',
+          whereArgs: [destinationId],
+        );
+        if (destinationRows.isEmpty) {
+          throw StateError('The destination category no longer exists.');
+        }
+
+        await txn.update(
+          'tasks',
+          {'category_id': destinationId},
+          where: 'category_id = ?',
+          whereArgs: [id],
+        );
+        await txn.update(
+          'events',
+          {'category_id': destinationId},
+          where: 'category_id = ?',
+          whereArgs: [id],
+        );
+      } else {
+        await txn.delete('tasks', where: 'category_id = ?', whereArgs: [id]);
+        await txn.delete('events', where: 'category_id = ?', whereArgs: [id]);
+      }
+
+      return await txn.delete('categories', where: 'id = ?', whereArgs: [id]) >
+          0;
+    });
   }
 
   Future<Task> insertTask(Task task) async {
@@ -201,6 +253,219 @@ class PlannerRepository {
           whereArgs: [id],
         ) >
         0;
+  }
+
+  /// Applies a complete Canvas response in one local transaction. Existing
+  /// completion state and item IDs are retained when a remote item is refreshed.
+  Future<LinkedAccount> applyCanvasSync(
+    CanvasSyncPayload payload, {
+    bool replaceExistingImports = false,
+  }) => applyCalendarSync(
+    payload,
+    replaceExistingImports: replaceExistingImports,
+  );
+
+  Future<LinkedAccount> applyCalendarSync(
+    CanvasSyncPayload payload, {
+    bool replaceExistingImports = false,
+  }) async {
+    final db = await _databaseHelper.database;
+    final provider = payload.providerName.toLowerCase();
+    final providerInfo = CalendarProvider.values.firstWhere(
+      (value) => value.key == provider,
+      orElse: () => throw ArgumentError.value(
+        payload.providerName,
+        'providerName',
+        'Unknown calendar provider.',
+      ),
+    );
+    return db.transaction((txn) async {
+      final accounts = await txn.query(
+        'linked_accounts',
+        where: 'LOWER(platform_name) = ?',
+        whereArgs: [provider],
+        limit: 1,
+      );
+      final existingAccount = accounts.isEmpty
+          ? null
+          : linkedAccountFromMap(accounts.single);
+
+      final oldRemoteUserId = existingAccount?.remoteUserId?.trim();
+      final newRemoteUserId = payload.remoteUserId.trim();
+      final oldProviderUrl = existingAccount?.providerUrl?.trim();
+      final newProviderUrl = payload.providerUrl.trim();
+      final accountChanged =
+          (oldRemoteUserId?.isNotEmpty == true &&
+              newRemoteUserId.isNotEmpty &&
+              oldRemoteUserId != newRemoteUserId) ||
+          (oldProviderUrl?.isNotEmpty == true &&
+              newProviderUrl.isNotEmpty &&
+              oldProviderUrl != newProviderUrl);
+      if (replaceExistingImports || accountChanged) {
+        // Only remove records imported from this provider. Locally created
+        // planner items and imports from other calendars remain untouched.
+        await txn.delete(
+          'tasks',
+          where: 'src_platform = ?',
+          whereArgs: [provider],
+        );
+        await txn.delete(
+          'events',
+          where: 'src_platform = ?',
+          whereArgs: [provider],
+        );
+      }
+
+      TaskCategory? category;
+      final existingCategoryId = existingAccount?.categoryId;
+      if (existingCategoryId != null) {
+        final rows = await txn.query(
+          'categories',
+          where: 'id = ?',
+          whereArgs: [existingCategoryId],
+          limit: 1,
+        );
+        if (rows.isNotEmpty) category ??= categoryFromMap(rows.single);
+      }
+      if (category == null) {
+        final rows = await txn.query(
+          'categories',
+          where: 'title = ? COLLATE NOCASE',
+          whereArgs: [providerInfo.title],
+          limit: 1,
+        );
+        category = rows.isEmpty
+            ? TaskCategory(
+                title: providerInfo.title,
+                iconName: providerInfo.categoryIcon,
+                items: [],
+              )
+            : categoryFromMap(rows.single);
+        category.id ??= await txn.insert('categories', categoryToMap(category));
+      }
+
+      final account = LinkedAccount(
+        id: existingAccount?.id,
+        platformName: provider,
+        accountName: payload.accountName,
+        accountEmail: payload.accountEmail,
+        providerUrl: payload.providerUrl,
+        remoteUserId: payload.remoteUserId,
+        categoryId: category.id,
+        lastSyncTime: payload.syncedAt,
+      );
+      if (account.id == null) {
+        account.id = await txn.insert(
+          'linked_accounts',
+          linkedAccountToMap(account),
+        );
+      } else {
+        await txn.update(
+          'linked_accounts',
+          linkedAccountToMap(account)..remove('id'),
+          where: 'id = ?',
+          whereArgs: [account.id],
+        );
+      }
+
+      for (final imported in payload.tasks) {
+        final rows = await txn.query(
+          'tasks',
+          where: 'src_platform = ? AND external_id = ?',
+          whereArgs: [provider, imported.externalId],
+          limit: 1,
+        );
+        if (rows.isEmpty) {
+          final due = imported.due.toLocal();
+          await txn.insert(
+            'tasks',
+            taskToMap(
+              Task(
+                categoryId: category.id,
+                title: imported.title,
+                date: DateTime(due.year, due.month, due.day),
+                time: TimeOfDay(hour: due.hour, minute: due.minute),
+                estimatedDuration: Duration.zero,
+                isChecked: false,
+                description: imported.description,
+                srcPlatform: provider,
+                externalId: imported.externalId,
+              ),
+            ),
+          );
+        } else {
+          final old = taskFromMap(rows.single);
+          final due = imported.due.toLocal();
+          old
+            ..categoryId = category.id
+            ..title = imported.title
+            ..date = DateTime(due.year, due.month, due.day)
+            ..time = TimeOfDay(hour: due.hour, minute: due.minute)
+            ..description = imported.description
+            ..srcPlatform = provider
+            ..externalId = imported.externalId;
+          await txn.update(
+            'tasks',
+            taskToMap(old)..remove('id'),
+            where: 'id = ?',
+            whereArgs: [old.id],
+          );
+        }
+      }
+
+      for (final imported in payload.events) {
+        final rows = await txn.query(
+          'events',
+          where: 'src_platform = ? AND external_id = ?',
+          whereArgs: [provider, imported.externalId],
+          limit: 1,
+        );
+        final start = imported.start.toLocal();
+        final end = imported.end.toLocal();
+        if (rows.isEmpty) {
+          await txn.insert(
+            'events',
+            eventToMap(
+              Event(
+                categoryId: category.id,
+                title: imported.title,
+                date: DateTime(start.year, start.month, start.day),
+                endDate: DateTime(end.year, end.month, end.day),
+                start: TimeOfDay(hour: start.hour, minute: start.minute),
+                end: TimeOfDay(hour: end.hour, minute: end.minute),
+                isCurrent: false,
+                allDay: imported.allDay,
+                location: imported.location,
+                notes: imported.description,
+                srcPlatform: provider,
+                externalId: imported.externalId,
+              ),
+            ),
+          );
+        } else {
+          final old = eventFromMap(rows.single);
+          old
+            ..categoryId = category.id
+            ..title = imported.title
+            ..date = DateTime(start.year, start.month, start.day)
+            ..endDate = DateTime(end.year, end.month, end.day)
+            ..start = TimeOfDay(hour: start.hour, minute: start.minute)
+            ..end = TimeOfDay(hour: end.hour, minute: end.minute)
+            ..allDay = imported.allDay
+            ..location = imported.location
+            ..notes = imported.description
+            ..srcPlatform = provider
+            ..externalId = imported.externalId;
+          await txn.update(
+            'events',
+            eventToMap(old)..remove('id'),
+            where: 'id = ?',
+            whereArgs: [old.id],
+          );
+        }
+      }
+      return account;
+    });
   }
 
   Future<List<PlannerItem>> getAllItems() async {

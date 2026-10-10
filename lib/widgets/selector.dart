@@ -20,6 +20,7 @@ class Selector extends StatelessWidget {
     required this.onChanged,
     this.alignment = AlignmentDirectional.centerStart,
     this.isExpanded = false,
+    this.contentColor = AppColors.primary,
   });
 
   final List<SelectorOption> options;
@@ -28,6 +29,7 @@ class Selector extends StatelessWidget {
   final ValueChanged<String?> onChanged;
   final AlignmentGeometry alignment;
   final bool isExpanded;
+  final Color contentColor;
 
   Widget _optionContent(
     SelectorOption option,
@@ -44,7 +46,7 @@ class Selector extends StatelessWidget {
 
     return Row(
       children: [
-        CategoryIcon(iconName: iconName, size: 18),
+        CategoryIcon(iconName: iconName, size: 18, color: contentColor),
         const SizedBox(width: AppSpacing.xs),
         Flexible(child: labelWidget),
       ],
@@ -55,7 +57,7 @@ class Selector extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodyMedium!.copyWith(
       fontWeight: FontWeight.normal,
-      color: AppColors.primary,
+      color: contentColor,
     );
     final placeholderStyle = style.copyWith(
       color: AppColors.onSurface.withValues(alpha: 0.55),

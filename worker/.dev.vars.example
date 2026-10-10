@@ -1,0 +1,17 @@
+# Copy this file to .dev.vars and replace the example values.
+# Add only credentials for the providers you intend to test locally.
+
+CANVAS_CLIENT_ID="replace-with-institution-approved-client-id"
+CANVAS_CLIENT_SECRET="replace-with-institution-approved-client-secret"
+CANVAS_REDIRECT_URI="http://localhost:8787/api/canvas/oauth/callback"
+
+GOOGLE_CLIENT_ID="replace-with-google-web-client-id"
+GOOGLE_CLIENT_SECRET="replace-with-google-client-secret"
+GOOGLE_REDIRECT_URI="http://localhost:8787/api/google/oauth/callback"
+
+MICROSOFT_CLIENT_ID="replace-with-entra-application-id"
+MICROSOFT_CLIENT_SECRET="replace-with-entra-client-secret-value"
+MICROSOFT_REDIRECT_URI="http://localhost:8787/api/outlook/oauth/callback"
+
+# Generate a unique random 32-byte base64 value; this placeholder will not work.
+TOKEN_ENCRYPTION_KEY="replace-with-random-32-byte-base64-key"

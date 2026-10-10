@@ -11,10 +11,12 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     required this.destination,
     this.isBlurred = false,
+    this.actions,
   });
 
   final AppDestination destination;
   final bool isBlurred;
+  final List<Widget>? actions;
 
   @override
   Size get preferredSize => const Size.fromHeight(AppSpacing.appBarHeight);
@@ -32,6 +34,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
           color: theme.colorScheme.onPrimary,
         ),
       ),
+      actions: actions,
       backgroundColor: theme.colorScheme.primary,
       elevation: 0,
       scrolledUnderElevation: 0,

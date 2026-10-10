@@ -45,7 +45,10 @@ class EstimatedDurationPicker extends StatelessWidget {
         borderRadius: radius,
         onTap: () => _showPicker(context),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.xxs,
+          ),
           child: SizedBox(
             height: AppSpacing.popupFieldHeight,
             child: Row(
