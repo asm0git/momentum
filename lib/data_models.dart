@@ -18,9 +18,9 @@ enum CalendarProvider {
   };
 
   String get categoryIcon => switch (this) {
-    CalendarProvider.canvas => 'mi_school',
-    CalendarProvider.googleCalendar ||
-    CalendarProvider.outlook => 'mi_calendar_month',
+    CalendarProvider.canvas => 'provider_canvas',
+    CalendarProvider.googleCalendar => 'provider_google',
+    CalendarProvider.outlook => 'provider_outlook',
   };
 }
 

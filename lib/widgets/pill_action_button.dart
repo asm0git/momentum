@@ -9,17 +9,21 @@ class PillActionButton extends StatelessWidget {
     required this.onPressed,
     this.leadingIcon,
     this.trailingIcon,
+    this.foregroundColor = AppColors.primary,
+    this.outlineColor = AppColors.surface,
   });
 
   final String label;
   final VoidCallback onPressed;
   final IconData? leadingIcon;
   final IconData? trailingIcon;
+  final Color foregroundColor;
+  final Color outlineColor;
 
   @override
   Widget build(BuildContext context) {
     final labelStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      color: AppColors.primary,
+      color: foregroundColor,
       fontWeight: FontWeight.normal,
     );
 
@@ -27,8 +31,8 @@ class PillActionButton extends StatelessWidget {
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         backgroundColor: AppColors.background,
-        foregroundColor: AppColors.primary,
-        side: const BorderSide(color: AppColors.surface),
+        foregroundColor: foregroundColor,
+        side: BorderSide(color: outlineColor),
         shape: const StadiumBorder(),
         minimumSize: const Size(0, 44),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),

@@ -105,6 +105,23 @@ class CategoryIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final providerAsset = switch (iconName) {
+      'provider_canvas' => 'assets/img/import/canvas.png',
+      'provider_google' => 'assets/img/import/gcalendar.png',
+      'provider_outlook' => 'assets/img/import/outlook.png',
+      _ => null,
+    };
+    if (providerAsset != null) {
+      return Image.asset(
+        providerAsset,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.medium,
+        semanticLabel: semanticLabel,
+      );
+    }
+
     final materialIcon = categoryIconData[iconName];
     if (materialIcon != null) {
       return Icon(

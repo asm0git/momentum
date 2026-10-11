@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
@@ -54,6 +55,8 @@ class _CalendarWidgetState extends State<CalendarWidget> {
 
   late DateTime _selectedDay = _initialSelection();
   late DateTime _visibleMonth = DateTime(_selectedDay.year, _selectedDay.month);
+  double _horizontalSwipeDistance = 0;
+  double _verticalSwipeDistance = 0;
 
   DateTime _initialSelection() {
     final selected = DateUtils.dateOnly(widget.initialDate ?? DateTime.now());
@@ -121,6 +124,41 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         minimum == null ||
         !previousMonth.isBefore(DateTime(minimum.year, minimum.month));
 
+    Widget weekGrid = Column(
+      children: [
+        for (final week in weeks)
+          SizedBox(
+            height: widget.compact
+                ? AppSpacing.selectedIconContainerSize - AppSpacing.xs
+                : AppSpacing.calendarDayHeight,
+            child: week,
+          ),
+      ],
+    );
+    if (!widget.compact && mode != CalendarViewMode.fullMonth) {
+      weekGrid = GestureDetector(
+        key: const ValueKey('calendar-week-swipe-navigation'),
+        behavior: HitTestBehavior.translucent,
+        onHorizontalDragStart: (_) => _horizontalSwipeDistance = 0,
+        onHorizontalDragUpdate: (details) =>
+            _horizontalSwipeDistance += details.delta.dx,
+        onHorizontalDragEnd: (_) {
+          _finishWeekSwipe(_horizontalSwipeDistance);
+          _horizontalSwipeDistance = 0;
+        },
+        onHorizontalDragCancel: () => _horizontalSwipeDistance = 0,
+        onVerticalDragStart: (_) => _verticalSwipeDistance = 0,
+        onVerticalDragUpdate: (details) =>
+            _verticalSwipeDistance += details.delta.dy,
+        onVerticalDragEnd: (_) {
+          _finishWeekSwipe(_verticalSwipeDistance);
+          _verticalSwipeDistance = 0;
+        },
+        onVerticalDragCancel: () => _verticalSwipeDistance = 0,
+        child: weekGrid,
+      );
+    }
+
     return Column(
       mainAxisSize: widget.compact ? MainAxisSize.min : MainAxisSize.max,
       children: [
@@ -149,17 +187,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        Column(
-          children: [
-            for (final week in weeks)
-              SizedBox(
-                height: widget.compact
-                    ? AppSpacing.selectedIconContainerSize - AppSpacing.xs
-                    : AppSpacing.calendarDayHeight,
-                child: week,
-              ),
-          ],
-        ),
+        weekGrid,
       ],
     );
   }
@@ -207,6 +235,30 @@ class _CalendarWidgetState extends State<CalendarWidget> {
       }
     });
     widget.onDateSelected?.call(day);
+  }
+
+  void _shiftWeek(int direction) {
+    final nextSelectedDay = DateTime(
+      _selectedDay.year,
+      _selectedDay.month,
+      _selectedDay.day + direction * 7,
+    );
+    final minimum = widget.minimumDate == null
+        ? null
+        : DateUtils.dateOnly(widget.minimumDate!);
+    if (minimum != null && nextSelectedDay.isBefore(minimum)) return;
+
+    setState(() {
+      _selectedDay = nextSelectedDay;
+      _visibleMonth = DateTime(nextSelectedDay.year, nextSelectedDay.month);
+    });
+    widget.onDateSelected?.call(nextSelectedDay);
+  }
+
+  void _finishWeekSwipe(double distance) {
+    if (distance.abs() < kTouchSlop) return;
+    // Left/up moves forward through the weeks; right/down moves backward.
+    _shiftWeek(distance < 0 ? 1 : -1);
   }
 
   static DateTime _startOfWeek(DateTime date) {

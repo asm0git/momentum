@@ -162,7 +162,10 @@ class CanvasBackendClient implements CanvasBackend, ProviderCalendarBackend {
     try {
       decoded = jsonDecode(response.body);
     } on FormatException {
-      throw StateError('Calendar service returned an unreadable response.');
+      throw StateError(
+        'Calendar service returned an unreadable response. '
+        'Please read the project README for assistance.',
+      );
     }
     final json = decoded is Map<String, dynamic>
         ? decoded

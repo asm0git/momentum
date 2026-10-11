@@ -11,12 +11,16 @@ class DashboardCategoryCard extends StatelessWidget {
     required this.category,
     required this.nextItem,
     required this.onTap,
+    this.iconName,
+    this.showPendingCount = true,
     this.pendingCount,
   });
 
   final TaskCategory category;
   final PlannerItem? nextItem;
   final VoidCallback onTap;
+  final String? iconName;
+  final bool showPendingCount;
   final int? pendingCount;
 
   @override
@@ -51,9 +55,9 @@ class DashboardCategoryCard extends StatelessWidget {
   Widget _buildHeading(BuildContext context, TextTheme textTheme) {
     return Row(
       children: [
-        if (category.iconName.trim().isNotEmpty)
+        if ((iconName ?? category.iconName).trim().isNotEmpty)
           CategoryIcon(
-            iconName: category.iconName,
+            iconName: iconName ?? category.iconName,
             size: 20,
             fit: BoxFit.contain,
           )
@@ -73,14 +77,15 @@ class DashboardCategoryCard extends StatelessWidget {
                   color: AppColors.primary,
                 ),
               ),
-              Text(
-                '${pendingCount ?? category.pendingCount} pending',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.labelMedium?.copyWith(
-                  color: AppColors.secondary,
+              if (showPendingCount)
+                Text(
+                  '${pendingCount ?? category.pendingCount} pending',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelMedium?.copyWith(
+                    color: AppColors.secondary,
+                  ),
                 ),
-              ),
             ],
           ),
         ),

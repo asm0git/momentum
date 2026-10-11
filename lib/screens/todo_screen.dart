@@ -71,6 +71,9 @@ class _TodoScreenState extends State<TodoScreen> {
             itemBuilder: (context, index) {
               final category = categories[index];
               final categoryId = category.id;
+              final importProvider = planner.calendarProviderForCategory(
+                category,
+              );
               final items = categoryId == null
                   ? const <PlannerItem>[]
                   : planner.itemsForCategory(categoryId);
@@ -86,8 +89,9 @@ class _TodoScreenState extends State<TodoScreen> {
                     : _categoryKeys.putIfAbsent(categoryId, GlobalKey.new),
                 title: category.title,
                 pendingLabel: '$pendingCount pending',
-                iconName: category.iconName,
+                iconName: planner.categoryDisplayIconName(category),
                 items: items,
+                showPendingCount: importProvider == null,
                 initiallyExpanded: categoryId == widget.initialCategoryId,
                 onDeleteCategory: categoryId == null
                     ? null

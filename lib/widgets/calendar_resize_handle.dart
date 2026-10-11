@@ -83,17 +83,32 @@ class _CalendarResizeHandleState extends State<CalendarResizeHandle> {
         onVerticalDragEnd: (_) => _finishDrag(),
         child: const SizedBox(
           height: 44,
-          child: Center(
-            child: SizedBox(
-              width: 36,
-              height: 4,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.secondary,
-                  borderRadius: BorderRadius.all(Radius.circular(4)),
+          child: Stack(
+            alignment: Alignment.topCenter,
+            children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SizedBox(
+                  height: 1,
+                  child: ColoredBox(color: AppColors.calendarBorder),
                 ),
               ),
-            ),
+              Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: 36,
+                  height: 4,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary,
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

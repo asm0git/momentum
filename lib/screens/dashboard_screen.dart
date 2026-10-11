@@ -301,6 +301,14 @@ class _ScreenBody extends StatelessWidget {
                       'dashboard-category-${categories[index].title}',
                     ),
                     category: categories[index],
+                    iconName: planner.categoryDisplayIconName(
+                      categories[index],
+                    ),
+                    showPendingCount:
+                        planner.calendarProviderForCategory(
+                          categories[index],
+                        ) ==
+                        null,
                     nextItem: categories[index].id == null
                         ? null
                         : planner.nextUpcomingItemForCategory(

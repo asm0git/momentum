@@ -54,6 +54,55 @@ class PlannerState extends ChangeNotifier {
             (account) => account.platformName.toLowerCase() == provider.key,
           )
           .firstOrNull;
+
+  CalendarProvider? calendarProviderForCategory(TaskCategory category) {
+    final categoryId = category.id;
+    if (categoryId != null) {
+      for (final provider in CalendarProvider.values) {
+        if (accountForProvider(provider)?.categoryId == categoryId) {
+          return provider;
+        }
+      }
+    }
+
+    for (final provider in CalendarProvider.values) {
+      if (category.iconName == provider.categoryIcon) return provider;
+
+      final legacyDefaultIcon = switch (provider) {
+        CalendarProvider.canvas => 'mi_school',
+        CalendarProvider.googleCalendar || CalendarProvider.outlook =>
+          'mi_calendar_month',
+      };
+      if (category.iconName == legacyDefaultIcon &&
+          category.items.any(
+            (item) =>
+                (item is Task &&
+                    item.srcPlatform?.toLowerCase() == provider.key) ||
+                (item is Event &&
+                    item.srcPlatform?.toLowerCase() == provider.key),
+          )) {
+        return provider;
+      }
+    }
+    return null;
+  }
+
+  String categoryDisplayIconName(TaskCategory category) {
+    final provider = calendarProviderForCategory(category);
+    if (provider == null) return category.iconName;
+
+    final legacyDefaultIcon = switch (provider) {
+      CalendarProvider.canvas => 'mi_school',
+      CalendarProvider.googleCalendar || CalendarProvider.outlook =>
+        'mi_calendar_month',
+    };
+    if (category.iconName == legacyDefaultIcon ||
+        category.iconName == provider.categoryIcon) {
+      return provider.categoryIcon;
+    }
+    return category.iconName;
+  }
+
   CanvasConnectionStatus? statusForProvider(CalendarProvider provider) =>
       provider == CalendarProvider.canvas
       ? _canvasConnectionStatus

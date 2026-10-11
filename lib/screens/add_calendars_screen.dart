@@ -1,64 +1,278 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
 import '../data_models.dart';
+import '../services/canvas_oauth_redirect_stub.dart'
+    if (dart.library.js_interop) '../services/canvas_oauth_redirect_web.dart'
+    as oauth;
 import '../services/onboarding_preferences.dart';
 import '../state/planner_state.dart';
+import '../widgets/blurred_dialog.dart';
 import '../widgets/pill_action_button.dart';
 
-class AddCalendarsScreen extends StatelessWidget {
-  const AddCalendarsScreen({super.key, this.onboarding = false});
+class AddCalendarsScreen extends StatefulWidget {
+  const AddCalendarsScreen({
+    super.key,
+    this.onboarding = false,
+    this.callbackUri,
+  });
 
   final bool onboarding;
+  final Uri? callbackUri;
 
-  Future<void> _continue(BuildContext context) async {
-    if (onboarding) {
-      await OnboardingPreferences.markComplete();
-      if (!context.mounted) return;
-      Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (_) => false);
-    } else {
-      final navigator = Navigator.of(context);
-      if (!navigator.canPop()) {
-        navigator.pushNamedAndRemoveUntil('/dashboard', (_) => false);
-        return;
-      }
+  @override
+  State<AddCalendarsScreen> createState() => _AddCalendarsScreenState();
+}
 
-      var foundPreviousScreen = false;
-      navigator.popUntil((route) {
-        if (route.settings.name == '/calendars') {
-          return !navigator.canPop();
-        }
-        foundPreviousScreen = true;
-        return true;
-      });
-      if (!foundPreviousScreen) {
-        navigator.pushNamedAndRemoveUntil('/dashboard', (_) => false);
+class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
+  final _canvasSiteController = TextEditingController();
+  CalendarProvider? _expandedProvider;
+  CalendarProvider? _loadingProvider;
+  CalendarProvider? _connectingProvider;
+  String? _message;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final query = (widget.callbackUri ?? Uri.base).queryParameters;
+    final callbackProvider = _providerFromKey(query['calendar_provider']);
+    _expandedProvider = callbackProvider;
+    if (callbackProvider != null) {
+      final callbackError = query['${callbackProvider.key}_error'];
+      if (callbackError != null) {
+        _error = switch (callbackError) {
+          'authorization_cancelled' =>
+            '${callbackProvider.title} authorization was canceled.',
+          'provider_not_configured' =>
+            '${callbackProvider.title} is not configured yet.',
+          _ => 'Could not connect ${callbackProvider.title}. Please try again.',
+        };
+      } else if (query['${callbackProvider.key}_connected'] == '1') {
+        _message = '${callbackProvider.title} connected.';
       }
     }
+
+    final provider = _expandedProvider;
+    if (provider != null) {
+      _loadingProvider = provider;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_loadProvider(provider));
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _canvasSiteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _continue() async {
+    if (widget.onboarding) {
+      await OnboardingPreferences.markComplete();
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil('/dashboard', (_) => false);
+      return;
+    }
+
+    final navigator = Navigator.of(context);
+    if (!navigator.canPop()) {
+      navigator.pushNamedAndRemoveUntil('/dashboard', (_) => false);
+      return;
+    }
+
+    var foundPreviousScreen = false;
+    navigator.popUntil((route) {
+      if (route.settings.name == '/calendars') {
+        return !navigator.canPop();
+      }
+      foundPreviousScreen = true;
+      return true;
+    });
+    if (!foundPreviousScreen) {
+      navigator.pushNamedAndRemoveUntil('/dashboard', (_) => false);
+    }
+  }
+
+  Future<void> _toggleProvider(CalendarProvider provider) async {
+    if (_expandedProvider == provider) {
+      setState(() {
+        _expandedProvider = null;
+        _loadingProvider = null;
+        _message = null;
+        _error = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _expandedProvider = provider;
+      _loadingProvider = provider;
+      _message = null;
+      _error = null;
+      if (provider == CalendarProvider.canvas) {
+        _canvasSiteController.clear();
+      }
+    });
+    await _loadProvider(provider);
+  }
+
+  Future<void> _loadProvider(CalendarProvider provider) async {
+    try {
+      final planner = context.read<PlannerState>();
+      final status = await planner.refreshProviderStatus(provider);
+      if (!mounted || _expandedProvider != provider) return;
+
+      if (provider == CalendarProvider.canvas) {
+        _canvasSiteController.text = status.providerUrl ?? '';
+      }
+
+      final account = planner.accountForProvider(provider);
+      final accountChanged =
+          account == null ||
+          (status.remoteUserId != null &&
+              account.remoteUserId != status.remoteUserId) ||
+          (status.providerUrl != null &&
+              account.providerUrl != status.providerUrl);
+      final syncIsDue =
+          account == null ||
+          accountChanged ||
+          account.lastSyncTime == null ||
+          status.lastSyncTime == null ||
+          DateTime.now().difference(status.lastSyncTime!) >=
+              const Duration(minutes: 15);
+
+      if (status.connected &&
+          syncIsDue &&
+          !planner.isProviderSyncing(provider)) {
+        await _syncProvider(provider, automatic: true);
+      }
+    } catch (error) {
+      if (mounted && _expandedProvider == provider) {
+        setState(() => _error = _readableError(error));
+      }
+    } finally {
+      if (mounted && _loadingProvider == provider) {
+        setState(() => _loadingProvider = null);
+      }
+    }
+  }
+
+  Future<void> _connect(CalendarProvider provider) async {
+    String? siteUrl;
+    if (provider == CalendarProvider.canvas) {
+      siteUrl = _normalizeCanvasUrl(_canvasSiteController.text);
+      if (siteUrl == null) {
+        setState(() {
+          _message = null;
+          _error = 'Enter a valid Canvas site URL.';
+        });
+        return;
+      }
+    }
+
+    setState(() {
+      _connectingProvider = provider;
+      _message = null;
+      _error = null;
+    });
+    try {
+      final planner = context.read<PlannerState>();
+      final uri = provider == CalendarProvider.canvas
+          ? planner.canvasOAuthStartUri(siteUrl!)
+          : planner.providerOAuthStartUri(provider);
+      oauth.redirectToCanvasOAuth(uri.toString());
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _connectingProvider = null;
+          _error = _readableError(error);
+        });
+      }
+    }
+  }
+
+  Future<void> _syncProvider(
+    CalendarProvider provider, {
+    bool automatic = false,
+  }) async {
+    if (!automatic) {
+      setState(() {
+        _message = null;
+        _error = null;
+      });
+    }
+    try {
+      await context.read<PlannerState>().syncProvider(provider);
+      if (mounted && _expandedProvider == provider) {
+        setState(() => _message = 'Sync complete.');
+      }
+    } catch (error) {
+      if (mounted && _expandedProvider == provider) {
+        setState(() => _error = _readableError(error));
+      }
+    }
+  }
+
+  Future<void> _disconnect(CalendarProvider provider) async {
+    final confirmed = await showBlurredDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.background,
+        title: Text(
+          'Disconnect ${provider.title}?',
+          style: Theme.of(dialogContext).textTheme.titleMedium,
+        ),
+        content: Text(
+          'Imported items will remain in Momentum.',
+          style: Theme.of(dialogContext).textTheme.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _message = null;
+      _error = null;
+    });
+    try {
+      await context.read<PlannerState>().disconnectProvider(provider);
+      if (mounted && _expandedProvider == provider) {
+        if (provider == CalendarProvider.canvas) _canvasSiteController.clear();
+        setState(
+          () => _message =
+              '${provider.title} disconnected. Imported items remain.',
+        );
+      }
+    } catch (error) {
+      if (mounted && _expandedProvider == provider) {
+        setState(() => _error = _readableError(error));
+      }
+    }
+  }
+
+  void _manageSettings(CalendarProvider provider) {
+    Navigator.of(context).pushNamed(_routeFor(provider));
   }
 
   @override
   Widget build(BuildContext context) {
     final planner = context.watch<PlannerState>();
-    final query = Uri.base.queryParameters;
-    final callbackProvider = CalendarProvider.values
-        .where((provider) => provider.key == query['calendar_provider'])
-        .firstOrNull;
-    final callbackError = callbackProvider == null
-        ? null
-        : query['${callbackProvider.key}_error'];
-    final callbackMessage = callbackProvider == null
-        ? null
-        : callbackError == null
-        ? query['${callbackProvider.key}_connected'] == '1'
-              ? '${callbackProvider.title} connected. Syncing your calendar…'
-              : null
-        : callbackError == 'authorization_cancelled'
-        ? '${callbackProvider.title} authorization was canceled.'
-        : callbackError == 'provider_not_configured'
-        ? '${callbackProvider.title} is not configured yet.'
-        : 'Could not connect ${callbackProvider.title}. Please try again.';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -75,83 +289,114 @@ class AddCalendarsScreen extends StatelessWidget {
                 semanticLabel: 'Momentum',
               ),
               Expanded(
-                child: Center(
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Align(
-                          alignment: Alignment.center,
-                          child: Text(
-                            'Sync your calendars',
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(color: AppColors.primary),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(
-                              AppRadii.focusPreset,
-                            ),
-                          ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Center(
+                        child: SizedBox(
+                          width: double.infinity,
                           child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              for (
-                                var index = 0;
-                                index < CalendarProvider.values.length;
-                                index++
-                              ) ...[
-                                _CalendarRow(
-                                  provider: CalendarProvider.values[index],
-                                  connected:
-                                      planner
-                                          .statusForProvider(
-                                            CalendarProvider.values[index],
-                                          )
-                                          ?.connected ==
-                                      true,
-                                  syncing: planner.isProviderSyncing(
-                                    CalendarProvider.values[index],
-                                  ),
-                                  hasError:
-                                      planner.errorForProvider(
-                                        CalendarProvider.values[index],
-                                      ) !=
-                                      null,
-                                  onTap: () => Navigator.of(context).pushNamed(
-                                    _routeFor(CalendarProvider.values[index]),
+                              Text(
+                                'Sync your calendars',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyLarge
+                                    ?.copyWith(color: AppColors.primary),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadii.focusPreset,
                                   ),
                                 ),
-                                if (index < CalendarProvider.values.length - 1)
-                                  const Divider(
-                                    height: 1,
-                                    indent: AppSpacing.md + 28 + AppSpacing.md,
-                                    endIndent: AppSpacing.md,
-                                    color: AppColors.background,
-                                  ),
-                              ],
+                                child: Column(
+                                  children: [
+                                    for (
+                                      var index = 0;
+                                      index < CalendarProvider.values.length;
+                                      index++
+                                    ) ...[
+                                      _CalendarRow(
+                                        provider:
+                                            CalendarProvider.values[index],
+                                        connected:
+                                            planner
+                                                .statusForProvider(
+                                                  CalendarProvider
+                                                      .values[index],
+                                                )
+                                                ?.connected ==
+                                            true,
+                                        syncing:
+                                            planner.isProviderSyncing(
+                                              CalendarProvider.values[index],
+                                            ) ||
+                                            _loadingProvider ==
+                                                CalendarProvider.values[index],
+                                        hasError:
+                                            planner.errorForProvider(
+                                                  CalendarProvider
+                                                      .values[index],
+                                                ) !=
+                                                null ||
+                                            (_expandedProvider ==
+                                                    CalendarProvider
+                                                        .values[index] &&
+                                                _error != null),
+                                        expanded:
+                                            _expandedProvider ==
+                                            CalendarProvider.values[index],
+                                        onTap: () => _toggleProvider(
+                                          CalendarProvider.values[index],
+                                        ),
+                                      ),
+                                      ClipRect(
+                                        child: AnimatedSize(
+                                          duration: const Duration(
+                                            milliseconds: 220,
+                                          ),
+                                          curve: Curves.easeInOutCubic,
+                                          alignment: Alignment.topCenter,
+                                          child:
+                                              _expandedProvider ==
+                                                  CalendarProvider.values[index]
+                                              ? _providerPanel(
+                                                  context,
+                                                  planner,
+                                                  CalendarProvider
+                                                      .values[index],
+                                                )
+                                              : const SizedBox(
+                                                  width: double.infinity,
+                                                  height: 0,
+                                                ),
+                                        ),
+                                      ),
+                                      if (index <
+                                          CalendarProvider.values.length - 1)
+                                        const Divider(
+                                          height: 1,
+                                          indent:
+                                              AppSpacing.md +
+                                              28 +
+                                              AppSpacing.md,
+                                          endIndent: AppSpacing.md,
+                                          color: AppColors.background,
+                                        ),
+                                    ],
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                        if (callbackMessage != null) ...[
-                          const SizedBox(height: AppSpacing.sm),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              callbackMessage,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: callbackError == null
-                                        ? AppColors.primary
-                                        : AppColors.error,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -160,7 +405,7 @@ class AddCalendarsScreen extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: PillActionButton(
                   label: 'Skip',
-                  onPressed: () => _continue(context),
+                  onPressed: _continue,
                   trailingIcon: Icons.chevron_right,
                 ),
               ),
@@ -172,10 +417,238 @@ class AddCalendarsScreen extends StatelessWidget {
     );
   }
 
+  Widget _providerPanel(
+    BuildContext context,
+    PlannerState planner,
+    CalendarProvider provider,
+  ) {
+    final status = planner.statusForProvider(provider);
+    final textTheme = Theme.of(context).textTheme;
+    final connected = status?.connected == true;
+    final syncing = planner.isProviderSyncing(provider);
+
+    return Padding(
+      key: ValueKey('calendar-provider-panel-${provider.key}'),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        0,
+        AppSpacing.md,
+        AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_loadingProvider == provider && status == null)
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (status == null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xxs),
+              child: SizedBox(
+                width: double.infinity,
+                child: PillActionButton(
+                  label: 'Try again',
+                  leadingIcon: Icons.refresh,
+                  foregroundColor: AppColors.error,
+                  outlineColor: AppColors.error,
+                  onPressed: () {
+                    setState(() {
+                      _loadingProvider = provider;
+                      _error = null;
+                    });
+                    unawaited(_loadProvider(provider));
+                  },
+                ),
+              ),
+            )
+          else if (connected) ...[
+            if (status.accountName != null || status.accountEmail != null)
+              Text(
+                '${status.accountName ?? 'Connected'}${status.accountEmail == null ? '' : '\n${status.accountEmail}'}',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: AppColors.onSurface,
+                ),
+              ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              status.lastSyncTime == null
+                  ? 'Not synced yet'
+                  : 'Last synced ${MaterialLocalizations.of(context).formatMediumDate(status.lastSyncTime!.toLocal())} at ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(status.lastSyncTime!.toLocal()))}',
+              style: textTheme.bodyMedium?.copyWith(color: AppColors.onSurface),
+            ),
+            if (syncing) ...[
+              const SizedBox(height: AppSpacing.sm),
+              const LinearProgressIndicator(),
+              const SizedBox(height: AppSpacing.xs),
+              Text('Syncing…', style: textTheme.bodyMedium),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              height: AppSpacing.popupFieldHeight,
+              child: FilledButton.icon(
+                onPressed: syncing ? null : () => _syncProvider(provider),
+                icon: const Icon(Icons.sync),
+                label: Text(
+                  'Sync now',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: AppColors.onPrimary,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _manageSettings(provider),
+                    child: Text(
+                      'Manage settings',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => _disconnect(provider),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                    ),
+                    child: Text(
+                      'Disconnect',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            Text(
+              provider == CalendarProvider.canvas
+                  ? 'Enter your institution’s Canvas site. You will sign in securely on Canvas.'
+                  : 'Sign in securely with ${provider.title}. Momentum only reads calendar data.',
+              style: textTheme.bodyMedium?.copyWith(color: AppColors.onSurface),
+            ),
+            if (provider == CalendarProvider.canvas) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _canvasSiteController,
+                keyboardType: TextInputType.url,
+                autocorrect: false,
+                decoration: _decoration(context, 'Canvas site URL'),
+                style: textTheme.bodyLarge?.copyWith(
+                  color: AppColors.onSurface,
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              height: AppSpacing.popupFieldHeight,
+              child: FilledButton.icon(
+                onPressed: _connectingProvider == provider
+                    ? null
+                    : () => _connect(provider),
+                icon: Image.asset(
+                  _iconAssetFor(provider),
+                  width: 20,
+                  height: 20,
+                  fit: BoxFit.contain,
+                ),
+                label: Text(
+                  _connectingProvider == provider
+                      ? 'Connecting…'
+                      : 'Connect with ${provider.title}',
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: AppColors.onPrimary,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (_message != null || _error != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              _error ?? _message!,
+              style: textTheme.bodyMedium?.copyWith(
+                color: _error == null ? AppColors.primary : AppColors.error,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _decoration(BuildContext context, String hint) =>
+      InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: AppColors.background,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadii.focusPreset),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadii.focusPreset),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppRadii.focusPreset),
+          borderSide: const BorderSide(color: AppColors.error),
+        ),
+        hintStyle: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: AppColors.disabled),
+      );
+
+  String? _normalizeCanvasUrl(String value) {
+    var input = value.trim();
+    if (input.isEmpty) return null;
+    if (!input.contains('://')) input = 'https://$input';
+    final uri = Uri.tryParse(input);
+    if (uri == null || uri.host.isEmpty || uri.scheme != 'https') return null;
+    return Uri(
+      scheme: uri.scheme,
+      host: uri.host,
+      port: uri.hasPort ? uri.port : null,
+    ).toString();
+  }
+
+  String _readableError(Object error) => error
+      .toString()
+      .replaceFirst('Bad state: ', '')
+      .replaceFirst('Exception: ', '');
+
+  static CalendarProvider? _providerFromKey(String? key) => CalendarProvider
+      .values
+      .where((provider) => provider.key == key)
+      .firstOrNull;
+
   static String _routeFor(CalendarProvider provider) => switch (provider) {
     CalendarProvider.canvas => '/canvas',
     CalendarProvider.googleCalendar => '/google',
     CalendarProvider.outlook => '/outlook',
+  };
+
+  static String _iconAssetFor(CalendarProvider provider) => switch (provider) {
+    CalendarProvider.canvas => 'assets/img/import/canvas.png',
+    CalendarProvider.googleCalendar => 'assets/img/import/gcalendar.png',
+    CalendarProvider.outlook => 'assets/img/import/outlook.png',
   };
 }
 
@@ -185,6 +658,7 @@ class _CalendarRow extends StatelessWidget {
     required this.connected,
     required this.syncing,
     required this.hasError,
+    required this.expanded,
     required this.onTap,
   });
 
@@ -192,56 +666,65 @@ class _CalendarRow extends StatelessWidget {
   final bool connected;
   final bool syncing;
   final bool hasError;
+  final bool expanded;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.md,
-          ),
-          child: Row(
-            children: [
-              Image.asset(
-                _iconAssetFor(provider),
-                width: 28,
-                height: 28,
-                fit: BoxFit.contain,
-                excludeFromSemantics: true,
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Text(
-                  provider.title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.onSurface),
+    return Semantics(
+      button: true,
+      expanded: expanded,
+      label: '${provider.title}${connected ? ', connected' : ''}',
+      child: Material(
+        color: AppColors.transparent,
+        child: InkWell(
+          key: ValueKey('calendar-provider-row-${provider.key}'),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.md,
+            ),
+            child: Row(
+              children: [
+                Image.asset(
+                  _CalendarRow._iconAssetFor(provider),
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.contain,
+                  excludeFromSemantics: true,
                 ),
-              ),
-              if (syncing)
-                const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else if (hasError)
-                const Icon(Icons.error_outline, color: AppColors.error)
-              else if (connected)
-                const Icon(Icons.check_circle, color: AppColors.secondary)
-              else
-                const Icon(Icons.chevron_right, color: AppColors.onSurface),
-            ],
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                    provider.title,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.onSurface,
+                    ),
+                  ),
+                ),
+                if (syncing)
+                  const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else if (hasError)
+                  const Icon(Icons.error_outline, color: AppColors.error)
+                else if (expanded)
+                  const Icon(Icons.expand_less, color: AppColors.onSurface)
+                else if (connected)
+                  const Icon(Icons.check_circle, color: AppColors.secondary)
+                else
+                  const Icon(Icons.expand_more, color: AppColors.onSurface),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  String _iconAssetFor(CalendarProvider provider) => switch (provider) {
+  static String _iconAssetFor(CalendarProvider provider) => switch (provider) {
     CalendarProvider.canvas => 'assets/img/import/canvas.png',
     CalendarProvider.googleCalendar => 'assets/img/import/gcalendar.png',
     CalendarProvider.outlook => 'assets/img/import/outlook.png',

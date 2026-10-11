@@ -18,6 +18,7 @@ class CollapsibleCategory extends StatefulWidget {
     required this.pendingLabel,
     required this.iconName,
     required this.items,
+    this.showPendingCount = true,
     this.initiallyExpanded = false,
     this.onDeleteCategory,
   });
@@ -26,6 +27,7 @@ class CollapsibleCategory extends StatefulWidget {
   final String pendingLabel;
   final String iconName;
   final List<PlannerItem> items;
+  final bool showPendingCount;
   final bool initiallyExpanded;
   final VoidCallback? onDeleteCategory;
 
@@ -88,14 +90,15 @@ class _CollapsibleCategoryState extends State<CollapsibleCategory> {
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.titleMedium,
                   ),
-                  Text(
-                    widget.pendingLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.labelMedium?.copyWith(
-                      color: AppColors.secondary,
+                  if (widget.showPendingCount)
+                    Text(
+                      widget.pendingLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.labelMedium?.copyWith(
+                        color: AppColors.secondary,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

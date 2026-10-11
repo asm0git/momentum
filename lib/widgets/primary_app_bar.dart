@@ -12,6 +12,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.destination,
     this.isBlurred = false,
     this.actions,
+    this.automaticallyImplyLeading = true,
   }) : title = null;
 
   const PrimaryAppBar.withTitle({
@@ -19,12 +20,14 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     this.isBlurred = false,
     this.actions,
+    this.automaticallyImplyLeading = true,
   }) : destination = null;
 
   final AppDestination? destination;
   final String? title;
   final bool isBlurred;
   final List<Widget>? actions;
+  final bool automaticallyImplyLeading;
 
   @override
   Size get preferredSize => const Size.fromHeight(AppSpacing.appBarHeight);
@@ -35,6 +38,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     final appBar = AppBar(
       centerTitle: true,
+      automaticallyImplyLeading: automaticallyImplyLeading,
       toolbarHeight: AppSpacing.appBarHeight,
       title: Text(
         title ?? destination!.title,
