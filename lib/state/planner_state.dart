@@ -428,36 +428,45 @@ class PlannerState extends ChangeNotifier {
 
   Future<void> disconnectCanvas() async {
     await _canvasBackend.disconnect();
-    final account = _canvasAccount;
-    if (account != null && account.id != null) {
-      // Keep the last account identity so a later connection to a different
-      // account can replace only the old Canvas imports after sync succeeds.
-      account.lastSyncTime = null;
-      await _repository.updateLinkedAccount(account);
+    try {
+      final account = _canvasAccount;
+      if (account != null && account.id != null) {
+        // Keep the last account identity so a later connection to a different
+        // account can replace only the old Canvas imports after sync succeeds.
+        account.lastSyncTime = null;
+        await _repository.updateLinkedAccount(account);
+      }
+      await _reloadSnapshot();
+    } finally {
+      // Publish the disconnected state only after persistence and the shared
+      // snapshot have finished refreshing. This keeps listeners from seeing a
+      // completed disconnect while the screen still has stale account data.
+      _canvasConnectionStatus = const CanvasConnectionStatus(connected: false);
+      _canvasError = null;
+      if (!_isDisposed) notifyListeners();
     }
-    _canvasConnectionStatus = const CanvasConnectionStatus(connected: false);
-    _canvasError = null;
-    await _reloadSnapshot();
-    if (!_isDisposed) notifyListeners();
   }
 
   Future<void> disconnectProvider(CalendarProvider provider) async {
     if (provider == CalendarProvider.canvas) return disconnectCanvas();
     await _calendarBackend.disconnectProvider(provider);
-    final account = accountForProvider(provider);
-    if (account != null && account.id != null) {
-      // Retain the account identity as a local sync marker. Imported records
-      // stay visible while disconnected, and account changes can be detected
-      // after the next successful sync.
-      account.lastSyncTime = null;
-      await _repository.updateLinkedAccount(account);
+    try {
+      final account = accountForProvider(provider);
+      if (account != null && account.id != null) {
+        // Retain the account identity as a local sync marker. Imported records
+        // stay visible while disconnected, and account changes can be detected
+        // after the next successful sync.
+        account.lastSyncTime = null;
+        await _repository.updateLinkedAccount(account);
+      }
+      await _reloadSnapshot();
+    } finally {
+      _providerStatuses[provider] = const CanvasConnectionStatus(
+        connected: false,
+      );
+      _providerErrors.remove(provider);
+      if (!_isDisposed) notifyListeners();
     }
-    _providerStatuses[provider] = const CanvasConnectionStatus(
-      connected: false,
-    );
-    _providerErrors.remove(provider);
-    await _reloadSnapshot();
-    if (!_isDisposed) notifyListeners();
   }
 
   Future<void> _autoSyncCalendarsIfDue() async {
