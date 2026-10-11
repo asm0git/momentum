@@ -15,6 +15,23 @@ class AppColors {
   static const popupScrim = Color(0x26000000);
   static const disabled = Color(0xFF94A3B8);
   static const calendarBorder = surface;
+  static const focusChartColors = <Color>[
+    primary,
+    secondary,
+    Color(0xFF5977C5),
+    Color(0xFF3C8C79),
+    Color(0xFFE6A23C),
+    Color(0xFF8D65B5),
+    Color(0xFFCE6D4D),
+    Color(0xFF536B79),
+  ];
+  static const focusHeatmapLevels = <Color>[
+    Color(0xFFEDEBF2),
+    Color(0xFFD3C7E8),
+    Color(0xFFA98BCF),
+    Color(0xFF7652A7),
+    primary,
+  ];
 }
 
 class AppSpacing {

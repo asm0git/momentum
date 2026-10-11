@@ -46,7 +46,7 @@ class DatabaseHelper {
     return factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 6,
+        version: 7,
         onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: (db, version) async {
           await _createSchema(db);
@@ -101,6 +101,9 @@ class DatabaseHelper {
               where: 'title = ?',
               whereArgs: ["Janisa's Birthday"],
             );
+          }
+          if (oldVersion < 7) {
+            await _createFocusCategoryTotalsTable(db);
           }
         },
       ),
@@ -266,6 +269,20 @@ class DatabaseHelper {
       CREATE TABLE focus_daily_totals (
         focus_date TEXT PRIMARY KEY,
         total_seconds INTEGER NOT NULL DEFAULT 0 CHECK (total_seconds >= 0)
+      )
+    ''');
+    await _createFocusCategoryTotalsTable(db);
+  }
+
+  Future<void> _createFocusCategoryTotalsTable(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS focus_daily_category_totals (
+        focus_date TEXT NOT NULL,
+        category_id INTEGER NOT NULL,
+        category_title TEXT NOT NULL,
+        category_icon TEXT NOT NULL,
+        total_seconds INTEGER NOT NULL DEFAULT 0 CHECK (total_seconds >= 0),
+        PRIMARY KEY (focus_date, category_id)
       )
     ''');
   }

@@ -14,7 +14,7 @@ import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
 import 'data_models.dart';
-import 'screens/ai_screen.dart';
+import 'screens/insights_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/add_calendars_screen.dart';
 import 'screens/canvas_connection_screen.dart';
@@ -66,9 +66,8 @@ class MyApp extends StatelessWidget {
       title: 'Momentum',
       debugShowCheckedModeBanner: false,
       theme: appTheme,
-      builder: (context, child) => ResponsiveAppViewport(
-        child: PlannerLoadGate(child: child!),
-      ),
+      builder: (context, child) =>
+          ResponsiveAppViewport(child: PlannerLoadGate(child: child!)),
       initialRoute: initialRoute,
       onGenerateRoute: _buildRoute,
     );
@@ -104,8 +103,9 @@ class MyApp extends StatelessWidget {
           settings,
         );
       case '/ai':
+      case '/insights':
         return _screenRoute(
-          const AiScreen(key: ValueKey('ai-screen')),
+          const InsightsScreen(key: ValueKey('insights-screen')),
           settings,
         );
       case '/calendars':

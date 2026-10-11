@@ -744,7 +744,7 @@ class _NotesField extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
-          vertical: AppSpacing.xxs,
+          vertical: AppSpacing.md,
         ),
         child: TextField(
           controller: controller,

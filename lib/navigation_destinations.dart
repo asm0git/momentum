@@ -2,7 +2,7 @@ enum AppDestination {
   dashboard(title: 'Dashboard', iconName: 'Home', route: '/dashboard'),
   calendar(title: 'Calendar', iconName: 'Calendar', route: '/calendar'),
   timer(title: 'Timer', iconName: 'Timer', route: '/timer'),
-  ai(title: 'AI Planner', iconName: 'AI', route: '/ai'),
+  insights(title: 'Insights', iconName: 'Insights', route: '/insights'),
   todo(title: 'To-Do', iconName: 'To-Do', route: '/todo');
 
   const AppDestination({

@@ -42,11 +42,13 @@ class PlannerState extends ChangeNotifier {
   bool _isLoading = true;
   Object? _error;
   bool _isDisposed = false;
+  int _focusHistoryRevision = 0;
 
   List<TaskCategory> get categories => List.unmodifiable(_categories);
   List<PlannerItem> get items => List.unmodifiable(_items);
   bool get isLoading => _isLoading;
   Object? get error => _error;
+  int get focusHistoryRevision => _focusHistoryRevision;
   LinkedAccount? get canvasAccount => _canvasAccount;
   LinkedAccount? accountForProvider(CalendarProvider provider) =>
       _linkedAccounts
@@ -70,8 +72,8 @@ class PlannerState extends ChangeNotifier {
 
       final legacyDefaultIcon = switch (provider) {
         CalendarProvider.canvas => 'mi_school',
-        CalendarProvider.googleCalendar || CalendarProvider.outlook =>
-          'mi_calendar_month',
+        CalendarProvider.googleCalendar ||
+        CalendarProvider.outlook => 'mi_calendar_month',
       };
       if (category.iconName == legacyDefaultIcon &&
           category.items.any(
@@ -93,8 +95,8 @@ class PlannerState extends ChangeNotifier {
 
     final legacyDefaultIcon = switch (provider) {
       CalendarProvider.canvas => 'mi_school',
-      CalendarProvider.googleCalendar || CalendarProvider.outlook =>
-        'mi_calendar_month',
+      CalendarProvider.googleCalendar ||
+      CalendarProvider.outlook => 'mi_calendar_month',
     };
     if (category.iconName == legacyDefaultIcon ||
         category.iconName == provider.categoryIcon) {
@@ -175,6 +177,39 @@ class PlannerState extends ChangeNotifier {
     }
     result.sort(_compareItems);
     return result;
+  }
+
+  /// Incomplete categorized tasks, with recurring series represented once.
+  List<FocusTaskSelection> get selectableFocusTasks {
+    final selections = <FocusTaskSelection>[];
+    for (final category in _categories) {
+      final categoryId = category.id;
+      if (categoryId == null) continue;
+      for (final task in itemsForCategory(categoryId).whereType<Task>()) {
+        final taskId = task.id;
+        if (taskId == null || task.isChecked) continue;
+        selections.add(
+          FocusTaskSelection(
+            taskId: taskId,
+            taskTitle: task.title,
+            categoryId: categoryId,
+            categoryTitle: category.title,
+            categoryIcon: categoryDisplayIconName(category),
+          ),
+        );
+      }
+    }
+    selections.sort((first, second) {
+      final byCategory = first.categoryTitle.toLowerCase().compareTo(
+        second.categoryTitle.toLowerCase(),
+      );
+      return byCategory != 0
+          ? byCategory
+          : first.taskTitle.toLowerCase().compareTo(
+              second.taskTitle.toLowerCase(),
+            );
+    });
+    return List.unmodifiable(selections);
   }
 
   /// Resolves a generated calendar occurrence to the saved series record.
@@ -325,8 +360,27 @@ class PlannerState extends ChangeNotifier {
   Future<int> getFocusSecondsForDate(DateTime date) =>
       _repository.getFocusSecondsForDate(date);
 
-  Future<void> addFocusSeconds(DateTime date, int seconds) =>
-      _repository.addFocusSeconds(date, seconds);
+  Future<Map<DateTime, int>> getFocusTotalsForRange(
+    DateTime firstDay,
+    DateTime lastDay,
+  ) => _repository.getFocusTotalsForRange(firstDay, lastDay);
+
+  Future<List<FocusCategoryTotal>> getFocusCategoryTotalsForRange(
+    DateTime firstDay,
+    DateTime lastDay,
+  ) => _repository.getFocusCategoryTotalsForRange(firstDay, lastDay);
+
+  Future<void> addFocusSeconds(
+    DateTime date,
+    int seconds,
+    FocusTaskSelection selection,
+  ) async {
+    await _repository.addFocusSeconds(date, seconds, selection);
+    if (!_isDisposed) {
+      _focusHistoryRevision++;
+      notifyListeners();
+    }
+  }
 
   Future<CanvasConnectionStatus> refreshCanvasStatus() {
     final inFlight = _canvasStatusFuture;

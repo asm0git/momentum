@@ -26,7 +26,7 @@ class Selector extends StatelessWidget {
   final List<SelectorOption> options;
   final String? selectedValue;
   final String placeholder;
-  final ValueChanged<String?> onChanged;
+  final ValueChanged<String?>? onChanged;
   final AlignmentGeometry alignment;
   final bool isExpanded;
   final Color contentColor;

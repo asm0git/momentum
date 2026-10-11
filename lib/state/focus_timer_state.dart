@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../data/recurrence.dart';
+import '../data_models.dart';
 import 'planner_state.dart';
 
 enum FocusPhase { work, rest }
@@ -31,6 +32,8 @@ class FocusTimerState extends ChangeNotifier {
   int _remainingSeconds;
   FocusPhase _phase = FocusPhase.work;
   bool _isRunning = false;
+  FocusTaskSelection? _selectedTask;
+  FocusTaskSelection? _activeTask;
   int _persistedToday = 0;
   int _dailyTotalLoadGeneration = 0;
   int _flushCounter = 0;
@@ -41,12 +44,15 @@ class FocusTimerState extends ChangeNotifier {
   bool _isTicking = false;
   Future<void>? _flushInProgress;
   final Map<DateTime, int> _pendingSeconds = {};
+  final Map<DateTime, Map<int, _PendingCategoryFocus>> _pendingCategorySeconds =
+      {};
 
   int get workMinutes => _workMinutes;
   int get breakMinutes => _breakMinutes;
   int get remainingSeconds => _remainingSeconds;
   FocusPhase get phase => _phase;
   bool get isRunning => _isRunning;
+  FocusTaskSelection? get selectedTask => _selectedTask;
   int get totalFocusSecondsToday =>
       _persistedToday + (_pendingSeconds[_focusDate] ?? 0);
   int get phaseDurationSeconds =>
@@ -62,6 +68,13 @@ class FocusTimerState extends ChangeNotifier {
     unawaited(_reloadToday(dateOnly(_clock())));
   }
 
+  bool selectTask(FocusTaskSelection? selection) {
+    if (_isRunning) return false;
+    _selectedTask = selection;
+    notifyListeners();
+    return true;
+  }
+
   void selectPreset({required int workMinutes, required int breakMinutes}) {
     final now = _clock();
     if (_isRunning) _advanceTime(now);
@@ -75,11 +88,12 @@ class FocusTimerState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleRunning() {
+  bool toggleRunning() {
     if (_isRunning) {
       final now = _clock();
       _advanceTime(now);
       _isRunning = false;
+      _activeTask = null;
       _lastTick = null;
       _ticker?.cancel();
       _ticker = null;
@@ -91,6 +105,7 @@ class FocusTimerState extends ChangeNotifier {
         _remainingSeconds = _workMinutes * 60;
       }
       _isRunning = true;
+      _activeTask = _selectedTask ?? FocusTaskSelection.unassigned;
       _lastTick = _clock();
       unawaited(_ensureToday(_lastTick!));
       if (_startTicker) {
@@ -101,6 +116,7 @@ class FocusTimerState extends ChangeNotifier {
       }
     }
     notifyListeners();
+    return true;
   }
 
   Future<void> _tick() async {
@@ -155,6 +171,21 @@ class FocusTimerState extends ChangeNotifier {
             (seconds) => seconds + chunk,
             ifAbsent: () => chunk,
           );
+          final activeTask = _activeTask ?? FocusTaskSelection.unassigned;
+          final categoryForDay = _pendingCategorySeconds.putIfAbsent(
+            day,
+            () => <int, _PendingCategoryFocus>{},
+          );
+          final pending = categoryForDay[activeTask.categoryId];
+          if (pending == null) {
+            categoryForDay[activeTask.categoryId] = _PendingCategoryFocus(
+              selection: activeTask,
+              seconds: chunk,
+            );
+          } else {
+            pending.selection = activeTask;
+            pending.seconds += chunk;
+          }
         }
       }
 
@@ -202,21 +233,46 @@ class FocusTimerState extends ChangeNotifier {
     final activeFlush = _flushInProgress;
     if (activeFlush != null) return activeFlush;
     final planner = _planner;
-    if (planner == null || _pendingSeconds.isEmpty) return;
+    if (planner == null || _pendingCategorySeconds.isEmpty) return;
 
-    final snapshot = Map<DateTime, int>.of(_pendingSeconds);
+    final snapshot = <DateTime, Map<int, _PendingCategoryFocus>>{
+      for (final dayEntry in _pendingCategorySeconds.entries)
+        dayEntry.key: {
+          for (final categoryEntry in dayEntry.value.entries)
+            categoryEntry.key: _PendingCategoryFocus(
+              selection: categoryEntry.value.selection,
+              seconds: categoryEntry.value.seconds,
+            ),
+        },
+    };
     var wroteSeconds = false;
     final flush = () async {
       try {
-        for (final entry in snapshot.entries) {
-          await planner.addFocusSeconds(entry.key, entry.value);
-          wroteSeconds = true;
-          final stillPending = _pendingSeconds[entry.key] ?? 0;
-          final remaining = stillPending - entry.value;
-          if (remaining <= 0) {
-            _pendingSeconds.remove(entry.key);
-          } else {
-            _pendingSeconds[entry.key] = remaining;
+        for (final dayEntry in snapshot.entries) {
+          for (final categoryEntry in dayEntry.value.entries) {
+            final amount = categoryEntry.value.seconds;
+            await planner.addFocusSeconds(
+              dayEntry.key,
+              amount,
+              categoryEntry.value.selection,
+            );
+            wroteSeconds = true;
+            final stillPending = _pendingSeconds[dayEntry.key] ?? 0;
+            final dailyRemaining = stillPending - amount;
+            if (dailyRemaining <= 0) {
+              _pendingSeconds.remove(dayEntry.key);
+            } else {
+              _pendingSeconds[dayEntry.key] = dailyRemaining;
+            }
+            final categories = _pendingCategorySeconds[dayEntry.key];
+            final current = categories?[categoryEntry.key];
+            if (categories != null && current != null) {
+              current.seconds -= amount;
+              if (current.seconds <= 0) categories.remove(categoryEntry.key);
+              if (categories.isEmpty) {
+                _pendingCategorySeconds.remove(dayEntry.key);
+              }
+            }
           }
         }
       } catch (_) {
@@ -245,4 +301,11 @@ class FocusTimerState extends ChangeNotifier {
     unawaited(_flushPending());
     super.dispose();
   }
+}
+
+class _PendingCategoryFocus {
+  _PendingCategoryFocus({required this.selection, required this.seconds});
+
+  FocusTaskSelection selection;
+  int seconds;
 }

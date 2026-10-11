@@ -9,7 +9,18 @@ import '../state/focus_timer_state.dart';
 
 /// The timer face remains sharp while the surrounding timer page is blurred.
 class Clock extends StatelessWidget {
-  const Clock({super.key});
+  const Clock({super.key, this.onToggleRunning});
+
+  final VoidCallback? onToggleRunning;
+
+  void _toggle(FocusTimerState timer) {
+    final callback = onToggleRunning;
+    if (callback != null) {
+      callback();
+    } else {
+      timer.toggleRunning();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +37,7 @@ class Clock extends StatelessWidget {
           children: [
             Positioned.fill(
               child: GestureDetector(
-                onTap: timer.toggleRunning,
+                onTap: () => _toggle(timer),
                 child: TweenAnimationBuilder<double>(
                   tween: Tween<double>(begin: progress, end: progress),
                   duration: const Duration(milliseconds: 450),
@@ -37,7 +48,7 @@ class Clock extends StatelessWidget {
             ),
             Center(
               child: GestureDetector(
-                onTap: timer.toggleRunning,
+                onTap: () => _toggle(timer),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

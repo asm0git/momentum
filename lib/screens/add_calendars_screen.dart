@@ -479,7 +479,7 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
               child: FilledButton.icon(
                 onPressed: syncing ? null : () => _syncProvider(provider),
                 icon: const Icon(Icons.sync),
-                label: Text('Sync now'),
+                label: const Text('Sync now'),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(0, 48),
                   textStyle: _actionTextStyle(context, AppColors.onPrimary),
@@ -497,7 +497,7 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
                       foregroundColor: AppColors.primary,
                       textStyle: _actionTextStyle(context, AppColors.primary),
                     ),
-                    child: Text('Manage settings'),
+                    child: const Text('Manage settings'),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
@@ -510,7 +510,7 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
                       side: const BorderSide(color: AppColors.error),
                       textStyle: _actionTextStyle(context, AppColors.error),
                     ),
-                    child: Text('Disconnect'),
+                    child: const Text('Disconnect'),
                   ),
                 ),
               ],

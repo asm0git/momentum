@@ -562,18 +562,98 @@ class PlannerRepository {
     return rows.isEmpty ? 0 : rows.single['total_seconds']! as int;
   }
 
-  Future<void> addFocusSeconds(DateTime date, int seconds) async {
+  Future<Map<DateTime, int>> getFocusTotalsForRange(
+    DateTime firstDay,
+    DateTime lastDay,
+  ) async {
+    final db = await _databaseHelper.database;
+    final first = dateOnly(firstDay).toIso8601String();
+    final last = dateOnly(lastDay).toIso8601String();
+    final rows = await db.query(
+      'focus_daily_totals',
+      columns: ['focus_date', 'total_seconds'],
+      where: 'focus_date >= ? AND focus_date <= ?',
+      whereArgs: [first, last],
+      orderBy: 'focus_date',
+    );
+    return {
+      for (final row in rows)
+        dateOnly(DateTime.parse(row['focus_date']! as String)):
+            row['total_seconds']! as int,
+    };
+  }
+
+  Future<List<FocusCategoryTotal>> getFocusCategoryTotalsForRange(
+    DateTime firstDay,
+    DateTime lastDay,
+  ) async {
+    final db = await _databaseHelper.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT totals.category_id,
+        COALESCE(categories.title, totals.category_title) AS category_title,
+        COALESCE(categories.icon_name, totals.category_icon) AS category_icon,
+        SUM(totals.total_seconds) AS total_seconds
+      FROM focus_daily_category_totals AS totals
+      LEFT JOIN categories ON categories.id = totals.category_id
+      WHERE totals.focus_date >= ? AND totals.focus_date <= ?
+      GROUP BY totals.category_id, category_title, category_icon
+      ORDER BY total_seconds DESC, category_title COLLATE NOCASE
+      ''',
+      [
+        dateOnly(firstDay).toIso8601String(),
+        dateOnly(lastDay).toIso8601String(),
+      ],
+    );
+    return rows
+        .map(
+          (row) => FocusCategoryTotal(
+            categoryId: row['category_id']! as int,
+            categoryTitle: row['category_title']! as String,
+            categoryIcon: row['category_icon']! as String,
+            totalSeconds: row['total_seconds']! as int,
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> addFocusSeconds(
+    DateTime date,
+    int seconds,
+    FocusTaskSelection selection,
+  ) async {
     if (seconds <= 0) return;
     final db = await _databaseHelper.database;
-    await db.rawInsert(
-      '''
-      INSERT INTO focus_daily_totals (focus_date, total_seconds)
-      VALUES (?, ?)
-      ON CONFLICT(focus_date) DO UPDATE SET
-        total_seconds = total_seconds + excluded.total_seconds
-      ''',
-      [dateOnly(date).toIso8601String(), seconds],
-    );
+    final focusDate = dateOnly(date).toIso8601String();
+    await db.transaction((txn) async {
+      await txn.rawInsert(
+        '''
+        INSERT INTO focus_daily_totals (focus_date, total_seconds)
+        VALUES (?, ?)
+        ON CONFLICT(focus_date) DO UPDATE SET
+          total_seconds = total_seconds + excluded.total_seconds
+        ''',
+        [focusDate, seconds],
+      );
+      await txn.rawInsert(
+        '''
+        INSERT INTO focus_daily_category_totals
+          (focus_date, category_id, category_title, category_icon, total_seconds)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(focus_date, category_id) DO UPDATE SET
+          category_title = excluded.category_title,
+          category_icon = excluded.category_icon,
+          total_seconds = total_seconds + excluded.total_seconds
+        ''',
+        [
+          focusDate,
+          selection.categoryId,
+          selection.categoryTitle,
+          selection.categoryIcon,
+          seconds,
+        ],
+      );
+    });
   }
 
   Future<List<Task>> getTasksForDate(DateTime day) async {

@@ -1,5 +1,58 @@
 import 'package:flutter/material.dart';
 
+@immutable
+class FocusTaskSelection {
+  const FocusTaskSelection({
+    required this.taskId,
+    required this.taskTitle,
+    required this.categoryId,
+    required this.categoryTitle,
+    required this.categoryIcon,
+  });
+
+  static const unassigned = FocusTaskSelection(
+    taskId: 0,
+    taskTitle: 'Unassigned focus',
+    categoryId: -1,
+    categoryTitle: 'Unassigned',
+    categoryIcon: 'mi_timer',
+  );
+
+  final int taskId;
+  final String taskTitle;
+  final int categoryId;
+  final String categoryTitle;
+  final String categoryIcon;
+
+  @override
+  bool operator ==(Object other) =>
+      other is FocusTaskSelection &&
+      taskId == other.taskId &&
+      taskTitle == other.taskTitle &&
+      categoryId == other.categoryId &&
+      categoryTitle == other.categoryTitle &&
+      categoryIcon == other.categoryIcon;
+
+  @override
+  int get hashCode =>
+      Object.hash(taskId, taskTitle, categoryId, categoryTitle, categoryIcon);
+}
+
+@immutable
+class FocusCategoryTotal {
+  const FocusCategoryTotal({
+    required this.categoryId,
+    required this.categoryTitle,
+    required this.categoryIcon,
+    required this.totalSeconds,
+  });
+
+  final int categoryId;
+  final String categoryTitle;
+  final String categoryIcon;
+  final int totalSeconds;
+}
+
 enum CalendarProvider {
   canvas,
   googleCalendar,

@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/data/database_helper.dart';
 import 'package:momentum/data/planner_repository.dart';
+import 'package:momentum/data_models.dart';
 import 'package:momentum/state/focus_timer_state.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:path/path.dart' as p;
@@ -14,6 +16,7 @@ void main() {
   late PlannerState planner;
   late DateTime now;
   late FocusTimerState timer;
+  late FocusTaskSelection selection;
 
   setUpAll(() => sqfliteFfiInit());
 
@@ -28,6 +31,20 @@ void main() {
       repository: PlannerRepository(databaseHelper: databaseHelper),
     );
     await planner.initialize();
+    final category = await planner.addCategory(
+      TaskCategory(title: 'School', iconName: 'mi_school', items: []),
+    );
+    await planner.saveTask(
+      Task(
+        categoryId: category.id,
+        title: 'Study',
+        date: DateTime(2026, 10, 9),
+        isChecked: false,
+        time: const TimeOfDay(hour: 10, minute: 0),
+        estimatedDuration: Duration.zero,
+      ),
+    );
+    selection = planner.selectableFocusTasks.single;
     now = DateTime(2026, 10, 9, 10);
     timer = FocusTimerState(
       workMinutes: 1,
@@ -35,6 +52,7 @@ void main() {
       clock: () => now,
       startTicker: false,
     )..attachPlannerState(planner);
+    timer.selectTask(selection);
     await planner.getFocusSecondsForDate(now);
   });
 
@@ -56,6 +74,12 @@ void main() {
     expect(timer.phase, FocusPhase.rest);
     expect(timer.remainingSeconds, 55);
     expect(timer.totalFocusSecondsToday, 60);
+    await timer.flushPendingForTesting();
+    final categoryTotals = await planner.getFocusCategoryTotalsForRange(
+      now,
+      now,
+    );
+    expect(categoryTotals.single.totalSeconds, 60);
 
     now = now.add(const Duration(seconds: 55));
     await timer.tickForTesting();
@@ -80,7 +104,128 @@ void main() {
 
     expect(timer.totalFocusSecondsToday, 15);
     expect(await planner.getFocusSecondsForDate(now), 15);
+    final categoryTotals = await planner.getFocusCategoryTotalsForRange(
+      now,
+      now,
+    );
+    expect(categoryTotals.single.totalSeconds, 15);
   });
+
+  test('timer starts without a task and records focus as unassigned', () async {
+    timer.selectTask(null);
+    expect(timer.toggleRunning(), isTrue);
+    expect(timer.isRunning, isTrue);
+
+    now = now.add(const Duration(seconds: 12));
+    await timer.tickForTesting();
+    timer.toggleRunning();
+    await timer.flushPendingForTesting();
+
+    expect(await planner.getFocusSecondsForDate(now), 12);
+    final categoryTotals = await planner.getFocusCategoryTotalsForRange(
+      now,
+      now,
+    );
+    expect(categoryTotals, hasLength(1));
+    expect(categoryTotals.single.categoryId, -1);
+    expect(categoryTotals.single.categoryTitle, 'Unassigned');
+    expect(categoryTotals.single.categoryIcon, 'mi_timer');
+    expect(categoryTotals.single.totalSeconds, 12);
+  });
+
+  test('task selection stays locked while the timer is running', () {
+    expect(timer.toggleRunning(), isTrue);
+    expect(timer.selectTask(null), isFalse);
+    expect(timer.selectedTask, selection);
+    expect(timer.toggleRunning(), isTrue);
+  });
+
+  test(
+    'picker includes only incomplete categorized tasks and one repeat series',
+    () async {
+      final category = planner.categories.single;
+      final today = DateTime.now();
+      final recurring = await planner.saveTask(
+        Task(
+          categoryId: category.id,
+          title: 'Daily reading',
+          date: DateTime(today.year, today.month, today.day),
+          isChecked: false,
+          time: const TimeOfDay(hour: 9, minute: 0),
+          estimatedDuration: Duration.zero,
+          repeat: 'Daily',
+          repeatUntil: DateTime(today.year, today.month, today.day + 5),
+        ),
+      );
+      final completed = await planner.saveTask(
+        Task(
+          categoryId: category.id,
+          title: 'Already done',
+          date: DateTime(today.year, today.month, today.day),
+          isChecked: true,
+          time: const TimeOfDay(hour: 9, minute: 0),
+          estimatedDuration: Duration.zero,
+        ),
+      );
+      final unassigned = await planner.saveTask(
+        Task(
+          title: 'No category',
+          date: DateTime(today.year, today.month, today.day),
+          isChecked: false,
+          time: const TimeOfDay(hour: 9, minute: 0),
+          estimatedDuration: Duration.zero,
+        ),
+      );
+
+      final ids = planner.selectableFocusTasks
+          .map((task) => task.taskId)
+          .toList();
+      expect(ids.where((id) => id == recurring.id).length, 1);
+      expect(ids, contains(selection.taskId));
+      expect(ids, isNot(contains(completed.id)));
+      expect(ids, isNot(contains(unassigned.id)));
+    },
+  );
+
+  test(
+    'task changes while paused attribute later work to the new category',
+    () async {
+      timer.toggleRunning();
+      now = now.add(const Duration(seconds: 5));
+      await timer.tickForTesting();
+      timer.toggleRunning();
+      await timer.flushPendingForTesting();
+
+      final otherCategory = await planner.addCategory(
+        TaskCategory(title: 'Personal', iconName: 'mi_person', items: []),
+      );
+      await planner.saveTask(
+        Task(
+          categoryId: otherCategory.id,
+          title: 'Read',
+          date: DateTime(2026, 10, 9),
+          isChecked: false,
+          time: const TimeOfDay(hour: 11, minute: 0),
+          estimatedDuration: Duration.zero,
+        ),
+      );
+      final nextSelection = planner.selectableFocusTasks.singleWhere(
+        (task) => task.categoryId == otherCategory.id,
+      );
+      expect(timer.selectTask(nextSelection), isTrue);
+      timer.toggleRunning();
+      now = now.add(const Duration(seconds: 4));
+      await timer.tickForTesting();
+      timer.toggleRunning();
+      await timer.flushPendingForTesting();
+
+      final totals = await planner.getFocusCategoryTotalsForRange(now, now);
+      expect(
+        {for (final total in totals) total.categoryTitle: total.totalSeconds},
+        {'School': 5, 'Personal': 4},
+      );
+    },
+  );
 
   test(
     'preset selection applies immediately and resets the current phase',
@@ -112,6 +257,7 @@ void main() {
         clock: () => now,
         startTicker: false,
       )..attachPlannerState(planner);
+      timer.selectTask(selection);
       await planner.getFocusSecondsForDate(now);
 
       timer.toggleRunning();
@@ -122,6 +268,11 @@ void main() {
       expect(await planner.getFocusSecondsForDate(DateTime(2026, 10, 9)), 2);
       expect(await planner.getFocusSecondsForDate(DateTime(2026, 10, 10)), 3);
       expect(timer.totalFocusSecondsToday, 3);
+      final categoryTotals = await planner.getFocusCategoryTotalsForRange(
+        DateTime(2026, 10, 9),
+        DateTime(2026, 10, 10),
+      );
+      expect(categoryTotals.single.totalSeconds, 5);
     },
   );
 }

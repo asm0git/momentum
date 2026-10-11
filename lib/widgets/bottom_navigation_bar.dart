@@ -144,10 +144,8 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
           Positioned.fill(
             child: AnimatedBuilder(
               animation: _popupAnimation,
-              builder: (context, child) => Opacity(
-                opacity: _popupAnimation.value,
-                child: child,
-              ),
+              builder: (context, child) =>
+                  Opacity(opacity: _popupAnimation.value, child: child),
               child: const BlurredPopupBarrier(
                 key: ValueKey('add-item-backdrop'),
               ),
@@ -257,12 +255,18 @@ class _NavigationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = Image.asset(
-      'assets/img/${selected ? 'selected' : 'unselected'}/${item.iconName}.png',
-      width: AppSpacing.navigationIconSize,
-      height: AppSpacing.navigationIconSize,
-      fit: BoxFit.contain,
-    );
+    final icon = item == AppDestination.insights
+        ? Icon(
+            selected ? Icons.insights : Icons.insights_outlined,
+            size: AppSpacing.navigationIconSize,
+            color: selected ? AppColors.onPrimary : primary,
+          )
+        : Image.asset(
+            'assets/img/${selected ? 'selected' : 'unselected'}/${item.iconName}.png',
+            width: AppSpacing.navigationIconSize,
+            height: AppSpacing.navigationIconSize,
+            fit: BoxFit.contain,
+          );
 
     return DecoratedBox(
       decoration: BoxDecoration(

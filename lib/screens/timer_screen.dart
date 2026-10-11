@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
+import '../data_models.dart';
 import '../navigation_destinations.dart';
 import '../state/focus_timer_state.dart';
 import '../state/planner_state.dart';
@@ -14,6 +15,7 @@ import '../widgets/item_actions.dart';
 import '../widgets/primary_app_bar.dart';
 import '../widgets/task_list_container.dart';
 import '../widgets/task_widget.dart';
+import '../widgets/selector.dart' as app_selector;
 
 // Timer screen with horizontally scrolling presets and the clock.
 class TimerScreen extends StatefulWidget {
@@ -24,6 +26,15 @@ class TimerScreen extends StatefulWidget {
 }
 
 class _TimerScreenState extends State<TimerScreen> {
+  final _scrollController = ScrollController();
+  bool _selectionClearQueued = false;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final planner = context.watch<PlannerState>();
@@ -37,6 +48,23 @@ class _TimerScreenState extends State<TimerScreen> {
             .firstOrNull
             ?.iconName,
     };
+    final focusTasks = planner.selectableFocusTasks;
+    final selectedTask = focusTimer.selectedTask;
+    final selectedIsAvailable =
+        selectedTask != null && focusTasks.any((task) => task == selectedTask);
+    if (!focusTimer.isRunning && selectedTask != null && !selectedIsAvailable) {
+      _queueSelectionClear(focusTimer);
+    }
+    final selectorTasks = [
+      ...focusTasks,
+      if (focusTimer.isRunning &&
+          selectedTask != null &&
+          !focusTasks.any((task) => task == selectedTask))
+        selectedTask,
+    ];
+    final displaySelection = selectedIsAvailable || focusTimer.isRunning
+        ? selectedTask
+        : null;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -49,6 +77,7 @@ class _TimerScreenState extends State<TimerScreen> {
         children: [
           Positioned.fill(
             child: SingleChildScrollView(
+              controller: _scrollController,
               child: Padding(
                 padding: const EdgeInsets.only(
                   top: AppSpacing.md,
@@ -97,7 +126,13 @@ class _TimerScreenState extends State<TimerScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
-                    const SizedBox(width: double.infinity, child: Clock()),
+                    SizedBox(
+                      width: double.infinity,
+                      child: Clock(
+                        onToggleRunning: () =>
+                            _handleClockTap(planner, focusTimer),
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.md),
                     _blurWhenRunning(
                       focusTimer.isRunning,
@@ -108,11 +143,65 @@ class _TimerScreenState extends State<TimerScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            Container(
+                              height: AppSpacing.popupFieldHeight,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadii.popup,
+                                ),
+                              ),
+                              child: app_selector.Selector(
+                                key: const ValueKey(
+                                  'timer-focus-task-selector',
+                                ),
+                                options: [
+                                  for (final task in selectorTasks)
+                                    app_selector.SelectorOption(
+                                      value: _selectionValue(task),
+                                      label:
+                                          '${task.taskTitle} (${task.categoryTitle})',
+                                      iconName: task.categoryIcon,
+                                    ),
+                                ],
+                                selectedValue: displaySelection == null
+                                    ? null
+                                    : _selectionValue(displaySelection),
+                                placeholder: focusTasks.isEmpty
+                                    ? 'No eligible tasks'
+                                    : 'Select a task',
+                                onChanged: focusTimer.isRunning
+                                    ? null
+                                    : (value) {
+                                        final selection = focusTasks
+                                            .where(
+                                              (task) =>
+                                                  _selectionValue(task) ==
+                                                  value,
+                                            )
+                                            .firstOrNull;
+                                        focusTimer.selectTask(selection);
+                                      },
+                                isExpanded: true,
+                              ),
+                            ),
+                            if (focusTasks.isEmpty) ...[
+                              const SizedBox(height: AppSpacing.xxs),
+                              Text(
+                                'Without a task, focus time is recorded as Unassigned in Insights.',
+                                style: Theme.of(context).textTheme.labelMedium
+                                    ?.copyWith(color: AppColors.disabled),
+                              ),
+                            ],
+                            const SizedBox(height: AppSpacing.xs),
                             Text(
                               'Today, $dateLabel',
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
-                            const SizedBox(height: AppSpacing.xs),
+                            const SizedBox(height: AppSpacing.sm),
                             if (agendaIcons.isNotEmpty)
                               TaskListContainer(
                                 items: agendaIcons.keys.toList(),
@@ -163,6 +252,29 @@ class _TimerScreenState extends State<TimerScreen> {
       ),
     );
   }
+
+  void _queueSelectionClear(FocusTimerState timer) {
+    if (_selectionClearQueued) return;
+    _selectionClearQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _selectionClearQueued = false;
+      if (mounted && !timer.isRunning) timer.selectTask(null);
+    });
+  }
+
+  void _handleClockTap(PlannerState planner, FocusTimerState timer) {
+    if (!timer.isRunning) {
+      final selection = timer.selectedTask;
+      final isAvailable =
+          selection != null &&
+          planner.selectableFocusTasks.any((task) => task == selection);
+      if (selection != null && !isAvailable) timer.selectTask(null);
+    }
+    timer.toggleRunning();
+  }
+
+  String _selectionValue(FocusTaskSelection selection) =>
+      '${selection.taskId}:${selection.categoryId}:${selection.taskTitle}:${selection.categoryTitle}';
 
   Widget _preset(FocusTimerState timer, int workMinutes, int breakMinutes) =>
       FocusPreset(

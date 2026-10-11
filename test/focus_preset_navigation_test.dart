@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/app_theme.dart';
+import 'package:momentum/data_models.dart';
 import 'package:momentum/screens/dashboard_screen.dart';
 import 'package:momentum/screens/timer_screen.dart';
 import 'package:momentum/state/focus_timer_state.dart';
@@ -44,6 +45,15 @@ void main() {
     expect(focusTimer.phase, FocusPhase.work);
     expect(focusTimer.remainingSeconds, 45 * 60);
 
+    focusTimer.selectTask(
+      const FocusTaskSelection(
+        taskId: 1,
+        taskTitle: 'Sample task',
+        categoryId: 1,
+        categoryTitle: 'Study',
+        categoryIcon: 'mi_school',
+      ),
+    );
     focusTimer.toggleRunning();
     await tester.pump();
     expect(find.byType(ImageFiltered), findsNWidgets(3));
@@ -54,5 +64,38 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  testWidgets('timer starts without a task and has no choose-task popup', (
+    tester,
+  ) async {
+    late FocusTimerState focusTimer;
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => PlannerState()),
+          ChangeNotifierProvider(
+            create: (_) => focusTimer = FocusTimerState(startTicker: false),
+          ),
+        ],
+        child: MaterialApp(theme: appTheme, home: const TimerScreen()),
+      ),
+    );
+    await tester.pump();
+
+    final taskSelector = find.byKey(
+      const ValueKey('timer-focus-task-selector'),
+    );
+    expect(taskSelector, findsOneWidget);
+    final selectorRect = tester.getRect(taskSelector);
+    final dateHeaderRect = tester.getRect(find.textContaining('Today, '));
+    expect(selectorRect.bottom, lessThan(dateHeaderRect.top));
+
+    await tester.tap(find.text('Tap to start'));
+    await tester.pumpAndSettle();
+
+    expect(focusTimer.isRunning, isTrue);
+    expect(find.text('Choose a task'), findsNothing);
+    expect(find.textContaining('Unassigned in Insights'), findsOneWidget);
   });
 }
