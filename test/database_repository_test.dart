@@ -509,7 +509,7 @@ void main() {
       expect(account.categoryId, isNotNull);
       expect(
         (await repository.getCategory(account.categoryId!))?.iconName,
-        'mi_school',
+        CalendarProvider.canvas.categoryIcon,
       );
       expect(task.srcPlatform, 'canvas');
       expect(task.externalId, 'assignment:course_8:3');

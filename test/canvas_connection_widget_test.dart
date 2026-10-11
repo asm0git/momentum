@@ -197,7 +197,7 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(find.widgetWithText(FilledButton, 'Disconnect'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     await tester.runAsync(() async {
       final timeout = DateTime.now().add(const Duration(seconds: 5));
       while (planner.isCanvasConnected && DateTime.now().isBefore(timeout)) {
