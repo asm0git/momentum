@@ -4,6 +4,26 @@ One entry per week, newest at the top, written **during** that week. Five minute
 each. They are the record of how the project actually went, and they make your
 final reflection almost write itself.
 
+# Week of: October 4, 2026
+
+## My goal this week
+This week, I wanted to move Momentum from a mostly visual prototype into an app that could actually be used. My main goals were to finish the main screens, make tasks and events save properly, and get the timer working beyond its appearance. I also wanted to begin connecting external calendars and prepare the app to run on the web.
+
+## What I did
+I polished the To-Do screen, completed the main Dashboard and Timer layouts, and built out the calendar. I also added a shared popup for creating and editing tasks and events, then connected the planner to SQLite so it could save real data instead of relying on mock data. Getting the database to work in the browser took another round of fixes, but I eventually got web storage working through IndexedDB.
+
+I added recurring tasks and events and connected the focus timer to shared state so it could keep running when moving between screens. I also worked on category management, task editing and deletion, and the date and time pickers. Toward the end of the week, I started the Google Calendar, Canvas, and Microsoft calendar connection flows using a Cloudflare Worker, and worked on the deployment configuration. These integrations were still only partly functional. Alongside development, I organized the mockup and design system assets and updated the related documentation.
+
+## What blocked me
+The biggest technical problem was getting SQLite to work on the web. The initial database setup did not work the same way in the browser as it would on a mobile device, so I had to work through the web adapter and its supporting files. Recurrence and timer behavior also required more attention because changes needed to stay consistent across several screens.
+
+Calendar integration introduced a different kind of blocker. Canvas required administrator permission to register the app on the university's platform, while Microsoft registration was restricted by the university-managed Entra tenant. These were permissions I could not fix through the app's code. I also encountered Cloudflare build and configuration errors, which took time away from polishing the remaining features.
+
+## What I learned
+I learned that completing a screen visually is only one part of making it work. Saving data, handling recurring items, and keeping a timer active across navigation required separating the app's state and database logic from its widgets. Having shared logic made it easier to keep the Dashboard, To-Do, Calendar, and Timer screens consistent.
+
+I also learned that external integrations depend on more than writing the connection flow. Provider permissions, OAuth registration, and deployment settings can prevent a feature from working even when its interface is already built. This helped me become more realistic about the project's scope and more careful about describing which features were ready and which still had limitations.
+
 # Week of: September 27, 2026
 
 ## My goal this week

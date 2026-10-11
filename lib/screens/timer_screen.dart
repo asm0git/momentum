@@ -170,9 +170,7 @@ class _TimerScreenState extends State<TimerScreen> {
                                 selectedValue: displaySelection == null
                                     ? null
                                     : _selectionValue(displaySelection),
-                                placeholder: focusTasks.isEmpty
-                                    ? 'No eligible tasks'
-                                    : 'Select a task',
+                                placeholder: 'Select a task',
                                 onChanged: focusTimer.isRunning
                                     ? null
                                     : (value) {
@@ -188,15 +186,14 @@ class _TimerScreenState extends State<TimerScreen> {
                                 isExpanded: true,
                               ),
                             ),
-                            if (focusTasks.isEmpty) ...[
-                              const SizedBox(height: AppSpacing.xxs),
-                              Text(
-                                'Without a task, focus time is recorded as Unassigned in Insights.',
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(color: AppColors.disabled),
-                              ),
-                            ],
-                            const SizedBox(height: AppSpacing.xs),
+                            const SizedBox(height: AppSpacing.sm),
+                            Text(
+                              'Select a task to track focus time by category. '
+                              "Without one, it's recorded as Unassigned in Insights.",
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(color: AppColors.disabled),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
                             Text(
                               'Today, $dateLabel',
                               style: Theme.of(context).textTheme.titleMedium,

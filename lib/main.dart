@@ -8,7 +8,7 @@
 // StatefulWidget, setState, Scaffold, AppBar, Column, Card, FilledButton.
 
 import 'package:device_preview/device_preview.dart';
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -32,6 +32,10 @@ import 'widgets/responsive_app_viewport.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final completed = await OnboardingPreferences.isComplete();
+  final showDebugDemoData =
+      kIsWeb &&
+      kDebugMode &&
+      await OnboardingPreferences.consumeDebugDemoDataPreview();
   final initialRoute = resolveStartupRoute(
     setupComplete: completed,
     location: Uri.base,
@@ -41,7 +45,11 @@ Future<void> main() async {
       enabled: !kReleaseMode,
       builder: (context) => MultiProvider(
         providers: [
-          ChangeNotifierProvider(create: (_) => PlannerState()..initialize()),
+          ChangeNotifierProvider(
+            create: (_) =>
+                PlannerState(includeDebugDemoData: showDebugDemoData)
+                  ..initialize(),
+          ),
           ChangeNotifierProxyProvider<PlannerState, FocusTimerState>(
             create: (_) => FocusTimerState(),
             update: (_, planner, timer) => timer!..attachPlannerState(planner),

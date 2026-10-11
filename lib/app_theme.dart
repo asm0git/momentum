@@ -128,7 +128,7 @@ final appTheme = ThemeData(
     labelMedium: TextStyle(
       fontFamily: 'SFProText',
       fontSize: 12,
-      fontWeight: FontWeight.w500,
+      fontWeight: FontWeight.w400,
       letterSpacing: -0.6,
       height: 1,
     ),

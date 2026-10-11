@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../data/debug_demo_data.dart';
 import '../data/planner_repository.dart';
 import '../data/recurrence.dart';
 import '../data_models.dart';
@@ -13,6 +14,7 @@ class PlannerState extends ChangeNotifier {
     CanvasBackend? canvasBackend,
     ProviderCalendarBackend? calendarBackend,
     bool? autoSyncCanvasOnStartup,
+    this.includeDebugDemoData = false,
   }) : _repository = repository ?? PlannerRepository(),
        _canvasBackend = canvasBackend ?? CanvasBackendClient(),
        _calendarBackend =
@@ -26,6 +28,7 @@ class PlannerState extends ChangeNotifier {
   final CanvasBackend _canvasBackend;
   final ProviderCalendarBackend _calendarBackend;
   final bool _autoSyncCanvasOnStartup;
+  final bool includeDebugDemoData;
   List<TaskCategory> _categories = [];
   List<PlannerItem> _items = [];
   Set<String> _taskOccurrenceCompletionKeys = {};
@@ -245,6 +248,11 @@ class PlannerState extends ChangeNotifier {
     final occurrenceCompletions = await _repository
         .getTaskOccurrenceCompletionKeys();
     final accounts = await _repository.getLinkedAccounts();
+    if (includeDebugDemoData) {
+      final demoCategory = DebugDemoData.googleCalendarCategory();
+      categories.add(demoCategory);
+      items.addAll(demoCategory.items);
+    }
     _categories = categories;
     _items = items;
     _taskOccurrenceCompletionKeys = occurrenceCompletions;
@@ -357,18 +365,72 @@ class PlannerState extends ChangeNotifier {
   Future<List<Task>> getTasksForDate(DateTime date) =>
       _repository.getTasksForDate(date);
 
-  Future<int> getFocusSecondsForDate(DateTime date) =>
-      _repository.getFocusSecondsForDate(date);
+  Future<int> getFocusSecondsForDate(DateTime date) async {
+    final stored = await _repository.getFocusSecondsForDate(date);
+    if (!includeDebugDemoData) return stored;
+    final demo = DebugDemoData.focusByDay(
+      firstDay: date,
+      lastDay: date,
+    )[dateOnly(date)];
+    return stored +
+        (demo?.fold<int>(0, (sum, total) => sum + total.totalSeconds) ?? 0);
+  }
 
   Future<Map<DateTime, int>> getFocusTotalsForRange(
     DateTime firstDay,
     DateTime lastDay,
-  ) => _repository.getFocusTotalsForRange(firstDay, lastDay);
+  ) async {
+    final totals = await _repository.getFocusTotalsForRange(firstDay, lastDay);
+    if (!includeDebugDemoData) return totals;
+    final demo = DebugDemoData.focusByDay(firstDay: firstDay, lastDay: lastDay);
+    for (final entry in demo.entries) {
+      totals.update(
+        entry.key,
+        (seconds) =>
+            seconds +
+            entry.value.fold<int>(0, (sum, row) => sum + row.totalSeconds),
+        ifAbsent: () =>
+            entry.value.fold<int>(0, (sum, row) => sum + row.totalSeconds),
+      );
+    }
+    return totals;
+  }
 
   Future<List<FocusCategoryTotal>> getFocusCategoryTotalsForRange(
     DateTime firstDay,
     DateTime lastDay,
-  ) => _repository.getFocusCategoryTotalsForRange(firstDay, lastDay);
+  ) async {
+    final stored = await _repository.getFocusCategoryTotalsForRange(
+      firstDay,
+      lastDay,
+    );
+    if (!includeDebugDemoData) return stored;
+    final totals = <int, FocusCategoryTotal>{
+      for (final total in stored) total.categoryId: total,
+    };
+    final demo = DebugDemoData.focusByDay(firstDay: firstDay, lastDay: lastDay);
+    for (final rows in demo.values) {
+      for (final row in rows) {
+        final current = totals[row.categoryId];
+        totals[row.categoryId] = FocusCategoryTotal(
+          categoryId: row.categoryId,
+          categoryTitle: row.categoryTitle,
+          categoryIcon: row.categoryIcon,
+          totalSeconds: row.totalSeconds + (current?.totalSeconds ?? 0),
+        );
+      }
+    }
+    final result = totals.values.toList()
+      ..sort((first, second) {
+        final byDuration = second.totalSeconds.compareTo(first.totalSeconds);
+        return byDuration != 0
+            ? byDuration
+            : first.categoryTitle.toLowerCase().compareTo(
+                second.categoryTitle.toLowerCase(),
+              );
+      });
+    return result;
+  }
 
   Future<void> addFocusSeconds(
     DateTime date,
