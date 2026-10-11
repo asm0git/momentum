@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -24,9 +26,19 @@ class _TodoScreenState extends State<TodoScreen> {
   final _scrollController = ScrollController();
   final _categoryKeys = <int, GlobalKey>{};
   bool _scrollScheduled = false;
+  Timer? _pastItemRefreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pastItemRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
+    _pastItemRefreshTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -76,7 +88,7 @@ class _TodoScreenState extends State<TodoScreen> {
               );
               final items = categoryId == null
                   ? const <PlannerItem>[]
-                  : planner.itemsForCategory(categoryId);
+                  : planner.todoItemsForCategory(categoryId);
               final pendingCount = items
                   .where(
                     (item) =>

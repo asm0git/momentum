@@ -8,7 +8,6 @@ import 'package:momentum/data/database_helper.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
 import 'package:momentum/screens/add_calendars_screen.dart';
-import 'package:momentum/screens/canvas_connection_screen.dart';
 import 'package:momentum/services/canvas_backend_client.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:provider/provider.dart';
@@ -45,7 +44,7 @@ void main() {
     await tempDirectory.delete(recursive: true);
   });
 
-  testWidgets('Canvas expands inline and validates its site URL', (
+  testWidgets('Canvas expands inline and validates its feed link', (
     tester,
   ) async {
     _setIPhone13Viewport(tester);
@@ -57,11 +56,14 @@ void main() {
     await tester.tap(find.text('Canvas'));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.text('Connect with Canvas'), findsOneWidget);
+    expect(find.text('Connect Canvas calendar'), findsOneWidget);
 
-    await tester.tap(find.text('Connect with Canvas'));
+    await tester.tap(find.text('Connect Canvas calendar'));
     await tester.pump();
-    expect(find.text('Enter a valid Canvas site URL.'), findsOneWidget);
+    expect(
+      find.text('Paste a valid HTTPS .ics link published by Canvas.'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -72,47 +74,41 @@ void main() {
 
     await tester.tap(find.text('Google Calendar'));
     await tester.pumpAndSettle();
-    expect(find.text('Connect with Google Calendar'), findsOneWidget);
+    expect(find.text('Connect Google Calendar'), findsOneWidget);
 
     await tester.tap(find.text('Outlook'));
     await tester.pumpAndSettle();
-    expect(find.text('Connect with Outlook'), findsOneWidget);
-    expect(find.text('Connect with Google Calendar'), findsNothing);
+    expect(find.text('Connect Outlook calendar'), findsOneWidget);
+    expect(find.text('Connect Google Calendar'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('OAuth callback expands the connected provider panel', (
+  testWidgets('Google Calendar connects with its published ICS link', (
     tester,
   ) async {
-    backend.providerStatuses[CalendarProvider.googleCalendar] =
-        CanvasConnectionStatus(
-          connected: true,
-          providerUrl: 'https://google.example.test',
-          accountName: 'Student',
-          remoteUserId: '18',
-          lastSyncTime: DateTime.now(),
-        );
-    await tester.runAsync(() async {
-      await planner.refreshProviderStatus(CalendarProvider.googleCalendar);
-      await planner.syncProvider(CalendarProvider.googleCalendar);
-    });
-
-    await tester.pumpWidget(
-      _app(
-        planner,
-        home: AddCalendarsScreen(
-          callbackUri: Uri.parse(
-            'https://momentum.test/calendars?calendar_provider=google&google_connected=1',
-          ),
-        ),
-      ),
-    );
+    await tester.pumpWidget(_app(planner, home: const AddCalendarsScreen()));
+    await tester.tap(find.text('Google Calendar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Google Calendar connected.'), findsOneWidget);
-    expect(find.text('Manage settings'), findsOneWidget);
+    expect(
+      find.textContaining('secret address in iCal format'),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byType(TextField),
+      'https://calendar.google.com/calendar/ical/a/private/b/basic.ics',
+    );
+    await tester.tap(find.text('Connect Google Calendar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Google Calendar connected and synced.'), findsOneWidget);
     expect(find.text('Sync now'), findsOneWidget);
-    expect(find.text('Connect with Canvas'), findsNothing);
+    expect(find.text('Disconnect'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('calendar-sync-success-google')),
+      findsOneWidget,
+    );
+    expect(find.text('Connect Canvas calendar'), findsNothing);
   });
 
   testWidgets('opening a connected stale provider syncs automatically', (
@@ -207,7 +203,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(planner.isCanvasConnected, isFalse);
     expect(planner.items.whereType<Task>().single.title, 'Biology quiz');
-    expect(find.text('Connect with Canvas'), findsOneWidget);
+    expect(find.text('Connect Canvas calendar'), findsOneWidget);
   });
 
   testWidgets('inline sync shows progress and reports provider errors', (
@@ -244,68 +240,6 @@ void main() {
     await tester.pump();
     await _waitForCanvasSync(tester, planner);
     expect(find.text('Calendar service unavailable.'), findsOneWidget);
-  });
-
-  testWidgets('Manage settings retains category editing and replace action', (
-    tester,
-  ) async {
-    backend.connectionStatus = CanvasConnectionStatus(
-      connected: true,
-      providerUrl: 'https://canvas.school.edu',
-      accountName: 'Student',
-      remoteUserId: '18',
-      lastSyncTime: DateTime.now(),
-    );
-    backend.nextCanvasSync = _payloadForTest(
-      taskTitle: 'Old biology quiz',
-      externalId: 'assignment:course_1:8',
-    );
-    await tester.runAsync(() async {
-      await planner.refreshCanvasStatus();
-      await planner.syncCanvas();
-    });
-
-    await tester.pumpWidget(
-      _app(
-        planner,
-        home: const AddCalendarsScreen(),
-        routes: {'/canvas': (_) => const CanvasConnectionScreen()},
-      ),
-    );
-    await tester.tap(find.text('Canvas'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Manage settings'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Canvas category'), findsOneWidget);
-    expect(find.text('Replace imported items'), findsOneWidget);
-    expect(find.text('Sync now'), findsNothing);
-    expect(find.text('Disconnect'), findsNothing);
-
-    await tester.enterText(find.byType(TextField), 'Classes');
-    await tester.tap(find.byTooltip('Save category name'));
-    await tester.pump();
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 100)),
-    );
-    await tester.pumpAndSettle();
-    expect(planner.categories.single.title, 'Classes');
-
-    backend.nextCanvasSync = _payloadForTest(
-      taskTitle: 'New biology quiz',
-      externalId: 'assignment:course_1:8',
-    );
-    await tester.tap(find.text('Replace imported items'));
-    await tester.pumpAndSettle();
-    expect(
-      find.textContaining('Momentum will remove Canvas imports'),
-      findsOneWidget,
-    );
-    await tester.tap(find.text('Replace and sync'));
-    await tester.pump();
-    await _waitForCanvasSync(tester, planner);
-    expect(planner.items.whereType<Task>().single.title, 'New biology quiz');
-    expect(find.text('Imported items replaced.'), findsOneWidget);
   });
 }
 
@@ -350,14 +284,11 @@ CanvasSyncPayload _payloadForTest({
   events: const [],
 );
 
-Widget _app(
-  PlannerState planner, {
-  required Widget home,
-  Map<String, WidgetBuilder> routes = const {},
-}) => ChangeNotifierProvider<PlannerState>.value(
-  value: planner,
-  child: MaterialApp(theme: appTheme, home: home, routes: routes),
-);
+Widget _app(PlannerState planner, {required Widget home}) =>
+    ChangeNotifierProvider<PlannerState>.value(
+      value: planner,
+      child: MaterialApp(theme: appTheme, home: home),
+    );
 
 class _FakeCalendarBackend implements CanvasBackend, ProviderCalendarBackend {
   CanvasConnectionStatus connectionStatus = const CanvasConnectionStatus(
@@ -381,6 +312,19 @@ class _FakeCalendarBackend implements CanvasBackend, ProviderCalendarBackend {
   @override
   Uri providerOAuthStartUri(CalendarProvider provider, {String? siteUrl}) =>
       Uri.parse('https://calendar.example.test/${provider.key}/oauth');
+
+  @override
+  Future<void> connectCalendarIcsFeed(
+    CalendarProvider provider,
+    String url,
+  ) async {
+    providerStatuses[provider] = CanvasConnectionStatus(
+      connected: true,
+      providerUrl: '${provider.key}-published-ics',
+      accountName: '${provider.title} published calendar',
+      remoteUserId: 'test-feed',
+    );
+  }
 
   @override
   Future<CanvasConnectionStatus> status() async => connectionStatus;

@@ -40,6 +40,28 @@ void main() {
     await tempDirectory.delete(recursive: true);
   });
 
+  testWidgets('focus heatmap ends at the current date', (tester) async {
+    await tester.pumpWidget(
+      ChangeNotifierProvider<PlannerState>.value(
+        value: planner,
+        child: MaterialApp(theme: appTheme, home: const InsightsScreen()),
+      ),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    String cellKey(DateTime date) =>
+        'insights-heatmap-cell-${date.toIso8601String().substring(0, 10)}';
+
+    expect(find.byKey(ValueKey(cellKey(today))), findsOneWidget);
+    expect(find.byKey(ValueKey(cellKey(tomorrow))), findsNothing);
+  });
+
   testWidgets(
     'weekly range navigation and category chart react to focus data',
     (tester) async {

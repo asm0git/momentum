@@ -8,6 +8,7 @@ class AppColors {
   static const surface = Color(0xFFF4F4F4);
   static const onSurface = Color(0xFF1E293B);
   static const error = Color(0xFF961212);
+  static const success = Color(0xFF2E7D32);
   static const transparent = Colors.transparent;
   static const navigationBlurMaskStart = Colors.transparent;
   static const navigationBlurMaskEnd = Colors.black;
@@ -61,9 +62,11 @@ class AppSpacing {
   static const double floatingGroupBottom = 8;
   static const double floatingGroupGap = 12;
   static const double dashboardCategoryWidth = base * 20;
-  static const double dashboardCategoryPreviewHeight = 24;
+  static const double dashboardCategoryHeight = base * 14;
+  static const double dashboardCategoryHeaderHeight = base * 5;
+  static const double dashboardCategoryPreviewHeight = base * 4;
   static const double focusPresetWidth = base * 23;
-  static const double popupFieldHeight = 44;
+  static const double popupFieldHeight = base*5;
 }
 
 class AppRadii {
@@ -116,21 +119,28 @@ final appTheme = ThemeData(
       fontSize: 24,
       fontWeight: FontWeight.w600,
       height: 1.2,
-      letterSpacing: -0.8,
+      letterSpacing: -0.6,
     ),
     bodyMedium: TextStyle(
       fontFamily: 'SFProText',
       fontSize: 16,
       fontWeight: FontWeight.w600,
       letterSpacing: -0.6,
-      height: 1.2,
+      height: 1.2
+    ),
+    bodySmall: TextStyle(
+      fontFamily: 'SFProText',
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      letterSpacing: -0.7,
+      height: 1.1
     ),
     labelMedium: TextStyle(
       fontFamily: 'SFProText',
       fontSize: 12,
       fontWeight: FontWeight.w400,
       letterSpacing: -0.6,
-      height: 1,
+      height: 1.1,
     ),
     labelSmall: TextStyle(
       fontFamily: 'SFProRounded',

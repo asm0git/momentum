@@ -10,39 +10,39 @@ the final app where it differs from those earlier designs.
 but the mockup itself shows the welcome screen and a Get started button. The
 final app does not require a planner account.
 
-![Welcome and Get started mockup](../assets/02-mockup/%5B1%5D%20Login%20and%20Auth.jpg)
+![Welcome and Get started mockup](assets/02-mockup/%5B1%5D%20Login%20and%20Auth.jpg)
 
 **[1a] Add calendars** — The mockup shows the optional provider setup step.
 
-![Add calendars mockup](../assets/02-mockup/%5B1a%5D%20Login%20and%20Auth.jpg)
+![Add calendars mockup](assets/02-mockup/%5B1a%5D%20Login%20and%20Auth.jpg)
 
 **[2] Dashboard**
 
-![Dashboard mockup](../assets/02-mockup/%5B2%5D%20Dashboard.jpg)
+![Dashboard mockup](assets/02-mockup/%5B2%5D%20Dashboard.jpg)
 
 **[3] Calendar**
 
-![Calendar mockup](../assets/02-mockup/%5B3%5D%20Calendar.jpg)
+![Calendar mockup](assets/02-mockup/%5B3%5D%20Calendar.jpg)
 
 **[4] Timer**
 
-![Timer mockup](../assets/02-mockup/%5B4%5D%20Timer.jpg)
+![Timer mockup](assets/02-mockup/%5B4%5D%20Timer.jpg)
 
 **[5] AI Planner — original concept, replaced by Insights in the final app**
 
-![Original AI Planner mockup](../assets/02-mockup/%5B5%5D%20AI%20Planner.jpg)
+![Original AI Planner mockup](assets/02-mockup/%5B5%5D%20AI%20Planner.jpg)
 
 **[6] To-Do — expanded and condensed category views**
 
-![Expanded To-Do mockup](../assets/02-mockup/%5B6%5D%20To-Do.jpg)
+![Expanded To-Do mockup](assets/02-mockup/%5B6%5D%20To-Do.jpg)
 
-![Condensed To-Do mockup](../assets/02-mockup/%5B6%5D%20To-Do%20Condensed.jpg)
+![Condensed To-Do mockup](assets/02-mockup/%5B6%5D%20To-Do%20Condensed.jpg)
 
 **[7] New Task and New Event**
 
-![New Task mockup](../assets/02-mockup/%5B7%5D%20New%20Task.jpg)
+![New Task mockup](assets/02-mockup/%5B7%5D%20New%20Task.jpg)
 
-![New Event mockup](../assets/02-mockup/%5B7%5D%20New%20Event.jpg)
+![New Event mockup](assets/02-mockup/%5B7%5D%20New%20Event.jpg)
 
 ## Wireframes
 
@@ -51,37 +51,37 @@ files. It shows the original proposal flow: account setup, optional calendar
 setup, the main screens, and task/event creation. The original Login/Auth and
 AI Planner concepts are called out because they are not part of the final app.
 
-![Flow diagram rendered from the supplied wireframe files](../assets/02-wireframe/flow-diagram.png)
+![Flow diagram rendered from the supplied wireframe files](assets/02-wireframe/flow-diagram.png)
 
 **[1] Login and Auth — original wireframe**
 
-![Login and Auth wireframe](../assets/02-wireframe/%5B1%5D%20Login%20and%20Auth.png)
+![Login and Auth wireframe](assets/02-wireframe/%5B1%5D%20Login%20and%20Auth.png)
 
 **[1a] Add calendars**
 
-![Add calendars wireframe](../assets/02-wireframe/%5B1a%5D%20Add%20calendars.png)
+![Add calendars wireframe](assets/02-wireframe/%5B1a%5D%20Add%20calendars.png)
 
 **[2] Dashboard**
 
-![Dashboard wireframe](../assets/02-wireframe/%5B2%5D%20Dashboard.png)
+![Dashboard wireframe](assets/02-wireframe/%5B2%5D%20Dashboard.png)
 
 **[3] Calendar**
 
-![Calendar wireframe](../assets/02-wireframe/%5B3%5D%20Calendar.png)
+![Calendar wireframe](assets/02-wireframe/%5B3%5D%20Calendar.png)
 
 **[5] AI Planner — original concept, replaced by Insights in the final app**
 
-![Original AI Planner wireframe](../assets/02-wireframe/%5B5%5D%20AI%20Planner.png)
+![Original AI Planner wireframe](assets/02-wireframe/%5B5%5D%20AI%20Planner.png)
 
 **[6] To-Do**
 
-![To-Do wireframe](../assets/02-wireframe/%5B6%5D%20To-do.png)
+![To-Do wireframe](assets/02-wireframe/%5B6%5D%20To-do.png)
 
 **[7] New Task and New Event**
 
-![New Task wireframe](../assets/02-wireframe/%5B7%5D%20New%20Task.png)
+![New Task wireframe](assets/02-wireframe/%5B7%5D%20New%20Task.png)
 
-![New Event wireframe](../assets/02-wireframe/%5B7%5D%20New%20Event.png)
+![New Event wireframe](assets/02-wireframe/%5B7%5D%20New%20Event.png)
 
 The supplied wireframes do not include separate Timer or Insights screens. The
 final app starts with Welcome, offers optional calendar setup, and then opens

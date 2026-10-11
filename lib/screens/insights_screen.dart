@@ -64,7 +64,8 @@ class _InsightsScreenState extends State<InsightsScreen> {
     if (mounted) setState(() => _isLoading = true);
     final start = _weekStart;
     final end = start.add(const Duration(days: 6));
-    final currentWeek = _mondayOf(DateTime.now());
+    final today = dateOnly(DateTime.now());
+    final currentWeek = _mondayOf(today);
     final heatStart = currentWeek.subtract(const Duration(days: 51 * 7));
     try {
       final weekTotals = await planner.getFocusTotalsForRange(start, end);
@@ -74,7 +75,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
       );
       final heatmapTotals = await planner.getFocusTotalsForRange(
         heatStart,
-        currentWeek.add(const Duration(days: 6)),
+        today,
       );
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
@@ -413,7 +414,8 @@ class _FocusHeatmap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentWeek = _mondayOf(DateTime.now());
+    final today = dateOnly(DateTime.now());
+    final currentWeek = _mondayOf(today);
     final start = currentWeek.subtract(const Duration(days: 51 * 7));
     final textTheme = Theme.of(context).textTheme;
     final columns = List<DateTime>.generate(
@@ -473,12 +475,17 @@ class _FocusHeatmap extends StatelessWidget {
                     ),
                   ),
                   for (final week in columns)
-                    _HeatmapCell(
-                      date: week.add(Duration(days: weekday)),
-                      seconds:
-                          totals[dateOnly(week.add(Duration(days: weekday)))] ??
-                          0,
-                    ),
+                    if (week.add(Duration(days: weekday)).isAfter(today))
+                      const SizedBox(width: 15, height: 12)
+                    else
+                      _HeatmapCell(
+                        date: week.add(Duration(days: weekday)),
+                        seconds:
+                            totals[dateOnly(
+                              week.add(Duration(days: weekday)),
+                            )] ??
+                            0,
+                      ),
                   const SizedBox(width: 36),
                 ],
               ),
@@ -532,6 +539,9 @@ class _HeatmapCell extends StatelessWidget {
       child: Tooltip(
         message: description,
         child: Container(
+          key: ValueKey(
+            'insights-heatmap-cell-${date.toIso8601String().substring(0, 10)}',
+          ),
           width: 12,
           height: 12,
           margin: const EdgeInsets.only(right: 3),

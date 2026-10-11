@@ -7,21 +7,16 @@ workers_dev = true
 directory = "../build/web"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-# Send API and OAuth navigation routes through the Worker before the SPA fallback.
+# Send API routes through the Worker before the SPA fallback.
 run_worker_first = ["/api/*"]
 
 [vars]
 ALLOWED_CANVAS_HOST = "canvas.example.edu"
-APP_ORIGIN = "https://momentum-canvas.aerith-catap.workers.dev"
-GOOGLE_CLIENT_ID = "967757945225-c3ubb0udqikkg024hl8nopeg2pe71oif.apps.googleusercontent.com"
-GOOGLE_REDIRECT_URI = "https://momentum-canvas.aerith-catap.workers.dev/api/google/oauth/callback"
-MICROSOFT_CLIENT_ID = "659da61d-044d-4c4a-a9ee-cadd42c9400e"
-MICROSOFT_REDIRECT_URI = "https://momentum-canvas.aerith-catap.workers.dev/api/outlook/oauth/callback"
-MICROSOFT_TENANT_ID = "common"
+APP_ORIGIN = "http://localhost:8787"
 # ...
 
 
-# These are edge rate limits for public OAuth and sync endpoints. Each counter
+# These are edge rate limits for public API and sync endpoints. Each counter
 # is local to a Cloudflare location and is an abuse guard, not billing metering.
 [[ratelimits]]
 name = "API_RATE_LIMITER"
@@ -48,7 +43,7 @@ namespace_id = "2026101003"
   period = 60
 
 [triggers]
-# Delete expired OAuth states and sessions every day (UTC).
+# Delete expired sessions and legacy OAuth state every day (UTC).
 crons = ["0 3 * * *"]
 
 [observability]

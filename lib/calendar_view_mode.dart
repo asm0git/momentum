@@ -15,7 +15,8 @@ enum CalendarViewMode {
       this != CalendarViewMode.fourWeeksWithoutIndicators;
 
   bool get usesDateOnlyWeekHeight =>
-      this == CalendarViewMode.oneWeekWithoutIndicators;
+      this == CalendarViewMode.oneWeekWithoutIndicators ||
+      this == CalendarViewMode.fourWeeksWithoutIndicators;
 
   CalendarViewMode? get smallerMode =>
       index == 0 ? null : CalendarViewMode.values[index - 1];

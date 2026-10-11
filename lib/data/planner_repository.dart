@@ -268,6 +268,8 @@ class PlannerRepository {
   Future<LinkedAccount> applyCalendarSync(
     CanvasSyncPayload payload, {
     bool replaceExistingImports = false,
+    bool removeMissingTasks = false,
+    bool removeMissingEvents = false,
   }) async {
     final db = await _databaseHelper.database;
     final provider = payload.providerName.toLowerCase();
@@ -413,6 +415,24 @@ class PlannerRepository {
         }
       }
 
+      if (removeMissingTasks) {
+        final importedIds = payload.tasks
+            .map((task) => task.externalId)
+            .toSet();
+        final existingTasks = await txn.query(
+          'tasks',
+          columns: ['id', 'external_id'],
+          where: 'src_platform = ?',
+          whereArgs: [provider],
+        );
+        for (final row in existingTasks) {
+          final externalId = row['external_id'] as String?;
+          if (externalId == null || !importedIds.contains(externalId)) {
+            await txn.delete('tasks', where: 'id = ?', whereArgs: [row['id']]);
+          }
+        }
+      }
+
       for (final imported in payload.events) {
         final rows = await txn.query(
           'events',
@@ -462,6 +482,24 @@ class PlannerRepository {
             where: 'id = ?',
             whereArgs: [old.id],
           );
+        }
+      }
+
+      if (removeMissingEvents) {
+        final importedIds = payload.events
+            .map((event) => event.externalId)
+            .toSet();
+        final existingEvents = await txn.query(
+          'events',
+          columns: ['id', 'external_id'],
+          where: 'src_platform = ?',
+          whereArgs: [provider],
+        );
+        for (final row in existingEvents) {
+          final externalId = row['external_id'] as String?;
+          if (externalId == null || !importedIds.contains(externalId)) {
+            await txn.delete('events', where: 'id = ?', whereArgs: [row['id']]);
+          }
         }
       }
       return account;

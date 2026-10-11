@@ -6,6 +6,7 @@ import '../data_models.dart';
 import '../state/planner_state.dart';
 import 'add_item_popup.dart';
 import 'blurred_dialog.dart';
+import 'confirmation_dialog_actions.dart';
 import 'selector.dart';
 
 Future<void> showItemEditor(BuildContext context, PlannerItem item) async {
@@ -57,28 +58,12 @@ Future<void> confirmDeleteItem(BuildContext context, PlannerItem item) async {
         actions: [
           SizedBox(
             width: buttonRowWidth,
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
-                    onPressed: () => Navigator.pop(dialogContext, false),
-                    child: const Text('Cancel'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      foregroundColor: AppColors.onPrimary,
-                      minimumSize: const Size(0, 48),
-                    ),
-                    onPressed: () => Navigator.pop(dialogContext, true),
-                    child: const Text('Delete'),
-                  ),
-                ),
-              ],
+            child: DialogActionButtons(
+              cancelLabel: 'Cancel',
+              actionLabel: 'Delete',
+              onCancel: () => Navigator.pop(dialogContext, false),
+              onAction: () => Navigator.pop(dialogContext, true),
+              actionColor: AppColors.error,
             ),
           ),
         ],
@@ -179,6 +164,7 @@ class _DeleteCategoryDialogState extends State<_DeleteCategoryDialog> {
       if (tasks > 0) '$tasks ${tasks == 1 ? 'task' : 'tasks'}',
       if (events > 0) '$events ${events == 1 ? 'event' : 'events'}',
     ].join(' and ');
+    final isMovingItems = _disposition == CategoryDeleteDisposition.moveItems;
 
     return Dialog(
       insetPadding: const EdgeInsets.all(AppSpacing.md),
@@ -193,7 +179,7 @@ class _DeleteCategoryDialogState extends State<_DeleteCategoryDialog> {
           padding: const EdgeInsets.only(
             top: AppSpacing.md,
             right: AppSpacing.md,
-            bottom: AppSpacing.md,
+            bottom: AppSpacing.xs,
             left: AppSpacing.md,
           ),
           child: SingleChildScrollView(
@@ -288,55 +274,31 @@ class _DeleteCategoryDialogState extends State<_DeleteCategoryDialog> {
                   ],
                 ],
                 const SizedBox(height: AppSpacing.md),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          minimumSize: const Size(0, 48),
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor:
-                              _disposition ==
-                                  CategoryDeleteDisposition.moveItems
-                              ? AppColors.primary
-                              : AppColors.error,
-                          foregroundColor: AppColors.onPrimary,
-                          minimumSize: const Size(0, 48),
-                        ),
-                        onPressed: _canSubmit
-                            ? () {
-                                final disposition = _hasItems
-                                    ? _disposition!
-                                    : CategoryDeleteDisposition.deleteItems;
-                                Navigator.pop(
-                                  context,
-                                  _CategoryDeleteChoice(
-                                    disposition: disposition,
-                                    destinationCategoryId:
-                                        _destinationCategoryId,
-                                  ),
-                                );
-                              }
-                            : null,
-                        child: Text(
-                          !_hasItems
-                              ? 'Delete category'
-                              : _disposition ==
-                                    CategoryDeleteDisposition.moveItems
-                              ? 'Move & delete'
-                              : 'Delete all',
-                        ),
-                      ),
-                    ),
-                  ],
+                DialogActionButtons(
+                  cancelLabel: 'Cancel',
+                  actionLabel: !_hasItems
+                      ? 'Delete category'
+                      : isMovingItems
+                      ? 'Move & delete'
+                      : 'Delete all',
+                  onCancel: () => Navigator.pop(context),
+                  onAction: _canSubmit
+                      ? () {
+                          final disposition = _hasItems
+                              ? _disposition!
+                              : CategoryDeleteDisposition.deleteItems;
+                          Navigator.pop(
+                            context,
+                            _CategoryDeleteChoice(
+                              disposition: disposition,
+                              destinationCategoryId: _destinationCategoryId,
+                            ),
+                          );
+                        }
+                      : null,
+                  actionColor: isMovingItems
+                      ? AppColors.primary
+                      : AppColors.error,
                 ),
               ],
             ),

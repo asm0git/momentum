@@ -47,6 +47,7 @@ abstract interface class CanvasBackend {
 
 abstract interface class ProviderCalendarBackend {
   Uri providerOAuthStartUri(CalendarProvider provider, {String? siteUrl});
+  Future<void> connectCalendarIcsFeed(CalendarProvider provider, String url);
   Future<CanvasConnectionStatus> providerStatus(CalendarProvider provider);
   Future<CanvasSyncPayload> syncProvider(CalendarProvider provider);
   Future<void> disconnectProvider(CalendarProvider provider);
@@ -101,6 +102,19 @@ class CanvasBackendClient implements CanvasBackend, ProviderCalendarBackend {
   ) async {
     final response = await _client.get(_providerUri(provider, 'status'));
     return CanvasConnectionStatus.fromJson(_decodeResponse(response));
+  }
+
+  @override
+  Future<void> connectCalendarIcsFeed(
+    CalendarProvider provider,
+    String url,
+  ) async {
+    final response = await _client.post(
+      _providerUri(provider, 'connect'),
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode({'url': url}),
+    );
+    _decodeResponse(response);
   }
 
   @override

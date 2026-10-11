@@ -43,6 +43,7 @@ class FocusTimerState extends ChangeNotifier {
   Timer? _ticker;
   bool _isTicking = false;
   Future<void>? _flushInProgress;
+  int _lastPlannerFocusHistoryRevision = 0;
   final Map<DateTime, int> _pendingSeconds = {};
   final Map<DateTime, Map<int, _PendingCategoryFocus>> _pendingCategorySeconds =
       {};
@@ -64,7 +65,20 @@ class FocusTimerState extends ChangeNotifier {
 
   void attachPlannerState(PlannerState planner) {
     if (identical(_planner, planner)) return;
+    _planner?.removeListener(_onPlannerChanged);
     _planner = planner;
+    _lastPlannerFocusHistoryRevision = planner.focusHistoryRevision;
+    planner.addListener(_onPlannerChanged);
+    unawaited(_reloadToday(dateOnly(_clock())));
+  }
+
+  void _onPlannerChanged() {
+    final planner = _planner;
+    if (planner == null ||
+        planner.focusHistoryRevision == _lastPlannerFocusHistoryRevision) {
+      return;
+    }
+    _lastPlannerFocusHistoryRevision = planner.focusHistoryRevision;
     unawaited(_reloadToday(dateOnly(_clock())));
   }
 
@@ -164,7 +178,23 @@ class FocusTimerState extends ChangeNotifier {
         if (secondsUntilMidnight > 0 && secondsUntilMidnight < chunk) {
           chunk = secondsUntilMidnight;
         }
-        if (chunk > 0) {
+        final chunkEnd = cursor.add(Duration(seconds: chunk));
+        final eventBoundary = _planner?.nextEventFocusBoundaryAfter(
+          cursor,
+          chunkEnd,
+        );
+        if (eventBoundary != null) {
+          final secondsUntilEventBoundary = eventBoundary
+              .difference(cursor)
+              .inSeconds;
+          if (secondsUntilEventBoundary > 0 &&
+              secondsUntilEventBoundary < chunk) {
+            chunk = secondsUntilEventBoundary;
+          }
+        }
+        final eventAlreadyCountsThisTime =
+            _planner?.eventFocusSelectionAt(cursor) != null;
+        if (chunk > 0 && !eventAlreadyCountsThisTime) {
           final day = dateOnly(cursor);
           _pendingSeconds.update(
             day,
@@ -298,6 +328,7 @@ class FocusTimerState extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
+    _planner?.removeListener(_onPlannerChanged);
     unawaited(_flushPending());
     super.dispose();
   }

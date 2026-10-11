@@ -163,13 +163,13 @@ messages belong in a public repo, in your sample data or in your screenshots.
 
 ## The final check, before you send the link
 
-- [ ] The live link in the README opens and every screen is reachable (or the
+- [x] The live link in the README opens and every screen is reachable (or the
       README explains why there is an APK and a video instead).
-- [ ] Screenshots in the README are real and current.
-- [ ] `docs/` holds the final version of each document: proposal, mockup images,
+- [x] Screenshots in the README are real and current.
+- [x] `docs/` holds the final version of each document: proposal, mockup images,
       design system plus its visual, weekly reports, video.
-- [ ] `docs/06-security-and-privacy.md` is complete and dated.
-- [ ] You created `project/README.md` in your workspace and it links here.
-- [ ] `flutter analyze` is clean.
-- [ ] A stranger could clone it, follow your README, and run it.
+- [x] `docs/06-security-and-privacy.md` is complete and dated.
+- [x] You created `project/README.md` in your workspace and it links here.
+- [x] `flutter analyze` is clean.
+- [x] A stranger could clone it, follow your README, and run it.
 - [ ] You deleted this file.

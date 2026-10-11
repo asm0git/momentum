@@ -3,12 +3,12 @@
 This guide walks through the calendar setup from the beginning. Follow the
 steps in order. You only need to set up the provider you want to try.
 
-Calendar sign-in needs a small service running beside Momentum. It is called a
-Cloudflare **Worker**. It sends you to Canvas, Google, or Microsoft to sign in,
-then saves an encrypted sign-in token so Momentum can import calendar items.
-Momentum never asks for your provider password. When testing locally, Wrangler
-keeps a test database on your computer. When you deploy, the Worker uses
-Cloudflare's online database.
+Calendar connections use a small service running beside Momentum, called a
+Cloudflare **Worker**. Canvas, Google Calendar, and Outlook all use published
+`.ics` feed links. No provider app registration or OAuth credentials are
+needed. The Worker encrypts feed links before saving them. When testing
+locally, Wrangler keeps a test database on your computer. When you deploy, the
+Worker uses Cloudflare's online database.
 
 ## First, decide what you want to do
 
@@ -24,26 +24,21 @@ Cloudflare's online database.
 - Git, Flutter, Node.js with npm, and a web browser. Install them from the
   [Git website](https://git-scm.com/downloads), [Flutter install guide](https://docs.flutter.dev/get-started/install),
   and [Node.js website](https://nodejs.org/).
-- A [Cloudflare account](https://dash.cloudflare.com/sign-up) for the sign-in
+- A [Cloudflare account](https://dash.cloudflare.com/sign-up) for the calendar
   service and its database.
 - A text editor for changing settings files. [Visual Studio Code](https://code.visualstudio.com/download)
   is free and works on Windows, macOS, and Linux.
 - An account with the calendar provider you plan to connect.
-- For Canvas, help from your school's Canvas administrator. Students usually
-  cannot create the required Canvas developer key themselves.
+- For Canvas, the calendar feed must be enabled by your school. Ask its Canvas
+  administrator if the Calendar page does not show a feed link.
 
 ## Words used in this guide
 
-- **Worker:** the Cloudflare service that handles calendar sign-in.
+- **Worker:** the Cloudflare service that fetches calendar feeds.
 - **D1 database:** Cloudflare's database. Wrangler uses a local test copy on
   your computer while you are developing.
-- **OAuth:** the sign-in process where you approve access on the provider's
-  own website. You do not give Momentum your password.
-- **Callback URL:** the web address the provider sends you back to after you
-  approve access. It must be copied exactly into both places.
-- **Client ID:** the public identifier for Momentum in the provider's settings.
-- **Client secret:** a private password for Momentum in the provider's
-  settings. Do not put it in Flutter code or commit it to GitHub.
+- **Published `.ics` link:** a read-only calendar feed URL. Treat it like a
+  password because anyone who has it may be able to read the calendar.
 
 ## Part 1: Download Momentum and install its tools
 
@@ -103,7 +98,7 @@ another text editor if you prefer; save each file after changing it.
 
 ## Part 2: Create and configure the database
 
-The Worker needs a database for calendar sign-in information. Do these steps
+The Worker needs a database for calendar connection information. Do these steps
 once for this Momentum copy.
 
 1. From the `worker` folder, create the Cloudflare database:
@@ -153,8 +148,8 @@ once for this Momentum copy.
 
 ## Part 3: Make a private settings file
 
-This file holds the provider keys needed for sign-in. It stays on your
-computer. Git is set up to ignore it so you do not accidentally upload it.
+This file holds the private encryption key. It stays on your computer. Git is
+set up to ignore it so you do not accidentally upload it.
 
 1. Make sure your terminal is still in the `worker` folder. Copy the example
    file using the command for your terminal:
@@ -171,8 +166,8 @@ computer. Git is set up to ignore it so you do not accidentally upload it.
    cp .dev.vars.example .dev.vars
    ```
 
-2. Open `worker/.dev.vars` in a text editor. Leave the example values for now;
-   you will replace the values for your chosen provider in Part 4.
+2. Open `worker/.dev.vars` in a text editor. The only required private value
+   is the encryption key described below.
 
 3. Make a local encryption key. Run this in the same terminal:
 
@@ -185,182 +180,66 @@ computer. Git is set up to ignore it so you do not accidentally upload it.
    marks around it. Do not share the key. Keep it unchanged; if you lose or
    replace it, you will have to connect your calendars again.
 
-4. Save `.dev.vars`. It should still contain all the provider names, even if
-   you are only setting up one provider. Only replace the values for the
-   provider you chose, plus `TOKEN_ENCRYPTION_KEY`.
+4. Save `.dev.vars`. No provider credentials are needed; the feed links are
+   entered in Momentum.
 
 ## Part 4: Set up one calendar provider
 
-Choose **one** section below. If a provider's website looks different, use its
-linked official help page or ask the account administrator for help.
+Choose the provider you want to connect. If a provider's website looks
+different, use its calendar settings or ask the account administrator for help.
 
 ### A. Canvas
 
-Canvas needs an app key approved by the school that runs your Canvas site. This
-is different from your Canvas username and password. Do not create a personal
-access token.
+Momentum reads the calendar feed published by your Canvas site. You do not
+need a Developer Key or Canvas app registration.
 
-1. Find your Canvas site address. It looks like `https://canvas.school.edu`.
-   Write down only the hostname part, such as `canvas.school.edu`.
-2. Ask your Canvas administrator to create or enable a **Developer Key** for
-   Momentum. You can copy this request and send it to them:
+1. Open the **Calendar** in Canvas and copy its **Calendar Feed** link. This
+   is usually shown near the bottom of the calendar page.
+2. Keep the feed link private. It grants read access to the calendar.
+3. If your Canvas site uses a custom hostname outside `instructure.com`, set
+   `ALLOWED_CANVAS_HOST` to that hostname in `worker/wrangler.toml` locally
+   and in the GitHub Actions variable for your hosted Worker. Do not include
+   `https://` or a path. Canvas sites on `instructure.com` are accepted
+   automatically.
+4. In Momentum, open **Add calendars**, choose **Canvas**, paste the feed link,
+   and select **Connect Canvas calendar**. The feed syncs when you connect,
+   when Momentum opens, and every five minutes while the app is open.
 
-   ```text
-   I want to connect the open-source Momentum planner to our Canvas site for
-   read-only calendar import. Please create or enable an OAuth Developer Key
-   for Momentum, and send me its Client ID and Client Secret securely.
-
-   Canvas site hostname: canvas.school.edu
-   Local callback URL: http://localhost:8787/api/canvas/oauth/callback
-
-   Please allow these read-only scopes:
-   url:GET|/api/v1/courses
-   url:GET|/api/v1/calendar_events
-   url:GET|/api/v1/users/self/profile
-   ```
-
-   Replace `canvas.school.edu` in the request with your school's hostname.
-   The administrator must enable the key for your school's Canvas site.
-   Canvas may show a different admin page at each school. If your administrator
-   cannot find Developer Keys, ask the school's Canvas support team.
-
-3. When the administrator gives you the Client ID and Client Secret, open
-   `worker/.dev.vars` and replace the Canvas example lines with the real
-   values. Keep the quotation marks:
-
-   ```text
-   CANVAS_CLIENT_ID="paste-client-id-here"
-   CANVAS_CLIENT_SECRET="paste-client-secret-here"
-   CANVAS_REDIRECT_URI="http://localhost:8787/api/canvas/oauth/callback"
-   ```
-
-4. Open `worker/wrangler.toml`. In the `[vars]` section, change
-   `ALLOWED_CANVAS_HOST` to your hostname. Do not include `https://`, a slash,
-   or anything after the hostname:
-
-   ```toml
-   ALLOWED_CANVAS_HOST = "canvas.school.edu"
-   ```
-
-   This Worker supports one Canvas institution at a time.
-
-5. Save both files. Later, when you run Momentum, enter the full address in
-   the Canvas site field, for example `https://canvas.school.edu`.
-
-More help: [Canvas OAuth guide](https://canvas.instructure.com/doc/api/file.oauth.html) and [Canvas Developer Keys guide](https://canvas.instructure.com/doc/api/file.developer_keys.html).
+If your school has disabled calendar feeds, ask its Canvas administrator to
+enable them.
 
 ### B. Google Calendar
 
-These steps create Google's app settings so Momentum can ask you to approve
-read-only access to your calendar.
+Momentum reads a published iCalendar feed. You do not need a Google Cloud
+project or OAuth client.
 
-1. Open [Google Cloud Console](https://console.cloud.google.com/) and sign in.
-2. At the top of the page, open the project menu and choose **New Project**.
-   Name it `Momentum test`, then select **Create**. When the project is ready,
-   make sure it is selected at the top of the page.
-3. Turn on the Calendar API:
-   - Open **APIs & Services**, then **Library**.
-   - Search for **Google Calendar API** and select it.
-   - Select **Enable**. If the button says **Manage**, it is already enabled.
-4. Set up the permission screen:
-   - Open **Google Auth Platform**, then **Branding**. If you see **Get
-     started**, select it.
-   - Enter `Momentum` as the app name. Choose your email as the user support
-     email and contact email, then continue and save.
-   - Open **Audience**. Choose **External** if you are using a personal Gmail
-     account. If you are only testing inside one school or work Google
-     organization, you can choose **Internal** if that option is available.
-   - While the app is in testing, open **Test users**, select **Add users**,
-     enter the Google email address you will use to sign in, and save. If you
-     skip this, Google may refuse the sign-in.
-   - If Google asks which permissions Momentum needs, add the scopes below.
-     These are the exact permissions the code requests. They allow calendar
-     viewing and basic sign-in information, but do not allow calendar edits:
-
-     ```text
-     openid
-     email
-     profile
-     https://www.googleapis.com/auth/calendar.events.readonly
-     https://www.googleapis.com/auth/calendar.calendarlist.readonly
-     ```
-
-     Do not add broader Calendar permissions such as edit access.
-5. Create the app's ID and secret:
-   - Open **Google Auth Platform**, then **Clients**.
-   - Select **Create Client**. Choose **Web application**.
-   - Name it `Momentum local`.
-   - Under **Authorized redirect URIs**, select **Add URI** and paste exactly:
-
-     ```text
-     http://localhost:8787/api/google/oauth/callback
-     ```
-
-     Do not put this under **Authorized JavaScript origins**.
-   - Select **Create**. Copy the Client ID and Client Secret from the box that
-     appears. The secret is private; do not paste it into a public chat or
-     GitHub.
-6. Open `worker/.dev.vars`. Replace the Google example lines. Keep the quotes:
-
-   ```text
-   GOOGLE_CLIENT_ID="paste-client-id-here"
-   GOOGLE_CLIENT_SECRET="paste-client-secret-here"
-   GOOGLE_REDIRECT_URI="http://localhost:8787/api/google/oauth/callback"
-   ```
-
-7. Save the file. When you sign in later, use an email address you added under
-   Google **Test users**. If Google says the app is unverified, make sure you
-   are signing in with a listed test user. A public app for other people may
-   need Google's review before testing restrictions can be removed.
-
-More help: Google's [OAuth consent screen guide](https://developers.google.com/workspace/guides/configure-oauth-consent) and [web server sign-in guide](https://developers.google.com/identity/protocols/oauth2/web-server).
+1. Open Google Calendar settings and select the calendar you want to connect.
+2. Under **Integrate calendar**, copy **Secret address in iCal format**. Do
+   not use the public address unless you intentionally made the calendar public.
+3. Keep the secret address private. Anyone who has it can read that calendar.
+4. In Momentum, open **Add calendars**, choose **Google Calendar**, paste the
+   secret iCal address, and select **Connect Google Calendar**. The feed syncs
+   when you connect, when Momentum opens, and every five minutes while the app
+   is open.
 
 ### C. Outlook
 
-These steps create a Microsoft app registration. The registration lets
-Momentum request read-only access after you sign in.
+Outlook connects through a published calendar link. You do not need Microsoft
+Entra, an app registration, or a Microsoft client secret.
 
-1. Open the [Microsoft Entra admin center](https://entra.microsoft.com/) and
-   sign in with your Microsoft account.
-2. Open **Identity**, then **Applications**, then **App registrations**.
-   Select **New registration**.
-3. Enter `Momentum local` as the name.
-4. Under **Supported account types**, choose the option that allows both
-   accounts in any organization and personal Microsoft accounts. This matches
-   the Worker's default setting.
-5. Under **Redirect URI**, choose **Web** and enter:
+1. Open Outlook on the web and open **Settings**.
+2. Go to **Calendar**, then **Shared calendars**.
+3. Under **Publish a calendar**, select the calendar and choose the detail
+   level you want to share. Choose **Can view all details** if you want event
+   titles, times, locations, and descriptions in Momentum.
+4. Select **Publish**, then copy the **ICS** link. Keep this link private:
+   anyone who has it can view the published calendar.
+5. In Momentum, open **Add calendars**, choose **Outlook**, paste the link, and
+   select **Connect Outlook calendar**. The calendar syncs when you connect,
+   when Momentum opens, and every five minutes while the app is open.
 
-   ```text
-   http://localhost:8787/api/outlook/oauth/callback
-   ```
-
-   Select **Register**.
-6. On the app's **Overview** page, copy **Application (client) ID**. Do not
-   copy **Object ID**; Momentum needs the Application ID.
-7. Add read-only calendar permission:
-   - Open **API permissions**, then select **Add a permission**.
-   - Choose **Microsoft Graph**, then **Delegated permissions**.
-   - Search for and check `Calendars.Read`, then select **Add permissions**.
-   - If your school or workplace says admin approval is required, ask its
-     Microsoft 365 administrator to approve this permission.
-8. Create the client secret:
-   - Open **Certificates & secrets**, then **Client secrets**.
-   - Select **New client secret**, enter a description such as `Momentum local`,
-     choose an expiration, and select **Add**.
-   - Copy the secret's **Value** immediately. Do not copy **Secret ID**. The
-     Value is only shown once; if you lose it, create a new secret.
-9. Open `worker/.dev.vars`. Replace the Outlook example lines and keep the
-   quotation marks:
-
-   ```text
-   MICROSOFT_CLIENT_ID="paste-Application-client-ID-here"
-   MICROSOFT_CLIENT_SECRET="paste-secret-Value-here"
-   MICROSOFT_REDIRECT_URI="http://localhost:8787/api/outlook/oauth/callback"
-   ```
-
-10. Save the file.
-
-More help: Microsoft's [app registration guide](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=client-secret), [callback URL guide](https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-redirect-uri), and [client secret guide](https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials).
+To revoke the link, return to **Shared calendars** and unpublish the calendar.
+That invalidates the link stored by Momentum.
 
 ## Part 5: Run and test it on your computer
 
@@ -394,17 +273,14 @@ provider.
    Wrangler may print `http://127.0.0.1:8787`.
 
 4. In Chrome, open `http://localhost:8787` even if Wrangler printed
-   `http://127.0.0.1:8787`. This setup registers the Google callback and
-   session cookie for `localhost`; the browser treats `127.0.0.1` as a
-   different address. Do not start the app with
-   `flutter run -d chrome` for this sign-in test; that command does not run the
-   Worker. The Worker must serve both Momentum and the `/api` sign-in routes
-   from the same address.
-5. In Momentum, choose **Add calendars**, choose the provider you configured,
-   and select **Connect with ...**. Sign in on the provider's own website and
-   approve access.
-6. After returning to Momentum, select **Sync now**. Check the Calendar or
-   To-Do screen for imported items.
+   `http://127.0.0.1:8787`. Use the same address for the app and API. Do not
+   start the app with `flutter run -d chrome` for this feed test; that command
+   does not run the Worker. The Worker must serve both Momentum and the `/api`
+   routes from the same address.
+5. In Momentum, choose **Add calendars**, paste a published `.ics` link, and
+   connect the provider.
+6. Check the Calendar or To-Do screen for imported items. All connected feeds
+   refresh when Momentum opens and every five minutes while it is open.
 
 If this works locally, the provider setup is complete. You do not need Part 6
 unless you want to publish the app online.
@@ -412,22 +288,17 @@ unless you want to publish the app online.
 ## Part 6: Publish the official app (maintainer only)
 
 The repository's GitHub Actions workflow now builds Flutter and deploys the
-website and OAuth API together to a Cloudflare custom domain. It also applies
+website and calendar API together to a Cloudflare custom domain. It also applies
 D1 updates. Do not use the old manual `wrangler deploy` steps for the official
 site. Follow the **Publish the official app** section at the top of the main
 [README](../README.md). That section explains the domain, GitHub settings,
-provider callbacks, Worker secrets, first deploy, and user smoke check.
+Worker secret, first deploy, and user smoke check.
 
 Local values in `.dev.vars` are never copied to the hosted Worker. After the
-first deploy, add the production credentials in the Cloudflare dashboard under
-the `momentum-canvas` Worker settings. Use `TOKEN_ENCRYPTION_KEY` and only the
-providers you enabled:
-
-```text
-Canvas:    CANVAS_CLIENT_ID, CANVAS_CLIENT_SECRET, CANVAS_REDIRECT_URI
-Google:    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI
-Microsoft: MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_REDIRECT_URI
-```
+first deploy, add `TOKEN_ENCRYPTION_KEY` in the Cloudflare dashboard under the
+`momentum-canvas` Worker's **Settings → Variables and Secrets**. Users paste
+their own published feed links in Momentum; do not put those links in GitHub
+Actions or Worker configuration.
 
 Set `APP_ORIGIN` and `ALLOWED_CANVAS_HOST` as GitHub Actions **variables**.
 Never add provider secrets to GitHub Actions or Flutter build settings. When
@@ -436,55 +307,45 @@ and Worker version are redeployed together.
 
 ## Part 7: Fix common problems
 
-- **The sign-in screen never opens or Momentum reports "provider not
-  configured":** check that all three provider values are filled in. For
-  local testing, check `worker/.dev.vars`. For the online app, check the
-  `momentum-canvas` Worker's **Settings → Variables and Secrets** in Cloudflare.
-- **The provider says the callback or redirect URL is wrong:** compare the
-  whole address character by character. Check `http` versus `https`, the
-  hostname, the `/api/.../oauth/callback` path, and any trailing slash. Local
-  uses `localhost:8787`; the official app uses the custom domain in the main
-  README.
-- **Google says the app is blocked or you are not allowed:** open Google Auth
-  Platform, then **Audience**, and add the email you are signing in with under
-  **Test users**. The app owner may also need to submit the app for Google's
-  review before unrestricted public use.
-- **Canvas says `unauthorized_client` or `invalid_scope`:** the administrator
-  must enable the developer key for your Canvas site and allow all three
-  scopes listed in the Canvas section. Check that `ALLOWED_CANVAS_HOST` is
-  only the hostname (no `https://`).
-- **Microsoft says admin approval is needed:** your school or workplace
-  controls app permissions. Ask its Microsoft 365 administrator to approve
-  delegated `Calendars.Read`.
+- **Momentum says it cannot read the calendar:** check that the link is the
+  provider's `.ics` feed URL and that it is still published. Google links must
+  use the **Secret address in iCal format**; Outlook links come from **Shared
+  calendars → Publish a calendar**. Canvas feeds may be disabled by the
+  school. Keep feed links private; anyone who gets one may be able to read the
+  calendar.
+- **Canvas reports that the link is not allowed:** if the Canvas site uses a
+  custom hostname outside `instructure.com`, set `ALLOWED_CANVAS_HOST` to its
+  hostname only (no `https://` or path) in Wrangler or the GitHub Actions
+  variable, then redeploy.
 - **Wrangler says it cannot find the database:** check that the ID in
   `worker/wrangler.toml` is the one Wrangler printed when you created
   `momentum-canvas`. Make sure you applied migrations with `--local` for local
   testing or `--remote` for the deployed app.
-- **The app opens on `localhost:xxxx` but sign-in returns to the app without
-  connecting:** use `http://localhost:8787`, start the Worker with
-  `npx wrangler dev`, and keep its terminal open. Do not use the separate
-  Flutter web server for calendar sign-in.
+- **The app opens on `localhost:xxxx` but calendar requests fail:** use
+  `http://localhost:8787`, start the Worker with `npx wrangler dev`, and keep
+  its terminal open. Do not use the separate Flutter web server for calendar
+  feeds.
 - **The log says an `/api/...` request used `not_found_handling` and returned
   the app page:** check that `worker/wrangler.toml` has
   `run_worker_first = ["/api/*"]` under `[assets]`. Otherwise, the SPA fallback
-  can answer a browser navigation to an OAuth route before the Worker sees it.
-- **You lost the encryption key:** create a new key and connect the calendar
-  again. Previously stored sign-in tokens cannot be recovered without the old
-  key.
+  can answer an API request before the Worker sees it.
+- **You lost the encryption key:** previously stored feed links cannot be
+  recovered without the old key. Generate a new key, save it in the Worker
+  settings, then reconnect the calendars.
 
 ## What is saved where
 
 - Momentum saves tasks, events, categories, and focus totals in its local
   database on your device or browser.
-- The Worker saves calendar connections in Cloudflare's database. Provider
-  sign-in tokens are encrypted with `TOKEN_ENCRYPTION_KEY`.
+- The Worker saves calendar connections in Cloudflare's database. Published
+  Canvas, Google Calendar, and Outlook feed links are encrypted with
+  `TOKEN_ENCRYPTION_KEY`.
 - Calendar import is one-way. Disconnecting removes the connection but leaves
   items already imported into Momentum. Changes made in Momentum are not sent
-  back to Canvas, Google, or Microsoft.
+  back to Canvas, Google, or Outlook.
 
 ## Official setup guides
 
 - [Cloudflare D1 database commands](https://developers.cloudflare.com/d1/wrangler-commands/)
-- [Canvas OAuth and developer keys](https://canvas.instructure.com/doc/api/file.oauth.html)
-- [Google OAuth consent screen](https://developers.google.com/workspace/guides/configure-oauth-consent)
-- [Microsoft app registration](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app?tabs=client-secret)
+- [Google Calendar sharing settings](https://support.google.com/calendar/answer/37082)
+- [Publish your Outlook calendar](https://support.microsoft.com/office/share-your-calendar-in-outlook-on-the-web-3fc8d1e4-6c42-4b80-9c5e-6a5d848f6332)

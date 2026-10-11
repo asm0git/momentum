@@ -2,11 +2,11 @@
 
 ## Palette, Spacing
 
-![Palette, contrast checks, and spacing scale](../assets/design_system/Colors.png)
+![Palette, contrast checks, and spacing scale](assets/design_system/Colors.png)
 
 ## Type scale
 
-![Typography and type scale](../assets/design_system/Typography.png)
+![Typography and type scale](assets/design_system/Typography.png)
 
 ## Components
 

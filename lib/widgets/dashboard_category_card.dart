@@ -29,6 +29,7 @@ class DashboardCategoryCard extends StatelessWidget {
 
     return SizedBox(
       width: AppSpacing.dashboardCategoryWidth,
+      height: AppSpacing.dashboardCategoryHeight,
       child: Material(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadii.popup),
@@ -38,10 +39,13 @@ class DashboardCategoryCard extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisSize: MainAxisSize.max,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeading(context, textTheme),
+                SizedBox(
+                  height: AppSpacing.dashboardCategoryHeaderHeight,
+                  child: _buildHeading(context, textTheme),
+                ),
                 const SizedBox(height: AppSpacing.xs),
                 _buildUpcomingPreview(context, textTheme),
               ],

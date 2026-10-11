@@ -111,17 +111,17 @@ describe('Canvas import helpers', () => {
     });
   });
 
-  it('redirects OAuth cancellation back to Momentum without creating a link', async () => {
+  it('rejects the retired Canvas OAuth callback', async () => {
     const response = await worker.fetch(
       new Request(
         'https://momentum.example.com/api/canvas/oauth/callback?error=access_denied',
       ),
       { APP_ORIGIN: 'https://momentum.example.com' } as Env,
     );
-    expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe(
-      'https://momentum.example.com/?calendar_provider=canvas&canvas_error=authorization_cancelled',
-    );
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual({
+      error: 'Calendar OAuth is no longer used.',
+    });
   });
 
   it('rejects a pagination link outside the configured Canvas host', async () => {
@@ -143,28 +143,28 @@ describe('Canvas import helpers', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('redirects to provider setup with a status when OAuth is not configured', async () => {
+  it('directs Google users to use a published feed instead of OAuth', async () => {
     const response = await worker.fetch(
       new Request('https://momentum.example.com/api/google/oauth/start'),
       { APP_ORIGIN: 'https://momentum.example.com' } as Env,
     );
-    expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe(
-      'https://momentum.example.com/?calendar_provider=google&google_error=provider_not_configured',
-    );
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual({
+      error: 'Connect google with a published .ics link.',
+    });
   });
 
-  it('returns users to setup when Outlook authorization is canceled', async () => {
+  it('rejects the retired Outlook OAuth callback', async () => {
     const response = await worker.fetch(
       new Request(
         'https://momentum.example.com/api/outlook/oauth/callback?error=access_denied',
       ),
       { APP_ORIGIN: 'https://momentum.example.com' } as Env,
     );
-    expect(response.status).toBe(302);
-    expect(response.headers.get('Location')).toBe(
-      'https://momentum.example.com/?calendar_provider=outlook&outlook_error=authorization_cancelled',
-    );
+    expect(response.status).toBe(410);
+    expect(await response.json()).toEqual({
+      error: 'Calendar OAuth is no longer used.',
+    });
   });
 
   it('rejects excessive OAuth starts with a retry hint', async () => {
@@ -229,7 +229,7 @@ describe('Canvas import helpers', () => {
     await cleanupExpiredState(db);
 
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(prepared).toHaveLength(5);
+    expect(prepared).toHaveLength(6);
     expect(prepared.map(({ sql }) => sql).join('\n')).toContain(
       'DELETE FROM provider_oauth_states WHERE expires_at <= ?',
     );

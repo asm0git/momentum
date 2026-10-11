@@ -5,6 +5,12 @@ import {
   normalizeCanvasSiteUrl,
   splitContextBatches,
 } from './canvas';
+import {
+  CalendarIcsError,
+  calendarIcsValidationError,
+  fetchCalendarIcsEvents,
+  normalizeCalendarIcsUrl,
+} from './ics_calendar';
 
 export interface Env {
   ASSETS: Fetcher;
@@ -49,7 +55,7 @@ export default {
     try {
       const url = new URL(request.url);
       const providerRoute = url.pathname.match(
-        /^\/api\/(google|outlook)\/(.+)$/,
+        /^\/api\/(canvas|google|outlook)\/(.+)$/,
       );
       const isCanvasRoute = url.pathname.startsWith('/api/canvas/');
       if (!isCanvasRoute && !providerRoute) return env.ASSETS.fetch(request);
@@ -63,7 +69,7 @@ export default {
           request,
           env,
           url,
-          providerRoute[1] as 'google' | 'outlook',
+          providerRoute[1] as ExternalProvider,
           providerRoute[2],
         );
       }
@@ -84,15 +90,17 @@ export default {
       }
     } catch (error) {
       const url = new URL(request.url);
+      const calendarError = error instanceof CalendarIcsError ? error : null;
       console.error(JSON.stringify({
         event: 'request_failed',
         method: request.method,
         path: url.pathname,
         error_type: error instanceof Error ? error.name : 'UnknownError',
+        ...(calendarError?.diagnostics() ?? {}),
       }));
       return json(
         { error: error instanceof Error ? error.message : 'Canvas request failed.' },
-        400,
+        calendarError?.responseStatus ?? 400,
       );
     }
   },
@@ -118,7 +126,8 @@ async function enforcePublicApiLimits(
 ): Promise<Response | null> {
   const isApiRequest = url.pathname.startsWith('/api/');
   const isOAuthStart = request.method === 'GET' && url.pathname.endsWith('/oauth/start');
-  const isSync = request.method === 'POST' && url.pathname.endsWith('/sync');
+  const isSync = request.method === 'POST' &&
+    (url.pathname.endsWith('/sync') || url.pathname.endsWith('/connect'));
   if (!isApiRequest) return null;
 
   const edgeIp = request.headers.get('cf-connecting-ip') ?? 'unknown-client';
@@ -160,6 +169,10 @@ export async function cleanupExpiredState(db: D1Database): Promise<void> {
     `).bind(now),
     db.prepare(`
       DELETE FROM provider_connections
+      WHERE session_id IN (SELECT session_id FROM sessions WHERE expires_at <= ?)
+    `).bind(now),
+    db.prepare(`
+      DELETE FROM calendar_ics_feeds
       WHERE session_id IN (SELECT session_id FROM sessions WHERE expires_at <= ?)
     `).bind(now),
     db.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now),
@@ -408,17 +421,26 @@ async function disconnect(request: Request, env: Env): Promise<Response> {
   return json({ disconnected: true });
 }
 
-type ExternalProvider = 'google' | 'outlook';
+type ExternalProvider = 'canvas' | 'google' | 'outlook';
+type OAuthProvider = 'google' | 'outlook';
 
 interface ProviderConnectionRow {
   session_id: string;
-  provider: ExternalProvider;
+  provider: OAuthProvider;
   remote_user_id: string;
   account_name: string;
   account_email: string | null;
   encrypted_access_token: string;
   encrypted_refresh_token: string | null;
   access_expires_at: number | null;
+  last_sync_time: string | null;
+}
+
+interface CalendarIcsFeedRow {
+  session_id: string;
+  provider: ExternalProvider;
+  remote_user_id: string;
+  encrypted_feed_url: string;
   last_sync_time: string | null;
 }
 
@@ -431,11 +453,13 @@ async function providerRequest(
 ): Promise<Response> {
   switch (`${request.method} ${endpoint}`) {
     case 'GET oauth/start':
-      return providerOAuthStart(request, env, provider);
+      return json({ error: `Connect ${provider} with a published .ics link.` }, 410);
     case 'GET oauth/callback':
-      return providerOAuthCallback(request, env, url, provider);
+      return json({ error: 'Calendar OAuth is no longer used.' }, 410);
     case 'GET status':
       return providerStatus(request, env, provider);
+    case 'POST connect':
+      return connectCalendarIcsFeed(request, env, provider);
     case 'POST sync':
       return syncExternalCalendar(request, env, provider);
     case 'POST disconnect':
@@ -448,7 +472,7 @@ async function providerRequest(
 async function providerOAuthStart(
   request: Request,
   env: Env,
-  provider: ExternalProvider,
+  provider: OAuthProvider,
 ): Promise<Response> {
   let config: ReturnType<typeof providerOAuthConfig>;
   try {
@@ -494,7 +518,7 @@ async function providerOAuthCallback(
   request: Request,
   env: Env,
   url: URL,
-  provider: ExternalProvider,
+  provider: OAuthProvider,
 ): Promise<Response> {
   const fail = (reason: string) =>
     appRedirect(
@@ -602,7 +626,7 @@ async function providerOAuthCallback(
   );
 }
 
-function providerOAuthConfig(provider: ExternalProvider, env: Env) {
+function providerOAuthConfig(provider: OAuthProvider, env: Env) {
   if (provider === 'google') {
     const clientId = env.GOOGLE_CLIENT_ID;
     const clientSecret = env.GOOGLE_CLIENT_SECRET;
@@ -656,16 +680,142 @@ async function providerStatus(
   env: Env,
   provider: ExternalProvider,
 ): Promise<Response> {
-  const connection = await providerConnectionForRequest(request, env, provider);
-  if (!connection) return json({ connected: false });
+  const feed = await calendarIcsFeedForRequest(request, env, provider);
+  if (!feed) return json({ connected: false });
   return json({
     connected: true,
-    providerUrl: '',
-    accountName: connection.account_name,
-    accountEmail: connection.account_email,
-    remoteUserId: connection.remote_user_id,
-    lastSyncTime: connection.last_sync_time,
+    providerUrl: `${provider}-published-ics`,
+    accountName: publishedCalendarName(provider),
+    remoteUserId: feed.remote_user_id,
+    lastSyncTime: feed.last_sync_time,
   });
+}
+
+async function connectCalendarIcsFeed(
+  request: Request,
+  env: Env,
+  provider: ExternalProvider,
+): Promise<Response> {
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json() as Record<string, unknown>;
+  } catch {
+    throw calendarIcsValidationError(
+      provider,
+      `Paste a valid published ${provider} .ics link.`,
+    );
+  }
+  if (typeof body.url !== 'string') {
+    throw calendarIcsValidationError(
+      provider,
+      `Paste a valid published ${provider} .ics link.`,
+    );
+  }
+  const feedUrl = normalizeCalendarIcsUrl(
+    provider,
+    body.url,
+    env.ALLOWED_CANVAS_HOST,
+  ).toString();
+  // Validate the link before saving it, so a typo never replaces a working feed.
+  await fetchCalendarIcsEvents(provider, feedUrl, env.ALLOWED_CANVAS_HOST);
+  const { sessionId, cookie } = await getOrCreateSession(request, env);
+  const remoteUserId = await fingerprint(feedUrl);
+  await env.DB.prepare(`
+    INSERT INTO calendar_ics_feeds
+      (session_id, provider, remote_user_id, encrypted_feed_url, last_sync_time)
+    VALUES (?, ?, ?, ?, NULL)
+    ON CONFLICT(session_id, provider) DO UPDATE SET
+      remote_user_id = excluded.remote_user_id,
+      encrypted_feed_url = excluded.encrypted_feed_url,
+      last_sync_time = NULL
+  `)
+    .bind(
+      sessionId,
+      provider,
+      remoteUserId,
+      await encrypt(feedUrl, env.TOKEN_ENCRYPTION_KEY),
+    )
+    .run();
+  await env.DB.prepare(
+    'DELETE FROM provider_connections WHERE session_id = ? AND provider = ?',
+  )
+    .bind(sessionId, provider)
+    .run();
+  if (provider === 'canvas') {
+    await env.DB.prepare('DELETE FROM canvas_connections WHERE session_id = ?')
+      .bind(sessionId)
+      .run();
+    await env.DB.prepare('DELETE FROM oauth_states WHERE session_id = ?')
+      .bind(sessionId)
+      .run();
+  }
+  return json({ connected: true }, 200, { 'Set-Cookie': cookie });
+}
+
+function publishedCalendarName(provider: ExternalProvider): string {
+  return provider === 'google'
+    ? 'Google Calendar published feed'
+    : provider === 'outlook'
+      ? 'Outlook published calendar'
+      : 'Canvas calendar feed';
+}
+
+async function calendarIcsFeedForRequest(
+  request: Request,
+  env: Env,
+  provider: ExternalProvider,
+): Promise<CalendarIcsFeedRow | null> {
+  const sessionId = readCookie(request, SESSION_COOKIE);
+  if (!sessionId) return null;
+  const session = await env.DB.prepare(
+    'SELECT session_id FROM sessions WHERE session_id = ? AND expires_at > ?',
+  )
+    .bind(sessionId, nowSeconds())
+    .first();
+  if (!session) return null;
+  return env.DB.prepare(
+    'SELECT * FROM calendar_ics_feeds WHERE session_id = ? AND provider = ?',
+  )
+    .bind(sessionId, provider)
+    .first<CalendarIcsFeedRow>();
+}
+
+async function syncCalendarIcsFeed(
+  request: Request,
+  env: Env,
+  provider: ExternalProvider,
+): Promise<Response> {
+  const feed = await calendarIcsFeedForRequest(request, env, provider);
+  if (!feed) return json({ error: `Connect ${provider} first.` }, 401);
+  const feedUrl = await decrypt(feed.encrypted_feed_url, env.TOKEN_ENCRYPTION_KEY);
+  const events = await fetchCalendarIcsEvents(
+    provider,
+    feedUrl,
+    env.ALLOWED_CANVAS_HOST,
+  );
+  const syncedAt = new Date().toISOString();
+  await env.DB.prepare(
+    'UPDATE calendar_ics_feeds SET last_sync_time = ? WHERE session_id = ? AND provider = ?',
+  )
+    .bind(syncedAt, feed.session_id, provider)
+    .run();
+  return json({
+    accountName: publishedCalendarName(provider),
+    accountEmail: null,
+    remoteUserId: feed.remote_user_id,
+    providerUrl: `${provider}-published-ics`,
+    providerName: provider,
+    syncedAt,
+    tasks: [],
+    events,
+  });
+}
+
+async function fingerprint(value: string): Promise<string> {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(bytes)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 async function disconnectProvider(
@@ -675,6 +825,19 @@ async function disconnectProvider(
 ): Promise<Response> {
   const sessionId = readCookie(request, SESSION_COOKIE);
   if (sessionId) {
+    await env.DB.prepare(
+      'DELETE FROM calendar_ics_feeds WHERE session_id = ? AND provider = ?',
+    )
+      .bind(sessionId, provider)
+      .run();
+    if (provider === 'canvas') {
+      await env.DB.prepare('DELETE FROM canvas_connections WHERE session_id = ?')
+        .bind(sessionId)
+        .run();
+      await env.DB.prepare('DELETE FROM oauth_states WHERE session_id = ?')
+        .bind(sessionId)
+        .run();
+    }
     await env.DB.prepare(
       'DELETE FROM provider_connections WHERE session_id = ? AND provider = ?',
     )
@@ -692,7 +855,7 @@ async function disconnectProvider(
 async function providerConnectionForRequest(
   request: Request,
   env: Env,
-  provider: ExternalProvider,
+  provider: OAuthProvider,
 ): Promise<ProviderConnectionRow | null> {
   const sessionId = readCookie(request, SESSION_COOKIE);
   if (!sessionId) return null;
@@ -739,32 +902,7 @@ async function syncExternalCalendar(
   env: Env,
   provider: ExternalProvider,
 ): Promise<Response> {
-  const connection = await providerConnectionForRequest(request, env, provider);
-  if (!connection) return json({ error: `Connect ${provider} first.` }, 401);
-  const token = await validProviderAccessToken(connection, env);
-  const start = new Date();
-  start.setUTCFullYear(start.getUTCFullYear() - 1);
-  const end = new Date();
-  end.setUTCFullYear(end.getUTCFullYear() + 2);
-  const events = provider === 'google'
-    ? await syncGoogleCalendar(token, start, end)
-    : await syncOutlookCalendar(token, start, end);
-  const syncedAt = new Date().toISOString();
-  await env.DB.prepare(
-    'UPDATE provider_connections SET last_sync_time = ? WHERE session_id = ? AND provider = ?',
-  )
-    .bind(syncedAt, connection.session_id, provider)
-    .run();
-  return json({
-    accountName: connection.account_name,
-    accountEmail: connection.account_email,
-    remoteUserId: connection.remote_user_id,
-    providerUrl: '',
-    providerName: provider,
-    syncedAt,
-    tasks: [],
-    events,
-  });
+  return syncCalendarIcsFeed(request, env, provider);
 }
 
 async function validProviderAccessToken(

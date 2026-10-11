@@ -28,6 +28,7 @@ class TimerScreen extends StatefulWidget {
 class _TimerScreenState extends State<TimerScreen> {
   final _scrollController = ScrollController();
   bool _selectionClearQueued = false;
+  bool _defaultSelectionQueued = false;
 
   @override
   void dispose() {
@@ -48,18 +49,29 @@ class _TimerScreenState extends State<TimerScreen> {
             .firstOrNull
             ?.iconName,
     };
-    final focusTasks = planner.selectableFocusTasks;
+    final focusItems = planner.selectableFocusItems;
     final selectedTask = focusTimer.selectedTask;
+    final selectedUnassigned = selectedTask == FocusTaskSelection.unassigned;
     final selectedIsAvailable =
-        selectedTask != null && focusTasks.any((task) => task == selectedTask);
+        selectedUnassigned ||
+        (selectedTask != null &&
+            focusItems.any((item) => item == selectedTask));
     if (!focusTimer.isRunning && selectedTask != null && !selectedIsAvailable) {
       _queueSelectionClear(focusTimer);
     }
-    final selectorTasks = [
-      ...focusTasks,
+    final defaultSelection = planner.defaultFocusSelection;
+    if (!focusTimer.isRunning &&
+        selectedTask == null &&
+        defaultSelection != null) {
+      _queueDefaultSelection(focusTimer, defaultSelection);
+    }
+    final selectorItems = [
+      FocusTaskSelection.unassigned,
+      ...focusItems,
       if (focusTimer.isRunning &&
           selectedTask != null &&
-          !focusTasks.any((task) => task == selectedTask))
+          !selectedUnassigned &&
+          !focusItems.any((item) => item == selectedTask))
         selectedTask,
     ];
     final displaySelection = selectedIsAvailable || focusTimer.isRunning
@@ -159,28 +171,34 @@ class _TimerScreenState extends State<TimerScreen> {
                                   'timer-focus-task-selector',
                                 ),
                                 options: [
-                                  for (final task in selectorTasks)
+                                  for (final item in selectorItems)
                                     app_selector.SelectorOption(
-                                      value: _selectionValue(task),
+                                      value: _selectionValue(item),
                                       label:
-                                          '${task.taskTitle} (${task.categoryTitle})',
-                                      iconName: task.categoryIcon,
+                                          '${item.taskTitle} (${item.categoryTitle})${item.isEvent ? ' · Event' : ''}',
+                                      iconName: item.categoryIcon,
                                     ),
                                 ],
                                 selectedValue: displaySelection == null
                                     ? null
                                     : _selectionValue(displaySelection),
-                                placeholder: 'Select a task',
+                                placeholder: 'Select a task or event',
                                 onChanged: focusTimer.isRunning
                                     ? null
                                     : (value) {
-                                        final selection = focusTasks
-                                            .where(
-                                              (task) =>
-                                                  _selectionValue(task) ==
-                                                  value,
-                                            )
-                                            .firstOrNull;
+                                        final selection =
+                                            value ==
+                                                _selectionValue(
+                                                  FocusTaskSelection.unassigned,
+                                                )
+                                            ? FocusTaskSelection.unassigned
+                                            : focusItems
+                                                  .where(
+                                                    (item) =>
+                                                        _selectionValue(item) ==
+                                                        value,
+                                                  )
+                                                  .firstOrNull;
                                         focusTimer.selectTask(selection);
                                       },
                                 isExpanded: true,
@@ -188,7 +206,8 @@ class _TimerScreenState extends State<TimerScreen> {
                             ),
                             const SizedBox(height: AppSpacing.sm),
                             Text(
-                              'Select a task to track focus time by category. '
+                              'Select a task or event to track focus time by '
+                              'category. '
                               "Without one, it's recorded as Unassigned in Insights.",
                               style: Theme.of(context).textTheme.labelMedium
                                   ?.copyWith(color: AppColors.disabled),
@@ -259,19 +278,34 @@ class _TimerScreenState extends State<TimerScreen> {
     });
   }
 
+  void _queueDefaultSelection(
+    FocusTimerState timer,
+    FocusTaskSelection selection,
+  ) {
+    if (_defaultSelectionQueued) return;
+    _defaultSelectionQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _defaultSelectionQueued = false;
+      if (mounted && !timer.isRunning && timer.selectedTask == null) {
+        timer.selectTask(selection);
+      }
+    });
+  }
+
   void _handleClockTap(PlannerState planner, FocusTimerState timer) {
     if (!timer.isRunning) {
       final selection = timer.selectedTask;
       final isAvailable =
-          selection != null &&
-          planner.selectableFocusTasks.any((task) => task == selection);
+          selection == FocusTaskSelection.unassigned ||
+          (selection != null &&
+              planner.selectableFocusItems.any((item) => item == selection));
       if (selection != null && !isAvailable) timer.selectTask(null);
     }
     timer.toggleRunning();
   }
 
   String _selectionValue(FocusTaskSelection selection) =>
-      '${selection.taskId}:${selection.categoryId}:${selection.taskTitle}:${selection.categoryTitle}';
+      '${selection.isEvent ? 'event' : 'task'}:${selection.taskId}:${selection.categoryId}:${selection.taskTitle}:${selection.categoryTitle}';
 
   Widget _preset(FocusTimerState timer, int workMinutes, int breakMinutes) =>
       FocusPreset(

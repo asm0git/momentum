@@ -13,12 +13,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'app_theme.dart';
-import 'data_models.dart';
 import 'screens/insights_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/add_calendars_screen.dart';
-import 'screens/canvas_connection_screen.dart';
-import 'screens/calendar_provider_connection_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/timer_screen.dart';
 import 'screens/todo_screen.dart';
@@ -122,22 +119,6 @@ class MyApp extends StatelessWidget {
             onboarding: settings.arguments is bool
                 ? settings.arguments! as bool
                 : firstRun,
-          ),
-          settings,
-        );
-      case '/canvas':
-        return _screenRoute(const CanvasConnectionScreen(), settings);
-      case '/google':
-        return _screenRoute(
-          const CalendarProviderConnectionScreen(
-            provider: CalendarProvider.googleCalendar,
-          ),
-          settings,
-        );
-      case '/outlook':
-        return _screenRoute(
-          const CalendarProviderConnectionScreen(
-            provider: CalendarProvider.outlook,
           ),
           settings,
         );

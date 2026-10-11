@@ -103,6 +103,18 @@ void main() {
     await _openCategoryDeleteDialog(tester, 'Source');
     await tester.tap(find.text('Move items to another category'));
     await tester.pumpAndSettle();
+    final moveAndDeleteFinder = find.widgetWithText(
+      FilledButton,
+      'Move & delete',
+    );
+    final disabledMoveButton = tester.widget<FilledButton>(moveAndDeleteFinder);
+    expect(disabledMoveButton.onPressed, isNull);
+    expect(
+      disabledMoveButton.style?.backgroundColor?.resolve({
+        WidgetState.disabled,
+      }),
+      AppColors.disabled,
+    );
     final destinationPicker = find.byType(DropdownButton<String?>);
     await tester.ensureVisible(destinationPicker);
     await tester.pumpAndSettle();
@@ -113,12 +125,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Choose a category'), findsNothing);
     expect(
-      tester
-          .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Move & delete'),
-          )
-          .onPressed,
+      tester.widget<FilledButton>(moveAndDeleteFinder).onPressed,
       isNotNull,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(moveAndDeleteFinder)
+          .style
+          ?.backgroundColor
+          ?.resolve({}),
+      AppColors.primary,
     );
     await tester.tap(find.text('Move & delete'));
     await tester.pumpAndSettle();
