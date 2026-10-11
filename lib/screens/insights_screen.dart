@@ -22,7 +22,7 @@ class InsightsScreen extends StatefulWidget {
 }
 
 class _InsightsScreenState extends State<InsightsScreen> {
-  late DateTime _weekStart = _sundayOf(DateTime.now());
+  late DateTime _weekStart = _mondayOf(DateTime.now());
   PlannerState? _planner;
   int _lastFocusRevision = -1;
   int _loadGeneration = 0;
@@ -899,11 +899,6 @@ class _CategoryRingPainter extends CustomPainter {
   @override
   bool shouldRepaint(_CategoryRingPainter oldDelegate) =>
       !listEquals(oldDelegate.values, values);
-}
-
-DateTime _sundayOf(DateTime date) {
-  final day = dateOnly(date);
-  return day.subtract(Duration(days: day.weekday % 7));
 }
 
 DateTime _mondayOf(DateTime date) {

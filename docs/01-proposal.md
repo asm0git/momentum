@@ -1,9 +1,12 @@
-# Momentum: Final Project Proposal
+# Proposal
+
+
 ## The problem, in one sentence
 
 Students often manage coursework, deadlines, activities, and personal plans in
 separate tools, making it harder to see what needs attention and protect time
 for focused work.
+
 
 ## Who it is for
 
@@ -12,17 +15,9 @@ extracurricular activities, personal projects, and other commitments. Its
 local-first planner can also be useful to anyone who wants a simple place to
 organize tasks, events, and focus time.
 
-## What users do today instead
-
-Students may keep deadlines in a learning platform, schedules in one or more
-calendar apps, and personal reminders in notes or task lists. Moving between
-those tools makes it easy to miss a commitment or lose track of how time is
-being used. Momentum brings the user's planner items together and can import
-calendar information where a provider connection is available.
-
 ## Core features
 
-| Area | What the final version provides |
+| Area | Feature |
 | --- | --- |
 | Dashboard | A daily overview of planner items and shortcuts to common actions. |
 | To-Do | Create, edit, complete, and remove tasks; group work by category; set due dates, times, estimated durations, priorities, and recurrence. |
@@ -34,14 +29,6 @@ calendar information where a provider connection is available.
 The main navigation consists of Dashboard, To-Do, Calendar, Timer, and Insights.
 Calendar connections are managed in a separate flow. The app does not require a
 planner login to use its local task, event, timer, or insights features.
-
-Calendar sign-in uses a Cloudflare Worker. Google Calendar, Canvas, and Microsoft
-Outlook connection flows are represented in the project. Google Calendar can
-be used when valid OAuth credentials are configured. Canvas is unavailable in
-the current university setup because administrator approval to register the app
-on `hau.instructure.com` has not been obtained. Microsoft Outlook is likewise
-unavailable because the university-managed Microsoft Entra tenant does not
-permit the required OAuth app registration.
 
 ## Out of scope, and why
 
@@ -77,12 +64,8 @@ synchronized to another device.
 | Events | Title, start and end dates/times, all-day state, location, notes, recurrence, and import source identifiers when applicable | Local SQLite database; browser IndexedDB on Web |
 | Focus totals | Daily focus seconds and totals by category | Local SQLite database; browser IndexedDB on Web |
 | Linked-calendar details | Provider, display name, account email when supplied, provider address, associated category, and last sync time | Local SQLite database; browser IndexedDB on Web |
-| Calendar display preference | Selected calendar view mode | Local app preferences |
 | OAuth tokens | Provider access and refresh tokens used to sync a connected calendar | The Cloudflare Worker stores encrypted tokens in D1. The encryption key is kept in Worker secrets, not in the Flutter app or planner database. |
 
-Calendar imports are one-way. Disconnecting a provider removes its Worker-side
-connection and tokens; items already imported into the local planner remain
-there. No provider password is stored by Momentum.
 
 ## Risks
 
@@ -99,10 +82,13 @@ origin. The status and next steps below are assessed as of **2026-10-11**.
 | The Web database adapter adds a browser compatibility dependency. | The project uses `sqflite_common_ffi_web`. **First step:** check persistence in supported browsers when the app or adapter is updated. |
 | Calendar tokens require careful server-side handling. | OAuth tokens are encrypted before storage in Worker-side D1. **First step:** keep provider secrets and the encryption key in Worker secret settings or ignored local configuration, never in public source files or Flutter build arguments. |
 
+
 ## Changes since the last version
 
 | Date | Section | Earlier plan | Final version and reason |
 | --- | --- | --- | --- |
 | 2026-10-09 | Core features | The AI Daily Planner was listed as an MVP feature. | The AI Planner was removed from this version and replaced with Insights, which summarizes focus activity recorded by the app. This gives the finished release a feature grounded in data Momentum already collects, while leaving AI planning as a possible future addition when time allows. |
 | 2026-10-07 | Data storage | The plan selected `sqflite` for a local database, with web support still undecided. | Planner records use SQLite, with the web database stored in IndexedDB. The Worker and D1 are used for calendar connections and encrypted OAuth tokens, not for syncing planner records. IndexedDB makes the SQLite approach usable in the browser while keeping planner data separate from the calendar sign-in service. |
+| 2026-10-01 | MVP features | A Pomodoro timer was considered as a simpler alternative to more complex planned features. | The Pomodoro timer was added to the MVP because it was more practical to implement and directly supports focused work through structured work and break sessions. It remains in the final app as the Timer screen, with focus time also informing Insights. |
 | 2026-09-20 | Stretch goals | Location-based reminders were proposed as a stretch goal. | Location-based reminders remain out of scope because they require location and background-notification support beyond the current web-first version. Keeping them out of the final feature list avoids promising behavior that has not been built or validated. |
+

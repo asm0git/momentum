@@ -18,7 +18,7 @@ While I did not encounter major technical setbacks, I struggled with time constr
 ## What I learned
 Technically, with the help of AI I learned how to conditionally recolor PNGs and SVGs based on active states. Furthermore, I learned how to "vibe code" efficiently through proper prompt engineering. By explicitly defining layout constraints first—such as 16px margins, exact typography, and precise row-by-row widget structures—I was able to guide the AI to generate much better code, which drastically reduced the time I spent debugging layout issues.
 
-## Week of: September 22, 2026
+# Week of: September 22, 2026
 
 ## What changed this week
 I had modest progress this week. First, I created and determined the scaffold and file structure of my application. Second, I set up my AI agents that will aid me in creating the projects, and provided them enough context with what I'm working with. Then, I also imported the lines of code I have already started with, such as app_theme.dart. Last, I also used AI to draft the bottom navigation pill, along with other important files.
