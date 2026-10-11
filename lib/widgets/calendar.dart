@@ -9,7 +9,7 @@ import 'week.dart';
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({
     super.key,
-    this.categories = const [],
+    this.items = const [],
     this.onDateSelected,
     this.initialDate,
     this.minimumDate,
@@ -17,7 +17,7 @@ class CalendarWidget extends StatefulWidget {
     this.viewMode = CalendarViewMode.fullMonth,
   });
 
-  final List<TaskCategory> categories;
+  final List<PlannerItem> items;
   final ValueChanged<DateTime>? onDateSelected;
   final DateTime? initialDate;
   final DateTime? minimumDate;
@@ -109,7 +109,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
         WeekWidget(
           days: days,
           selectedDay: _selectedDay,
-          categories: widget.compact ? const [] : widget.categories,
+          items: widget.compact ? const [] : widget.items,
           minimumDate: widget.minimumDate,
           compact: widget.compact,
           showTaskIndicators: !widget.compact && mode.showTaskIndicators,
@@ -130,7 +130,9 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           SizedBox(
             height: widget.compact
                 ? AppSpacing.selectedIconContainerSize - AppSpacing.xs
-                : AppSpacing.calendarDayHeight,
+                : mode.usesDateOnlyWeekHeight
+                ? calendarDateOnlyWeekHeight
+                : calendarItemsWeekHeight,
             child: week,
           ),
       ],

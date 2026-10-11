@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 import '../calendar_view_mode.dart';
+import 'week.dart';
 
 class CalendarResizeHandle extends StatefulWidget {
   const CalendarResizeHandle({
@@ -32,19 +33,23 @@ class _CalendarResizeHandleState extends State<CalendarResizeHandle> {
   int _weekCountFor(CalendarViewMode mode) =>
       mode.visibleWeekCount ?? widget.fullMonthWeekCount;
 
+  double _gridHeightFor(CalendarViewMode mode) =>
+      _weekCountFor(mode) *
+      (mode.usesDateOnlyWeekHeight
+          ? calendarDateOnlyWeekHeight
+          : calendarItemsWeekHeight);
+
   void _finishDrag() {
     final dragDistance = _dragDistance;
     _dragDistance = 0;
     if (dragDistance.abs() < kTouchSlop) return;
 
-    final targetWeekCount =
-        _weekCountFor(widget.mode) +
-        dragDistance / AppSpacing.calendarDayHeight;
+    final targetGridHeight = _gridHeightFor(widget.mode) + dragDistance;
     var selectedMode = widget.mode;
     var closestDistance = double.infinity;
 
     for (final candidate in CalendarViewMode.values) {
-      final distance = (_weekCountFor(candidate) - targetWeekCount).abs();
+      final distance = (_gridHeightFor(candidate) - targetGridHeight).abs();
       final isCloser = distance < closestDistance - 0.0001;
       final isDirectionalTie =
           (distance - closestDistance).abs() <= 0.0001 &&
@@ -66,7 +71,8 @@ class _CalendarResizeHandleState extends State<CalendarResizeHandle> {
       container: true,
       label: 'Calendar height',
       value: widget.mode.label,
-      hint: 'Swipe up to show fewer weeks or down to show more weeks.',
+      hint:
+          'Swipe up to show fewer weeks or hide item rows, or down to show more.',
       increasedValue: widget.mode.largerMode?.label,
       decreasedValue: widget.mode.smallerMode?.label,
       onIncrease: widget.mode.largerMode == null

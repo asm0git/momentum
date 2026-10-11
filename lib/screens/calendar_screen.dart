@@ -108,7 +108,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     alignment: Alignment.topCenter,
                     clipBehavior: Clip.hardEdge,
                     child: CalendarWidget(
-                      categories: categories,
+                      items: planner.items,
                       viewMode: _calendarViewMode,
                       onDateSelected: (date) {
                         setState(() {

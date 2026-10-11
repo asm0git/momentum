@@ -27,6 +27,14 @@ void main() {
 
       expect(await CalendarViewPreferences.load(), CalendarViewMode.twoWeeks);
 
+      await CalendarViewPreferences.save(
+        CalendarViewMode.oneWeekWithoutIndicators,
+      );
+      expect(
+        await CalendarViewPreferences.load(),
+        CalendarViewMode.oneWeekWithoutIndicators,
+      );
+
       SharedPreferences.setMockInitialValues({'calendar_view_mode': 'unknown'});
       expect(await CalendarViewPreferences.load(), CalendarViewMode.fullMonth);
     },
@@ -84,6 +92,23 @@ void main() {
     expect(find.byType(WeekWidget), findsNWidgets(5));
   });
 
+  testWidgets('compact one-week mode uses date-only row height', (
+    tester,
+  ) async {
+    await _pumpCalendar(
+      tester,
+      mode: CalendarViewMode.oneWeekWithoutIndicators,
+      initialDate: DateTime(2025, 1, 15),
+    );
+
+    expect(find.byType(WeekWidget), findsOneWidget);
+    expect(
+      tester.getSize(find.byType(WeekWidget).first).height,
+      calendarDateOnlyWeekHeight,
+    );
+    expect(_indicatorOpacityFor(tester, DateTime(2025, 1, 15)), 0);
+  });
+
   testWidgets('four-week view fades indicators while other views retain them', (
     tester,
   ) async {
@@ -119,7 +144,7 @@ void main() {
   testWidgets('drag snaps to a mode and animates the calendar height', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 900);
+    tester.view.physicalSize = const Size(390, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -140,7 +165,7 @@ void main() {
 
     await tester.drag(
       find.byKey(const ValueKey('calendar-resize-handle')),
-      const Offset(0, -80),
+      const Offset(0, -calendarItemsWeekHeight),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 140));
@@ -160,10 +185,49 @@ void main() {
     expect(find.byType(WeekWidget), findsNWidgets(4));
   });
 
+  testWidgets('minimum one-week mode expands to a week with bars', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _ResizableCalendarHarness(
+        initialMode: CalendarViewMode.oneWeek,
+        fullMonthWeekCount: 5,
+      ),
+    );
+    final calendar = find.byKey(const ValueKey('animated-calendar'));
+    final regularHeight = tester.getSize(calendar).height;
+
+    await tester.drag(
+      find.byKey(const ValueKey('calendar-resize-handle')),
+      const Offset(0, -100),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Compact one week'), findsOneWidget);
+    final compactHeight = tester.getSize(calendar).height;
+    expect(compactHeight, lessThan(regularHeight));
+    expect(
+      tester.getSize(find.byType(WeekWidget).first).height,
+      calendarDateOnlyWeekHeight,
+    );
+
+    await tester.drag(
+      find.byKey(const ValueKey('calendar-resize-handle')),
+      const Offset(0, 100),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('One week'), findsOneWidget);
+    expect(tester.getSize(calendar).height, greaterThan(compactHeight));
+  });
+
   testWidgets('equal-height four-week and full-month modes switch by drag', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(390, 900);
+    tester.view.physicalSize = const Size(390, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -175,6 +239,10 @@ void main() {
         initialDate: DateTime(2026, 2, 15),
       ),
     );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('calendar-resize-handle')),
+    );
+    await tester.pumpAndSettle();
     final calendar = find.byKey(const ValueKey('animated-calendar'));
     final fullMonthHeight = tester.getSize(calendar).height;
 
@@ -196,7 +264,7 @@ void main() {
   });
 
   testWidgets('a long drag can skip intermediate modes', (tester) async {
-    tester.view.physicalSize = const Size(390, 900);
+    tester.view.physicalSize = const Size(390, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -207,10 +275,9 @@ void main() {
         fullMonthWeekCount: 6,
       ),
     );
-
     await tester.drag(
       find.byKey(const ValueKey('calendar-resize-handle')),
-      const Offset(0, -280),
+      const Offset(0, -3 * calendarItemsWeekHeight),
     );
     await tester.pumpAndSettle();
 
@@ -266,6 +333,10 @@ void main() {
     );
     expect(tester.takeException(), isNull);
 
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('calendar-resize-handle')),
+    );
+    await tester.pumpAndSettle();
     await tester.drag(
       find.byKey(const ValueKey('calendar-resize-handle')),
       const Offset(0, -80),
@@ -320,9 +391,10 @@ double _indicatorOpacityFor(WidgetTester tester, DateTime date) {
   final day = find.byWidgetPredicate(
     (widget) => widget is DayWidget && widget.date == date,
   );
+  final week = find.ancestor(of: day, matching: find.byType(WeekWidget));
   final indicator = find.descendant(
-    of: day,
-    matching: find.byType(AnimatedOpacity),
+    of: week,
+    matching: find.byKey(const ValueKey('calendar-week-items-opacity')),
   );
   return tester.widget<AnimatedOpacity>(indicator).opacity;
 }

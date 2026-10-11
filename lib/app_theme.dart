@@ -36,7 +36,6 @@ class AppSpacing {
   static const double navigationIconSize = base * 3;
   static const double selectedIconContainerSize = base * 6;
   static const double calendarTodayCircleSize = 36;
-  static const double calendarDayHeight = base * 10;
   static const double calendarMonthControlSize = base * 4;
   static const double calendarMonthChevronSize = base * 3;
   static const double addIconSize = base * 3;

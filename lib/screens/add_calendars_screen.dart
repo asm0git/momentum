@@ -321,75 +321,15 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
                                       var index = 0;
                                       index < CalendarProvider.values.length;
                                       index++
-                                    ) ...[
-                                      _CalendarRow(
-                                        provider:
-                                            CalendarProvider.values[index],
-                                        connected:
-                                            planner
-                                                .statusForProvider(
-                                                  CalendarProvider
-                                                      .values[index],
-                                                )
-                                                ?.connected ==
-                                            true,
-                                        syncing:
-                                            planner.isProviderSyncing(
-                                              CalendarProvider.values[index],
-                                            ) ||
-                                            _loadingProvider ==
-                                                CalendarProvider.values[index],
-                                        hasError:
-                                            planner.errorForProvider(
-                                                  CalendarProvider
-                                                      .values[index],
-                                                ) !=
-                                                null ||
-                                            (_expandedProvider ==
-                                                    CalendarProvider
-                                                        .values[index] &&
-                                                _error != null),
-                                        expanded:
-                                            _expandedProvider ==
-                                            CalendarProvider.values[index],
-                                        onTap: () => _toggleProvider(
-                                          CalendarProvider.values[index],
-                                        ),
+                                    )
+                                      _providerSection(
+                                        context,
+                                        planner,
+                                        CalendarProvider.values[index],
+                                        isLast:
+                                            index ==
+                                            CalendarProvider.values.length - 1,
                                       ),
-                                      ClipRect(
-                                        child: AnimatedSize(
-                                          duration: const Duration(
-                                            milliseconds: 220,
-                                          ),
-                                          curve: Curves.easeInOutCubic,
-                                          alignment: Alignment.topCenter,
-                                          child:
-                                              _expandedProvider ==
-                                                  CalendarProvider.values[index]
-                                              ? _providerPanel(
-                                                  context,
-                                                  planner,
-                                                  CalendarProvider
-                                                      .values[index],
-                                                )
-                                              : const SizedBox(
-                                                  width: double.infinity,
-                                                  height: 0,
-                                                ),
-                                        ),
-                                      ),
-                                      if (index <
-                                          CalendarProvider.values.length - 1)
-                                        const Divider(
-                                          height: 1,
-                                          indent:
-                                              AppSpacing.md +
-                                              28 +
-                                              AppSpacing.md,
-                                          endIndent: AppSpacing.md,
-                                          color: AppColors.background,
-                                        ),
-                                    ],
                                   ],
                                 ),
                               ),
@@ -417,11 +357,64 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
     );
   }
 
+  Widget _providerSection(
+    BuildContext context,
+    PlannerState planner,
+    CalendarProvider provider, {
+    required bool isLast,
+  }) {
+    final expanded = _expandedProvider == provider;
+    final status = planner.statusForProvider(provider);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CalendarRow(
+                  provider: provider,
+                  connected: status?.connected == true,
+                  syncing:
+                      planner.isProviderSyncing(provider) ||
+                      _loadingProvider == provider,
+                  hasError:
+                      planner.errorForProvider(provider) != null ||
+                      (expanded && _error != null),
+                  expanded: expanded,
+                  onTap: () => _toggleProvider(provider),
+                ),
+                if (expanded) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _providerPanel(context, planner, provider, isLast: isLast),
+                ] else
+                  const SizedBox(width: double.infinity, height: 0),
+              ],
+            ),
+          ),
+        ),
+        if (!isLast)
+          const Divider(
+            height: 1,
+            indent: AppSpacing.md + 28 + AppSpacing.md,
+            endIndent: AppSpacing.md,
+            color: AppColors.background,
+          ),
+      ],
+    );
+  }
+
   Widget _providerPanel(
     BuildContext context,
     PlannerState planner,
-    CalendarProvider provider,
-  ) {
+    CalendarProvider provider, {
+    required bool isLast,
+  }) {
     final status = planner.statusForProvider(provider);
     final textTheme = Theme.of(context).textTheme;
     final connected = status?.connected == true;
@@ -429,11 +422,10 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
 
     return Padding(
       key: ValueKey('calendar-provider-panel-${provider.key}'),
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        0,
-        AppSpacing.md,
-        AppSpacing.md,
+      padding: EdgeInsets.only(
+        left: AppSpacing.md,
+        right: AppSpacing.md,
+        bottom: isLast ? AppSpacing.md : 0,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -444,23 +436,20 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (status == null)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xxs),
-              child: SizedBox(
-                width: double.infinity,
-                child: PillActionButton(
-                  label: 'Try again',
-                  leadingIcon: Icons.refresh,
-                  foregroundColor: AppColors.error,
-                  outlineColor: AppColors.error,
-                  onPressed: () {
-                    setState(() {
-                      _loadingProvider = provider;
-                      _error = null;
-                    });
-                    unawaited(_loadProvider(provider));
-                  },
-                ),
+            SizedBox(
+              width: double.infinity,
+              child: PillActionButton(
+                label: 'Try again',
+                leadingIcon: Icons.refresh,
+                foregroundColor: AppColors.error,
+                outlineColor: AppColors.error,
+                onPressed: () {
+                  setState(() {
+                    _loadingProvider = provider;
+                    _error = null;
+                  });
+                  unawaited(_loadProvider(provider));
+                },
               ),
             )
           else if (connected) ...[
@@ -486,16 +475,14 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
             ],
             const SizedBox(height: AppSpacing.md),
             SizedBox(
-              height: AppSpacing.popupFieldHeight,
+              height: 48,
               child: FilledButton.icon(
                 onPressed: syncing ? null : () => _syncProvider(provider),
                 icon: const Icon(Icons.sync),
-                label: Text(
-                  'Sync now',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: AppColors.onPrimary,
-                    fontWeight: FontWeight.normal,
-                  ),
+                label: Text('Sync now'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                  textStyle: _actionTextStyle(context, AppColors.onPrimary),
                 ),
               ),
             ),
@@ -505,13 +492,12 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => _manageSettings(provider),
-                    child: Text(
-                      'Manage settings',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.normal,
-                      ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      foregroundColor: AppColors.primary,
+                      textStyle: _actionTextStyle(context, AppColors.primary),
                     ),
+                    child: Text('Manage settings'),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
@@ -519,15 +505,12 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
                   child: OutlinedButton(
                     onPressed: () => _disconnect(provider),
                     style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
                       foregroundColor: AppColors.error,
+                      side: const BorderSide(color: AppColors.error),
+                      textStyle: _actionTextStyle(context, AppColors.error),
                     ),
-                    child: Text(
-                      'Disconnect',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: AppColors.error,
-                        fontWeight: FontWeight.normal,
-                      ),
-                    ),
+                    child: Text('Disconnect'),
                   ),
                 ),
               ],
@@ -540,20 +523,46 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
               style: textTheme.bodyMedium?.copyWith(color: AppColors.onSurface),
             ),
             if (provider == CalendarProvider.canvas) ...[
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: _canvasSiteController,
-                keyboardType: TextInputType.url,
-                autocorrect: false,
-                decoration: _decoration(context, 'Canvas site URL'),
-                style: textTheme.bodyLarge?.copyWith(
-                  color: AppColors.onSurface,
+              const SizedBox(height: AppSpacing.xs),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(AppRadii.popup),
+                ),
+                child: SizedBox(
+                  height: AppSpacing.popupFieldHeight,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                    ),
+                    child: Center(
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 24,
+                        child: TextField(
+                          controller: _canvasSiteController,
+                          keyboardType: TextInputType.url,
+                          autocorrect: false,
+                          textAlignVertical: TextAlignVertical.center,
+                          style: _fieldTextStyle(context),
+                          decoration: InputDecoration.collapsed(
+                            hintText: 'Canvas site URL',
+                            hintStyle: _fieldHintStyle(context),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],
-            const SizedBox(height: AppSpacing.md),
             SizedBox(
-              height: AppSpacing.popupFieldHeight,
+              height: provider == CalendarProvider.canvas
+                  ? AppSpacing.xs
+                  : AppSpacing.md,
+            ),
+            SizedBox(
+              height: 48,
               child: FilledButton.icon(
                 onPressed: _connectingProvider == provider
                     ? null
@@ -568,10 +577,10 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
                   _connectingProvider == provider
                       ? 'Connecting…'
                       : 'Connect with ${provider.title}',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: AppColors.onPrimary,
-                    fontWeight: FontWeight.normal,
-                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 48),
+                  textStyle: _actionTextStyle(context, AppColors.onPrimary),
                 ),
               ),
             ),
@@ -590,31 +599,18 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
     );
   }
 
-  InputDecoration _decoration(BuildContext context, String hint) =>
-      InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: AppColors.background,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.focusPreset),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.focusPreset),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadii.focusPreset),
-          borderSide: const BorderSide(color: AppColors.error),
-        ),
-        hintStyle: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: AppColors.disabled),
-      );
+  TextStyle _actionTextStyle(BuildContext context, Color color) => Theme.of(
+    context,
+  ).textTheme.bodyMedium!.copyWith(color: color, fontWeight: FontWeight.normal);
+
+  TextStyle _fieldTextStyle(BuildContext context) => Theme.of(context)
+      .textTheme
+      .bodyMedium!
+      .copyWith(color: AppColors.onSurface, fontWeight: FontWeight.normal);
+
+  TextStyle _fieldHintStyle(BuildContext context) => _fieldTextStyle(
+    context,
+  ).copyWith(color: AppColors.onSurface.withValues(alpha: 0.55));
 
   String? _normalizeCanvasUrl(String value) {
     var input = value.trim();
@@ -681,9 +677,11 @@ class _CalendarRow extends StatelessWidget {
           key: ValueKey('calendar-provider-row-${provider.key}'),
           onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.md,
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              expanded ? 0.0 : AppSpacing.md,
             ),
             child: Row(
               children: [

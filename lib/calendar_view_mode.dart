@@ -1,4 +1,5 @@
 enum CalendarViewMode {
+  oneWeekWithoutIndicators(1, 'Compact one week'),
   oneWeek(1, 'One week'),
   twoWeeks(2, 'Two weeks'),
   fourWeeksWithoutIndicators(4, 'Four weeks without task indicators'),
@@ -10,7 +11,11 @@ enum CalendarViewMode {
   final String label;
 
   bool get showTaskIndicators =>
+      this != CalendarViewMode.oneWeekWithoutIndicators &&
       this != CalendarViewMode.fourWeeksWithoutIndicators;
+
+  bool get usesDateOnlyWeekHeight =>
+      this == CalendarViewMode.oneWeekWithoutIndicators;
 
   CalendarViewMode? get smallerMode =>
       index == 0 ? null : CalendarViewMode.values[index - 1];
