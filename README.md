@@ -147,9 +147,7 @@ Canvas, Google Calendar, and Outlook use read-only published `.ics` links, which
 | [Design system](docs/03-design-system.md) | Colors, typography, spacing, and components. |
 | [Weekly reports](docs/04-weekly-reports.md) | Project progress by week. |
 | [Demo video notes](docs/05-demo-video.md) | Video link and timestamps. |
-| [Start here](START-HERE.md) | An introduction to the repository. |
 | [Security and privacy](docs/06-security-and-privacy.md) | Security and privacy checklist; complete it as needed. |
-| [Local database](docs/local-database.md) | Local storage and browser database details. |
 | [Calendar Worker guide](worker/README.md) | Local calendar setup and provider instructions. |
 
 ## Status and what is next
