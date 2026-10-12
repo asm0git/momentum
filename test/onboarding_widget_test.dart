@@ -112,7 +112,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Google Calendar'), findsOneWidget);
-    expect(find.text('Skip'), findsOneWidget);
+    expect(find.byTooltip('Return to planner'), findsOneWidget);
+    expect(find.text('Skip'), findsNothing);
   });
 }
 

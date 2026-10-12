@@ -68,48 +68,64 @@ void main() {
   });
 
   testWidgets('only the selected provider panel remains expanded', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_app(planner, home: const AddCalendarsScreen()));
+  tester,
+) async {
+  _setIPhone13Viewport(tester); // <-- add this line
+  await tester.pumpWidget(_app(planner, home: const AddCalendarsScreen()));
 
-    await tester.tap(find.text('Google Calendar'));
-    await tester.pumpAndSettle();
-    expect(find.text('Connect Google Calendar'), findsOneWidget);
+  await tester.tap(find.text('Google Calendar'));
+  await tester.pumpAndSettle();
+  expect(find.text('Connect Google Calendar'), findsOneWidget);
 
-    await tester.tap(find.text('Outlook'));
-    await tester.pumpAndSettle();
-    expect(find.text('Connect Outlook calendar'), findsOneWidget);
-    expect(find.text('Connect Google Calendar'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
+  await tester.tap(find.text('Outlook'));
+  await tester.pumpAndSettle();
+  expect(find.text('Connect Outlook calendar'), findsOneWidget);
+  expect(find.text('Connect Google Calendar'), findsNothing);
+  expect(tester.takeException(), isNull);
+});
 
   testWidgets('Google Calendar connects with its published ICS link', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_app(planner, home: const AddCalendarsScreen()));
-    await tester.tap(find.text('Google Calendar'));
-    await tester.pumpAndSettle();
+  tester,
+) async {
+  _setIPhone13Viewport(tester); // <-- add this line
+  await tester.pumpWidget(_app(planner, home: const AddCalendarsScreen()));
+  await tester.tap(find.text('Google Calendar'));
+  await tester.pumpAndSettle();
 
-    expect(
-      find.textContaining('secret address in iCal format'),
-      findsOneWidget,
-    );
-    await tester.enterText(
-      find.byType(TextField),
-      'https://calendar.google.com/calendar/ical/a/private/b/basic.ics',
-    );
-    await tester.tap(find.text('Connect Google Calendar'));
-    await tester.pumpAndSettle();
+  expect(
+    find.textContaining('secret address in iCal format'),
+    findsOneWidget,
+  );
+  await tester.enterText(
+    find.byType(TextField),
+    'https://calendar.google.com/calendar/ical/a/private/b/basic.ics',
+  );
+  await tester.tap(find.text('Connect Google Calendar'));
+  await tester.pump(); // <-- replaces pumpAndSettle()
 
-    expect(find.text('Google Calendar connected and synced.'), findsOneWidget);
-    expect(find.text('Sync now'), findsOneWidget);
-    expect(find.text('Disconnect'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('calendar-sync-success-google')),
-      findsOneWidget,
-    );
-    expect(find.text('Connect Canvas calendar'), findsNothing);
+  // Real SQLite I/O needs the real event loop, not the test's fake clock.
+  await tester.runAsync(() async {
+    final timeout = DateTime.now().add(const Duration(seconds: 5));
+    while ((planner
+                    .statusForProvider(CalendarProvider.googleCalendar)
+                    ?.connected !=
+                true ||
+            planner.isProviderSyncing(CalendarProvider.googleCalendar)) &&
+        DateTime.now().isBefore(timeout)) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
   });
+  await tester.pumpAndSettle();
+
+  expect(find.text('Google Calendar connected and synced.'), findsOneWidget);
+  expect(find.text('Sync now'), findsOneWidget);
+  expect(find.text('Disconnect'), findsOneWidget);
+  expect(
+    find.byKey(const ValueKey('calendar-sync-success-google')),
+    findsOneWidget,
+  );
+  expect(find.text('Connect Canvas calendar'), findsNothing);
+});
 
   testWidgets('opening a connected stale provider syncs automatically', (
     tester,
