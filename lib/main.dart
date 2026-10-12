@@ -20,6 +20,7 @@ import 'screens/dashboard_screen.dart';
 import 'screens/timer_screen.dart';
 import 'screens/todo_screen.dart';
 import 'screens/welcome_screen.dart';
+import 'services/focus_preset_preferences.dart';
 import 'services/onboarding_preferences.dart';
 import 'state/planner_state.dart';
 import 'state/focus_timer_state.dart';
@@ -33,6 +34,7 @@ Future<void> main() async {
       kIsWeb &&
       kDebugMode &&
       await OnboardingPreferences.consumeDebugDemoDataPreview();
+  final customFocusPresets = await FocusPresetPreferences.load();
   final initialRoute = resolveStartupRoute(
     setupComplete: completed,
     location: Uri.base,
@@ -48,7 +50,7 @@ Future<void> main() async {
                   ..initialize(),
           ),
           ChangeNotifierProxyProvider<PlannerState, FocusTimerState>(
-            create: (_) => FocusTimerState(),
+            create: (_) => FocusTimerState(customPresets: customFocusPresets),
             update: (_, planner, timer) => timer!..attachPlannerState(planner),
           ),
         ],

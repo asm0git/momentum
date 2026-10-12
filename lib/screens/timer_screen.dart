@@ -4,18 +4,29 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_theme.dart';
+import '../data/pomodoro_preset.dart';
 import '../data_models.dart';
 import '../navigation_destinations.dart';
 import '../state/focus_timer_state.dart';
 import '../state/planner_state.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/clock.dart';
+import '../widgets/estimated_duration_picker.dart';
 import '../widgets/focus_preset.dart';
 import '../widgets/item_actions.dart';
 import '../widgets/primary_app_bar.dart';
+import '../widgets/pill_action_button.dart';
 import '../widgets/task_list_container.dart';
 import '../widgets/task_widget.dart';
 import '../widgets/selector.dart' as app_selector;
+import '../widgets/blurred_dialog.dart';
+
+const _builtInPomodoroPresets = <PomodoroPreset>[
+  PomodoroPreset(workMinutes: 30, breakMinutes: 5),
+  PomodoroPreset(workMinutes: 25, breakMinutes: 2),
+  PomodoroPreset(workMinutes: 45, breakMinutes: 10),
+  PomodoroPreset(workMinutes: 60, breakMinutes: 15),
+];
 
 // Timer screen with horizontally scrolling presets and the clock.
 class TimerScreen extends StatefulWidget {
@@ -109,11 +120,29 @@ class _TimerScreenState extends State<TimerScreen> {
                               padding: const EdgeInsets.symmetric(
                                 horizontal: AppSpacing.screenEdgePadding,
                               ),
-                              child: Text(
-                                'Presets',
-                                style: Theme.of(context).textTheme.titleMedium,
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Presets',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  PillActionButton(
+                                    key: const ValueKey('timer-add-preset'),
+                                    label: 'Add preset',
+                                    leadingIcon: Icons.add_circle_outline,
+                                    backgroundColor: AppColors.surface,
+                                    outlineColor: AppColors.surface,
+                                    onPressed: () =>
+                                        _showAddPresetDialog(focusTimer),
+                                  ),
+                                ],
                               ),
                             ),
+                            const SizedBox(height: AppSpacing.sm),
                             SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: Padding(
@@ -121,14 +150,26 @@ class _TimerScreenState extends State<TimerScreen> {
                                   left:
                                       AppSpacing.screenEdgePadding +
                                       AppSpacing.xxs,
+                                  right:
+                                      AppSpacing.screenEdgePadding +
+                                      AppSpacing.xxs,
                                 ),
                                 child: Row(
                                   children: [
-                                    _preset(focusTimer, 30, 5),
-                                    _preset(focusTimer, 25, 2),
-                                    _preset(focusTimer, 45, 10),
-                                    _preset(focusTimer, 50, 10),
-                                    _preset(focusTimer, 60, 15),
+                                    for (final preset
+                                        in focusTimer.customPresets)
+                                      _preset(
+                                        focusTimer,
+                                        preset.workMinutes,
+                                        preset.breakMinutes,
+                                      ),
+                                    for (final preset
+                                        in _builtInPomodoroPresets)
+                                      _preset(
+                                        focusTimer,
+                                        preset.workMinutes,
+                                        preset.breakMinutes,
+                                      ),
                                   ],
                                 ),
                               ),
@@ -267,6 +308,132 @@ class _TimerScreenState extends State<TimerScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showAddPresetDialog(FocusTimerState timer) async {
+    var workDuration = const Duration(minutes: 25);
+    var restDuration = const Duration(minutes: 5);
+
+    final preset = await showBlurredDialog<PomodoroPreset>(
+      context: context,
+      builder: (dialogContext) {
+        final dialogWidth = (MediaQuery.sizeOf(dialogContext).width - 32)
+            .clamp(280.0, 400.0)
+            .toDouble();
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final canSave =
+                workDuration.inMinutes > 0 && restDuration.inMinutes > 0;
+            final textStyle = Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.normal);
+
+            return Dialog(
+              insetPadding: const EdgeInsets.all(AppSpacing.md),
+              backgroundColor: AppColors.background,
+              surfaceTintColor: AppColors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadii.popup),
+              ),
+              child: SizedBox(
+                width: dialogWidth,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Add preset',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      EstimatedDurationPicker(
+                        label: 'Work minutes',
+                        value: workDuration,
+                        onChanged: (value) =>
+                            setDialogState(() => workDuration = value),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      EstimatedDurationPicker(
+                        label: 'Rest minutes',
+                        value: restDuration,
+                        onChanged: (value) =>
+                            setDialogState(() => restDuration = value),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              style: TextButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                                textStyle: textStyle,
+                              ),
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Cancel'),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                minimumSize: const Size(0, 48),
+                                textStyle: textStyle,
+                              ),
+                              onPressed: canSave
+                                  ? () => Navigator.pop(
+                                      context,
+                                      PomodoroPreset(
+                                        workMinutes: workDuration.inMinutes,
+                                        breakMinutes: restDuration.inMinutes,
+                                      ),
+                                    )
+                                  : null,
+                              child: const Text('Save'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (!mounted || preset == null) return;
+
+    if (_builtInPomodoroPresets.contains(preset)) {
+      _showPresetMessage('That preset already exists.');
+      return;
+    }
+
+    final result = await timer.addCustomPreset(preset);
+    if (!mounted) return;
+    switch (result) {
+      case CustomPresetSaveResult.saved:
+        break;
+      case CustomPresetSaveResult.duplicate:
+        _showPresetMessage('That preset already exists.');
+      case CustomPresetSaveResult.invalid:
+        _showPresetMessage('Work and rest times must be at least 5 minutes.');
+      case CustomPresetSaveResult.notPersisted:
+        _showPresetMessage(
+          'Preset added for this session, but could not be saved.',
+        );
+    }
+  }
+
+  void _showPresetMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _queueSelectionClear(FocusTimerState timer) {

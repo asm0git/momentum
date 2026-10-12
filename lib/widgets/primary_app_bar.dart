@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 import '../app_theme.dart';
 import '../navigation_destinations.dart';
 
-// Shared colored app bar shown at the top of every main screen.
+/// Shared colored app bar shown at the top of each main screen.
 class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
   const PrimaryAppBar({
     super.key,
@@ -59,6 +59,7 @@ class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
 
     if (!isBlurred) return appBar;
+    // Blur the header while a foreground popup is active.
     return ClipRect(
       child: ImageFiltered(
         imageFilter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),

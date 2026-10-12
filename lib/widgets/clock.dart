@@ -13,6 +13,7 @@ class Clock extends StatelessWidget {
 
   final VoidCallback? onToggleRunning;
 
+  // Allow the parent to intercept taps when it needs extra timer behavior.
   void _toggle(FocusTimerState timer) {
     final callback = onToggleRunning;
     if (callback != null) {
@@ -116,6 +117,7 @@ class Clock extends StatelessWidget {
     return '${minutes.toString().padLeft(2, '0')}:${remainingSecs.toString().padLeft(2, '0')}';
   }
 
+  // Show the full focus total as hours, minutes, and seconds.
   static String _formatTotal(int seconds) {
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;
@@ -124,6 +126,7 @@ class Clock extends StatelessWidget {
   }
 }
 
+/// Draws the timer track, progress arc, and soft progress shadow.
 class _ClockRingPainter extends CustomPainter {
   const _ClockRingPainter({required this.progress});
 

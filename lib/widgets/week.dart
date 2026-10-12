@@ -20,8 +20,8 @@ const calendarItemsWeekHeight =
     _calendarOverflowHeight +
     AppSpacing.xxs;
 
-/// Height needed for the date header when item bars are hidden.
-const calendarDateOnlyWeekHeight = _calendarHeaderHeight + 1;
+/// Height of compact rows, sized to keep the six calendar views ordered.
+const calendarDateOnlyWeekHeight = 64.0;
 
 class WeekWidget extends StatelessWidget {
   const WeekWidget({

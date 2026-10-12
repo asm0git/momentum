@@ -1,9 +1,10 @@
 enum CalendarViewMode {
-  oneWeekWithoutIndicators(1, 'Compact one week'),
-  oneWeek(1, 'One week'),
-  twoWeeks(2, 'Two weeks'),
-  fourWeeksWithoutIndicators(4, 'Four weeks without task indicators'),
-  fullMonth(null, 'Full month');
+  oneWeekWithoutIndicators(1, 'Current week without event bars'),
+  oneWeek(1, 'Current week with event bars'),
+  twoWeeksWithoutIndicators(2, 'Two weeks without event bars'),
+  twoWeeks(2, 'Two weeks with event bars'),
+  fullMonthWithoutIndicators(null, 'Full month without event bars'),
+  fullMonth(null, 'Full month with event bars');
 
   const CalendarViewMode(this.visibleWeekCount, this.label);
 
@@ -12,11 +13,12 @@ enum CalendarViewMode {
 
   bool get showTaskIndicators =>
       this != CalendarViewMode.oneWeekWithoutIndicators &&
-      this != CalendarViewMode.fourWeeksWithoutIndicators;
+      this != CalendarViewMode.twoWeeksWithoutIndicators &&
+      this != CalendarViewMode.fullMonthWithoutIndicators;
 
-  bool get usesDateOnlyWeekHeight =>
-      this == CalendarViewMode.oneWeekWithoutIndicators ||
-      this == CalendarViewMode.fourWeeksWithoutIndicators;
+  bool get usesDateOnlyWeekHeight => !showTaskIndicators;
+
+  bool get showsWholeMonth => visibleWeekCount == null;
 
   CalendarViewMode? get smallerMode =>
       index == 0 ? null : CalendarViewMode.values[index - 1];
@@ -26,9 +28,13 @@ enum CalendarViewMode {
       ? null
       : CalendarViewMode.values[index + 1];
 
-  static CalendarViewMode fromPreferenceValue(String? value) =>
-      CalendarViewMode.values.firstWhere(
-        (mode) => mode.name == value,
-        orElse: () => CalendarViewMode.fullMonth,
-      );
+  static CalendarViewMode fromPreferenceValue(String? value) {
+    if (value == 'fourWeeksWithoutIndicators') {
+      return CalendarViewMode.fullMonthWithoutIndicators;
+    }
+    return CalendarViewMode.values.firstWhere(
+      (mode) => mode.name == value,
+      orElse: () => CalendarViewMode.fullMonth,
+    );
+  }
 }

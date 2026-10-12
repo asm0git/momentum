@@ -11,6 +11,7 @@ class SwipeToRevealDelete extends StatefulWidget {
     this.deleteLabel = 'Delete item',
     this.backgroundColor = AppColors.surface,
     this.deleteCircleScale = 1,
+    this.deleteRightInset,
   });
 
   static const actionWidth = 72.0;
@@ -20,6 +21,7 @@ class SwipeToRevealDelete extends StatefulWidget {
   final String deleteLabel;
   final Color backgroundColor;
   final double deleteCircleScale;
+  final double? deleteRightInset;
 
   @override
   State<SwipeToRevealDelete> createState() => _SwipeToRevealDeleteState();
@@ -107,20 +109,30 @@ class _SwipeToRevealDeleteState extends State<SwipeToRevealDelete>
                                 final iconSize = diameter * 0.5 < 24
                                     ? diameter * 0.5
                                     : 24.0;
-                                return SizedBox.square(
-                                  dimension: diameter,
-                                  child: DecoratedBox(
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.error,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: Tooltip(
-                                        message: widget.deleteLabel,
-                                        child: Icon(
-                                          Icons.delete_outline_rounded,
-                                          color: AppColors.onPrimary,
-                                          size: iconSize,
+                                final rightInset = widget.deleteRightInset;
+                                final horizontalOffset = rightInset == null
+                                    ? 0.0
+                                    : (SwipeToRevealDelete.actionWidth -
+                                              diameter) /
+                                          2 -
+                                        rightInset;
+                                return Transform.translate(
+                                  offset: Offset(horizontalOffset, 0),
+                                  child: SizedBox.square(
+                                    dimension: diameter,
+                                    child: DecoratedBox(
+                                      decoration: const BoxDecoration(
+                                        color: AppColors.error,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Tooltip(
+                                          message: widget.deleteLabel,
+                                          child: Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: AppColors.onPrimary,
+                                            size: iconSize,
+                                          ),
                                         ),
                                       ),
                                     ),

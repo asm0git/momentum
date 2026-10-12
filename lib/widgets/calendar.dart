@@ -137,7 +137,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
           ),
       ],
     );
-    if (!widget.compact && mode != CalendarViewMode.fullMonth) {
+    if (!widget.compact && !mode.showsWholeMonth) {
       weekGrid = GestureDetector(
         key: const ValueKey('calendar-week-swipe-navigation'),
         behavior: HitTestBehavior.translucent,
@@ -230,7 +230,7 @@ class _CalendarWidgetState extends State<CalendarWidget> {
     setState(() {
       _selectedDay = day;
       if (!widget.compact &&
-          widget.viewMode != CalendarViewMode.fullMonth &&
+          !widget.viewMode.showsWholeMonth &&
           (day.year != _visibleMonth.year ||
               day.month != _visibleMonth.month)) {
         _visibleMonth = DateTime(day.year, day.month);

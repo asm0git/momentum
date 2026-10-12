@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show listEquals;
@@ -23,6 +24,7 @@ class InsightsScreen extends StatefulWidget {
 
 class _InsightsScreenState extends State<InsightsScreen> {
   late DateTime _weekStart = _mondayOf(DateTime.now());
+  Timer? _dateRolloverTimer;
   PlannerState? _planner;
   int _lastFocusRevision = -1;
   int _loadGeneration = 0;
@@ -30,6 +32,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
   Map<DateTime, int> _weekTotals = {};
   Map<DateTime, int> _heatmapTotals = {};
   List<FocusCategoryTotal> _categoryTotals = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleDateRollover();
+  }
 
   @override
   void didChangeDependencies() {
@@ -46,8 +54,33 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   @override
   void dispose() {
+    _dateRolloverTimer?.cancel();
     _planner?.removeListener(_onPlannerChanged);
     super.dispose();
+  }
+
+  void _scheduleDateRollover() {
+    final now = DateTime.now();
+    final nextMidnight = DateTime(now.year, now.month, now.day + 1);
+    _dateRolloverTimer = Timer(nextMidnight.difference(now), () {
+      if (!mounted) return;
+      _scheduleDateRollover();
+      setState(() {});
+      unawaited(_reloadHeatmapTotals());
+    });
+  }
+
+  Future<void> _reloadHeatmapTotals() async {
+    final planner = _planner;
+    if (planner == null) return;
+    final today = dateOnly(DateTime.now());
+    final heatStart = _mondayOf(today).subtract(const Duration(days: 51 * 7));
+    try {
+      final totals = await planner.getFocusTotalsForRange(heatStart, today);
+      if (mounted) setState(() => _heatmapTotals = totals);
+    } catch (_) {
+      // Keep showing the last loaded heatmap if storage cannot be read.
+    }
   }
 
   void _onPlannerChanged() {
@@ -258,7 +291,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Daily focus time over the last 52 weeks',
+                          'Daily focus time over recent weeks',
                           style: textTheme.labelMedium?.copyWith(
                             color: AppColors.disabled,
                           ),
@@ -416,101 +449,116 @@ class _FocusHeatmap extends StatelessWidget {
   Widget build(BuildContext context) {
     final today = dateOnly(DateTime.now());
     final currentWeek = _mondayOf(today);
-    final start = currentWeek.subtract(const Duration(days: 51 * 7));
     final textTheme = Theme.of(context).textTheme;
-    final columns = List<DateTime>.generate(
-      52,
-      (index) => start.add(Duration(days: index * 7)),
-    );
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 28 + columns.length * 15 + 36,
-            height: 16,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                for (var column = 0; column < columns.length; column++)
-                  if (column == 0 ||
-                      columns[column].month != columns[column - 1].month ||
-                      columns[column].year != columns[column - 1].year)
-                    Positioned(
-                      left: 28 + column * 15,
-                      top: 0,
-                      child: SizedBox(
-                        width: 45,
-                        child: Text(
-                          _monthShort(columns[column].month),
-                          key: ValueKey(
-                            'insights-month-${columns[column].year}-${columns[column].month}',
+    return LayoutBuilder(
+      key: const ValueKey('insights-heatmap-grid'),
+      builder: (context, constraints) {
+        const weekdayLabelWidth = 28.0;
+        const cellStride = 15.0;
+        final availableWeeks = constraints.maxWidth.isFinite
+            ? ((constraints.maxWidth - weekdayLabelWidth) / cellStride).floor()
+            : 52;
+        final weekCount = availableWeeks.clamp(1, 52).toInt();
+        final gridWidth = weekdayLabelWidth + weekCount * cellStride;
+        final start = currentWeek.subtract(Duration(days: (weekCount - 1) * 7));
+        final columns = List<DateTime>.generate(
+          weekCount,
+          (index) => start.add(Duration(days: index * 7)),
+        );
+
+        return SizedBox(
+          width: gridWidth,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: gridWidth,
+                height: 16,
+                child: Stack(
+                  clipBehavior: Clip.hardEdge,
+                  children: [
+                    for (var column = 0; column < columns.length; column++)
+                      if (column == 0 ||
+                          columns[column].month != columns[column - 1].month ||
+                          columns[column].year != columns[column - 1].year)
+                        Positioned(
+                          left: math.min(
+                            weekdayLabelWidth + column * cellStride,
+                            gridWidth - 36,
                           ),
-                          maxLines: 1,
-                          softWrap: false,
-                          overflow: TextOverflow.visible,
+                          top: 0,
+                          child: SizedBox(
+                            width: 36,
+                            child: Text(
+                              _monthShort(columns[column].month),
+                              key: ValueKey(
+                                'insights-month-${columns[column].year}-${columns[column].month}',
+                              ),
+                              maxLines: 1,
+                              softWrap: false,
+                              overflow: TextOverflow.visible,
+                              style: textTheme.labelSmall?.copyWith(
+                                color: AppColors.disabled,
+                              ),
+                            ),
+                          ),
+                        ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              for (var weekday = 0; weekday < 7; weekday++)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: weekdayLabelWidth,
+                        child: Text(
+                          _weekdayShort(weekday + 1),
                           style: textTheme.labelSmall?.copyWith(
                             color: AppColors.disabled,
                           ),
                         ),
                       ),
-                    ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          for (var weekday = 0; weekday < 7; weekday++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 3),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 28,
-                    child: Text(
-                      _weekdayShort(weekday + 1),
-                      style: textTheme.labelSmall?.copyWith(
-                        color: AppColors.disabled,
-                      ),
-                    ),
-                  ),
-                  for (final week in columns)
-                    if (week.add(Duration(days: weekday)).isAfter(today))
-                      const SizedBox(width: 15, height: 12)
-                    else
-                      _HeatmapCell(
-                        date: week.add(Duration(days: weekday)),
-                        seconds:
-                            totals[dateOnly(
-                              week.add(Duration(days: weekday)),
-                            )] ??
-                            0,
-                      ),
-                  const SizedBox(width: 36),
-                ],
-              ),
-            ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Less', style: textTheme.labelSmall),
-              const SizedBox(width: AppSpacing.xxs),
-              for (final color in AppColors.focusHeatmapLevels)
-                Container(
-                  width: 12,
-                  height: 12,
-                  margin: const EdgeInsets.only(right: 3),
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(2),
+                      for (final week in columns)
+                        if (week.add(Duration(days: weekday)).isAfter(today))
+                          const SizedBox(width: cellStride, height: 12)
+                        else
+                          _HeatmapCell(
+                            date: week.add(Duration(days: weekday)),
+                            seconds:
+                                totals[dateOnly(
+                                  week.add(Duration(days: weekday)),
+                                )] ??
+                                0,
+                          ),
+                    ],
                   ),
                 ),
-              Text('More', style: textTheme.labelSmall),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Less', style: textTheme.labelSmall),
+                  const SizedBox(width: AppSpacing.xxs),
+                  for (final color in AppColors.focusHeatmapLevels)
+                    Container(
+                      width: 12,
+                      height: 12,
+                      margin: const EdgeInsets.only(right: 3),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  Text('More', style: textTheme.labelSmall),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -525,15 +573,7 @@ class _HeatmapCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateLabel = MaterialLocalizations.of(context).formatFullDate(date);
     final description = '$dateLabel: ${_durationLabel(seconds)} focus';
-    final level = seconds <= 0
-        ? 0
-        : seconds < 30 * 60
-        ? 1
-        : seconds < 60 * 60
-        ? 2
-        : seconds <= 2 * 60 * 60
-        ? 3
-        : 4;
+    final level = focusHeatmapLevelForSeconds(seconds);
     return Semantics(
       label: description,
       child: Tooltip(
@@ -554,6 +594,16 @@ class _HeatmapCell extends StatelessWidget {
     );
   }
 }
+
+int focusHeatmapLevelForSeconds(int seconds) => seconds <= 0
+    ? 0
+    : seconds < 30 * 60
+    ? 1
+    : seconds < 60 * 60
+    ? 2
+    : seconds <= 2 * 60 * 60
+    ? 3
+    : 4;
 
 class _WeeklyBarChart extends StatefulWidget {
   const _WeeklyBarChart({

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 
-// Compact timer preset card shown above the clock on the timer screen.
+/// Compact card that displays a work period and its matching break.
 class FocusPreset extends StatelessWidget {
   const FocusPreset({
     super.key,

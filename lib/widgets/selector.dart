@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import 'category_icon_picker.dart';
 
+/// A value and label that can optionally include a category icon.
 class SelectorOption {
   const SelectorOption({required this.label, this.value, this.iconName});
 
@@ -11,6 +12,7 @@ class SelectorOption {
   final String? iconName;
 }
 
+/// Shared dropdown used by planner forms and filters.
 class Selector extends StatelessWidget {
   const Selector({
     super.key,
@@ -36,6 +38,7 @@ class Selector extends StatelessWidget {
     TextStyle style, {
     required String label,
   }) {
+    // Use the same row layout for both selected and menu items.
     final iconName = option.iconName;
     final labelWidget = Text(
       label,

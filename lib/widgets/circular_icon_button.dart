@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 
+/// Reusable circular button for compact actions throughout the app.
 class CircularIconButton extends StatelessWidget {
   const CircularIconButton({
     super.key,
@@ -26,6 +27,7 @@ class CircularIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Animate color changes when the parent supplies a duration.
     return AnimatedContainer(
       duration: duration,
       decoration: BoxDecoration(

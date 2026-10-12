@@ -11,6 +11,7 @@ class PillActionButton extends StatelessWidget {
     this.trailingIcon,
     this.foregroundColor = AppColors.primary,
     this.outlineColor = AppColors.surface,
+    this.backgroundColor = AppColors.background,
   });
 
   final String label;
@@ -19,6 +20,7 @@ class PillActionButton extends StatelessWidget {
   final IconData? trailingIcon;
   final Color foregroundColor;
   final Color outlineColor;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +32,7 @@ class PillActionButton extends StatelessWidget {
     return OutlinedButton(
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
-        backgroundColor: AppColors.background,
+        backgroundColor: backgroundColor,
         foregroundColor: foregroundColor,
         side: BorderSide(color: outlineColor),
         shape: const StadiumBorder(),

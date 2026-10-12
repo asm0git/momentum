@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_theme.dart';
 import 'circular_icon_button.dart';
 
-// Floating action button used to add a task from the bottom navigation area.
+/// Add button displayed beside the bottom navigation bar.
 class AddTaskButton extends StatelessWidget {
   const AddTaskButton({
     super.key,
@@ -20,6 +20,7 @@ class AddTaskButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Rotate the plus icon once when the add menu opens or closes.
     return AnimatedBuilder(
       animation: controller,
       builder: (context, child) =>

@@ -43,11 +43,19 @@ Future<void> confirmDeleteItem(BuildContext context, PlannerItem item) async {
           'Delete item?',
           style: Theme.of(
             dialogContext,
-          ).textTheme.bodyLarge?.copyWith(color: AppColors.primary),
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.primary),
+        ),
+        contentPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.sm,
         ),
         content: Text(
           'Delete “${item.title}”? This cannot be undone.',
-          style: Theme.of(dialogContext).textTheme.bodyMedium,
+          style: Theme.of(
+            dialogContext,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(
           AppSpacing.md,
@@ -176,12 +184,7 @@ class _DeleteCategoryDialogState extends State<_DeleteCategoryDialog> {
       child: SizedBox(
         width: dialogWidth,
         child: Padding(
-          padding: const EdgeInsets.only(
-            top: AppSpacing.md,
-            right: AppSpacing.md,
-            bottom: AppSpacing.xs,
-            left: AppSpacing.md,
-          ),
+          padding: const EdgeInsets.all(AppSpacing.md),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -189,11 +192,11 @@ class _DeleteCategoryDialogState extends State<_DeleteCategoryDialog> {
               children: [
                 Text(
                   'Delete category?',
-                  style: textTheme.titleMedium?.copyWith(
+                  style: textTheme.bodyMedium?.copyWith(
                     color: AppColors.primary,
                   ),
                 ),
-                const SizedBox(height: AppSpacing.sm),
+                const SizedBox(height: AppSpacing.md),
                 Text(
                   _hasItems
                       ? '“${widget.category.title}” contains $itemSummary. '
@@ -202,6 +205,7 @@ class _DeleteCategoryDialogState extends State<_DeleteCategoryDialog> {
                             'This cannot be undone.',
                   style: textTheme.bodyMedium?.copyWith(
                     color: AppColors.onSurface,
+                    fontWeight: FontWeight.w400,
                   ),
                 ),
                 if (_hasItems) ...[
@@ -273,7 +277,7 @@ class _DeleteCategoryDialogState extends State<_DeleteCategoryDialog> {
                     ),
                   ],
                 ],
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 DialogActionButtons(
                   cancelLabel: 'Cancel',
                   actionLabel: !_hasItems

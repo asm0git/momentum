@@ -1,20 +1,16 @@
-import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
 
 import '../app_theme.dart';
 import '../calendar_view_mode.dart';
-import 'week.dart';
 
 class CalendarResizeHandle extends StatefulWidget {
   const CalendarResizeHandle({
     super.key,
     required this.mode,
-    required this.fullMonthWeekCount,
     required this.onModeChanged,
   });
 
   final CalendarViewMode mode;
-  final int fullMonthWeekCount;
   final ValueChanged<CalendarViewMode> onModeChanged;
 
   @override
@@ -22,7 +18,8 @@ class CalendarResizeHandle extends StatefulWidget {
 }
 
 class _CalendarResizeHandleState extends State<CalendarResizeHandle> {
-  double _dragDistance = 0;
+  int? _activePointer;
+  double? _pointerStartY;
 
   void _changeMode(CalendarViewMode? mode) {
     if (mode != null && mode != widget.mode) {
@@ -30,38 +27,16 @@ class _CalendarResizeHandleState extends State<CalendarResizeHandle> {
     }
   }
 
-  int _weekCountFor(CalendarViewMode mode) =>
-      mode.visibleWeekCount ?? widget.fullMonthWeekCount;
+  void _finishPointer(int pointer, double currentY) {
+    if (_activePointer != pointer) return;
+    final startY = _pointerStartY;
+    _activePointer = null;
+    _pointerStartY = null;
+    if (startY == null || currentY == startY) return;
 
-  double _gridHeightFor(CalendarViewMode mode) =>
-      _weekCountFor(mode) *
-      (mode.usesDateOnlyWeekHeight
-          ? calendarDateOnlyWeekHeight
-          : calendarItemsWeekHeight);
-
-  void _finishDrag() {
-    final dragDistance = _dragDistance;
-    _dragDistance = 0;
-    if (dragDistance.abs() < kTouchSlop) return;
-
-    final targetGridHeight = _gridHeightFor(widget.mode) + dragDistance;
-    var selectedMode = widget.mode;
-    var closestDistance = double.infinity;
-
-    for (final candidate in CalendarViewMode.values) {
-      final distance = (_gridHeightFor(candidate) - targetGridHeight).abs();
-      final isCloser = distance < closestDistance - 0.0001;
-      final isDirectionalTie =
-          (distance - closestDistance).abs() <= 0.0001 &&
-          ((dragDistance > 0 && candidate.index > selectedMode.index) ||
-              (dragDistance < 0 && candidate.index < selectedMode.index));
-      if (isCloser || isDirectionalTie) {
-        selectedMode = candidate;
-        closestDistance = distance;
-      }
-    }
-
-    _changeMode(selectedMode);
+    _changeMode(
+      currentY < startY ? widget.mode.smallerMode : widget.mode.largerMode,
+    );
   }
 
   @override
@@ -72,7 +47,7 @@ class _CalendarResizeHandleState extends State<CalendarResizeHandle> {
       label: 'Calendar height',
       value: widget.mode.label,
       hint:
-          'Swipe up to show fewer weeks or hide item rows, or down to show more.',
+          'Drag up to reduce the calendar or hide event bars. Drag down to show more weeks or event bars.',
       increasedValue: widget.mode.largerMode?.label,
       decreasedValue: widget.mode.smallerMode?.label,
       onIncrease: widget.mode.largerMode == null
@@ -84,37 +59,54 @@ class _CalendarResizeHandleState extends State<CalendarResizeHandle> {
       child: GestureDetector(
         key: const ValueKey('calendar-resize-handle'),
         behavior: HitTestBehavior.opaque,
-        onVerticalDragStart: (_) => _dragDistance = 0,
-        onVerticalDragUpdate: (details) => _dragDistance += details.delta.dy,
-        onVerticalDragEnd: (_) => _finishDrag(),
-        child: const SizedBox(
-          height: 44,
-          child: Stack(
-            alignment: Alignment.topCenter,
-            children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: SizedBox(
-                  height: 1,
-                  child: ColoredBox(color: AppColors.calendarBorder),
+        // Keep this recognizer in the gesture arena so a resize drag does not
+        // scroll the page. The Listener handles movement below Flutter's drag
+        // touch slop as well.
+        onVerticalDragStart: (_) {},
+        onVerticalDragUpdate: (_) {},
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (event) {
+            if (_activePointer != null) return;
+            _activePointer = event.pointer;
+            _pointerStartY = event.position.dy;
+          },
+          onPointerUp: (event) =>
+              _finishPointer(event.pointer, event.position.dy),
+          onPointerCancel: (event) {
+            if (_activePointer != event.pointer) return;
+            _activePointer = null;
+            _pointerStartY = null;
+          },
+          child: const SizedBox(
+            height: 54,
+            child: Stack(
+              alignment: Alignment.topCenter,
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: SizedBox(
+                    height: 1,
+                    child: ColoredBox(color: AppColors.calendarBorder),
+                  ),
                 ),
-              ),
-              Align(
-                alignment: Alignment.topCenter,
-                child: SizedBox(
-                  width: 36,
-                  height: 4,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AppColors.secondary,
-                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: 36,
+                    height: 8,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppColors.secondary,
+                        borderRadius: BorderRadius.all(Radius.circular(4)),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

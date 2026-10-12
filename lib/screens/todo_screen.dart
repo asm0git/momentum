@@ -7,9 +7,11 @@ import '../app_theme.dart';
 import '../data_models.dart';
 import '../navigation_destinations.dart';
 import '../state/planner_state.dart';
+import '../widgets/add_item_popup.dart';
 import '../widgets/bottom_navigation_bar.dart';
 import '../widgets/collapsible_category.dart';
 import '../widgets/item_actions.dart';
+import '../widgets/pill_action_button.dart';
 import '../widgets/primary_app_bar.dart';
 
 // To-do screen containing the expandable task categories.
@@ -74,43 +76,76 @@ class _TodoScreenState extends State<TodoScreen> {
       ),
       body: Stack(
         children: [
-          ListView.separated(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            itemCount: categories.length,
-            separatorBuilder: (context, index) =>
-                const SizedBox(height: AppSpacing.xxs),
-            itemBuilder: (context, index) {
-              final category = categories[index];
-              final categoryId = category.id;
-              final importProvider = planner.calendarProviderForCategory(
-                category,
-              );
-              final items = categoryId == null
-                  ? const <PlannerItem>[]
-                  : planner.todoItemsForCategory(categoryId);
-              final pendingCount = items
-                  .where(
-                    (item) =>
-                        item is Event || (item is Task && !item.isChecked),
-                  )
-                  .length;
-              return CollapsibleCategory(
-                key: categoryId == null
-                    ? ValueKey(category.title)
-                    : _categoryKeys.putIfAbsent(categoryId, GlobalKey.new),
-                title: category.title,
-                pendingLabel: '$pendingCount pending',
-                iconName: planner.categoryDisplayIconName(category),
-                items: items,
-                showPendingCount: importProvider == null,
-                initiallyExpanded: categoryId == widget.initialCategoryId,
-                onDeleteCategory: categoryId == null
-                    ? null
-                    : () =>
-                          confirmDeleteCategory(context, category, categories),
-              );
-            },
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  0,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: PillActionButton(
+                    key: const ValueKey('todo-new-category'),
+                    label: 'New category',
+                    onPressed: _createCategory,
+                    leadingIcon: Icons.add_circle_outline,
+                    backgroundColor: AppColors.surface,
+                    outlineColor: AppColors.surface,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  itemCount: categories.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: AppSpacing.xxs),
+                  itemBuilder: (context, index) {
+                    final category = categories[index];
+                    final categoryId = category.id;
+                    final importProvider = planner.calendarProviderForCategory(
+                      category,
+                    );
+                    final items = categoryId == null
+                        ? const <PlannerItem>[]
+                        : planner.todoItemsForCategory(categoryId);
+                    final pendingCount = items
+                        .where(
+                          (item) =>
+                              item is Event ||
+                              (item is Task && !item.isChecked),
+                        )
+                        .length;
+                    return CollapsibleCategory(
+                      key: categoryId == null
+                          ? ValueKey(category.title)
+                          : _categoryKeys.putIfAbsent(
+                              categoryId,
+                              GlobalKey.new,
+                            ),
+                      title: category.title,
+                      pendingLabel: '$pendingCount pending',
+                      iconName: planner.categoryDisplayIconName(category),
+                      items: items,
+                      showPendingCount: importProvider == null,
+                      initiallyExpanded: categoryId == widget.initialCategoryId,
+                      onDeleteCategory: categoryId == null
+                          ? null
+                          : () => confirmDeleteCategory(
+                              context,
+                              category,
+                              categories,
+                            ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
           Positioned.fill(
             child: FloatingNavigationGroup(
@@ -121,5 +156,19 @@ class _TodoScreenState extends State<TodoScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _createCategory() async {
+    final category = await showNewCategoryDialog(context);
+    if (category == null || !mounted) return;
+    try {
+      await context.read<PlannerState>().addCategory(category);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not create this category.')),
+        );
+      }
+    }
   }
 }

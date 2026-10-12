@@ -16,6 +16,12 @@ enum _PopupItemType { event, task }
 const _newCategoryValue = '__new_category__';
 const _noneCategoryValue = '__none_category__';
 
+Future<TaskCategory?> showNewCategoryDialog(BuildContext context) =>
+    showBlurredDialog<TaskCategory>(
+      context: context,
+      builder: (context) => const _NewCategoryDialog(),
+    );
+
 class AddItemPopup extends StatefulWidget {
   const AddItemPopup({
     super.key,
@@ -1023,10 +1029,7 @@ class _TitleCategoryFields extends StatelessWidget {
   }
 
   Future<void> _createCategory(BuildContext context) async {
-    final category = await showBlurredDialog<TaskCategory>(
-      context: context,
-      builder: (context) => const _NewCategoryDialog(),
-    );
+    final category = await showNewCategoryDialog(context);
     if (category == null || !context.mounted) return;
     try {
       final saved = await context.read<PlannerState>().addCategory(category);
@@ -1116,9 +1119,7 @@ class _NewCategoryDialogState extends State<_NewCategoryDialog> {
                                 autofocus: true,
                                 onChanged: (_) {
                                   if (_validationMessage != null) {
-                                    setState(
-                                      () => _validationMessage = null,
-                                    );
+                                    setState(() => _validationMessage = null);
                                   }
                                 },
                                 style: fieldStyle,
@@ -1156,6 +1157,7 @@ class _NewCategoryDialogState extends State<_NewCategoryDialog> {
                     child: TextButton(
                       style: TextButton.styleFrom(
                         minimumSize: const Size(0, 48),
+                        textStyle: _itemTypeTextStyle(context),
                       ),
                       onPressed: () => Navigator.pop(context),
                       child: const Text('Cancel'),
@@ -1166,6 +1168,7 @@ class _NewCategoryDialogState extends State<_NewCategoryDialog> {
                     child: FilledButton(
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 48),
+                        textStyle: _itemTypeTextStyle(context),
                       ),
                       onPressed: () {
                         final title = _controller.text.trim();
@@ -1244,7 +1247,6 @@ class _ItemTypeSelector extends StatelessWidget {
   }
 }
 
-TextStyle _itemTypeTextStyle(BuildContext context) =>
-    Theme.of(context).textTheme.bodyMedium!.copyWith(
-      fontWeight: FontWeight.normal,
-    );
+TextStyle _itemTypeTextStyle(BuildContext context) => Theme.of(
+  context,
+).textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.normal);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+/// Shared colors used across Momentum screens and widgets.
 class AppColors {
   static const background = Color(0xFFFFFFFF);
   static const primary = Color(0xFF342066);
@@ -35,6 +36,7 @@ class AppColors {
   ];
 }
 
+/// Spacing values based on an eight pixel layout scale.
 class AppSpacing {
   static const double base = 8;
 
@@ -69,6 +71,7 @@ class AppSpacing {
   static const double popupFieldHeight = base*5;
 }
 
+/// Corner radii for the main reusable surfaces.
 class AppRadii {
   static const double appBarBottom = AppSpacing.base * 10;
   static const double navigationDock = AppSpacing.base * 5;
@@ -78,6 +81,7 @@ class AppRadii {
   static const double estimatedDuration = 36;
 }
 
+/// The main Flutter theme built from the project design system.
 final appTheme = ThemeData(
   useMaterial3: true,
   fontFamily: 'SFProText',

@@ -1,3 +1,4 @@
+/// Defines the title, icon asset name, and route for each main tab.
 enum AppDestination {
   dashboard(title: 'Dashboard', iconName: 'Home', route: '/dashboard'),
   calendar(title: 'Calendar', iconName: 'Calendar', route: '/calendar'),

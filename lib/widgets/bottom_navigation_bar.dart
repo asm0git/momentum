@@ -118,23 +118,25 @@ class _FloatingNavigationGroupState extends State<FloatingNavigationGroup>
               AppSpacing.navigationDockHeight +
               AppSpacing.floatingGroupBottom +
               AppSpacing.sectionGap,
-          child: ClipRect(
-            child: ShaderMask(
-              blendMode: BlendMode.dstIn,
-              shaderCallback: (bounds) {
-                return const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppColors.navigationBlurMaskStart,
-                    AppColors.navigationBlurMaskEnd,
-                  ],
-                ).createShader(bounds);
-              },
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: const SizedBox.expand(
-                  child: ColoredBox(color: AppColors.navigationBlurTint),
+          child: IgnorePointer(
+            child: ClipRect(
+              child: ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (bounds) {
+                  return const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      AppColors.navigationBlurMaskStart,
+                      AppColors.navigationBlurMaskEnd,
+                    ],
+                  ).createShader(bounds);
+                },
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: const SizedBox.expand(
+                    child: ColoredBox(color: AppColors.navigationBlurTint),
+                  ),
                 ),
               ),
             ),

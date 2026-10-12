@@ -9,15 +9,18 @@ class EstimatedDurationPicker extends StatelessWidget {
     super.key,
     required this.value,
     required this.onChanged,
+    this.label = 'Estimated duration',
   });
 
   final Duration value;
   final ValueChanged<Duration> onChanged;
+  final String label;
 
   Future<void> _showPicker(BuildContext context) async {
     final duration = await showBlurredDialog<Duration>(
       context: context,
-      builder: (_) => _EstimatedDurationDialog(initialDuration: value),
+      builder: (_) =>
+          _EstimatedDurationDialog(initialDuration: value, title: label),
     );
     if (duration != null) onChanged(duration);
   }
@@ -53,7 +56,7 @@ class EstimatedDurationPicker extends StatelessWidget {
             height: AppSpacing.popupFieldHeight,
             child: Row(
               children: [
-                Expanded(child: Text('Estimated duration', style: textStyle)),
+                Expanded(child: Text(label, style: textStyle)),
                 Container(
                   height: 32,
                   padding: const EdgeInsets.symmetric(
@@ -86,9 +89,13 @@ class EstimatedDurationPicker extends StatelessWidget {
 }
 
 class _EstimatedDurationDialog extends StatefulWidget {
-  const _EstimatedDurationDialog({required this.initialDuration});
+  const _EstimatedDurationDialog({
+    required this.initialDuration,
+    required this.title,
+  });
 
   final Duration initialDuration;
+  final String title;
 
   @override
   State<_EstimatedDurationDialog> createState() =>
@@ -145,7 +152,7 @@ class _EstimatedDurationDialogState extends State<_EstimatedDurationDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Estimated duration', style: titleStyle),
+            Text(widget.title, style: titleStyle),
             const SizedBox(height: AppSpacing.sm),
             SizedBox(
               width: 240,

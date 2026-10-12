@@ -119,7 +119,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ),
                   CalendarResizeHandle(
                     mode: _calendarViewMode,
-                    fullMonthWeekCount: calendarMonthWeekCount(_selectedDate),
                     onModeChanged: _setCalendarViewMode,
                   ),
                   Text(

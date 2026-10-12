@@ -2,11 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../data/pomodoro_preset.dart';
 import '../data/recurrence.dart';
 import '../data_models.dart';
+import '../services/focus_preset_preferences.dart';
 import 'planner_state.dart';
 
 enum FocusPhase { work, rest }
+
+enum CustomPresetSaveResult { saved, duplicate, invalid, notPersisted }
 
 /// App-wide Pomodoro state and local-day focus accounting.
 class FocusTimerState extends ChangeNotifier {
@@ -15,15 +19,14 @@ class FocusTimerState extends ChangeNotifier {
     int breakMinutes = 5,
     DateTime Function()? clock,
     bool startTicker = true,
-  }) : this._(workMinutes, breakMinutes, clock ?? DateTime.now, startTicker);
-
-  FocusTimerState._(
-    this._workMinutes,
-    this._breakMinutes,
-    this._clock,
-    this._startTicker,
-  ) : _remainingSeconds = _workMinutes * 60,
-      _focusDate = dateOnly(_clock());
+    List<PomodoroPreset> customPresets = const [],
+  }) : _workMinutes = workMinutes,
+       _breakMinutes = breakMinutes,
+       _clock = clock ?? DateTime.now,
+       _startTicker = startTicker,
+       _remainingSeconds = workMinutes * 60,
+       _focusDate = dateOnly((clock ?? DateTime.now)()),
+       _customPresets = List.of(customPresets);
 
   int _workMinutes;
   int _breakMinutes;
@@ -47,9 +50,11 @@ class FocusTimerState extends ChangeNotifier {
   final Map<DateTime, int> _pendingSeconds = {};
   final Map<DateTime, Map<int, _PendingCategoryFocus>> _pendingCategorySeconds =
       {};
+  final List<PomodoroPreset> _customPresets;
 
   int get workMinutes => _workMinutes;
   int get breakMinutes => _breakMinutes;
+  List<PomodoroPreset> get customPresets => List.unmodifiable(_customPresets);
   int get remainingSeconds => _remainingSeconds;
   FocusPhase get phase => _phase;
   bool get isRunning => _isRunning;
@@ -100,6 +105,26 @@ class FocusTimerState extends ChangeNotifier {
     unawaited(_ensureToday(now));
     unawaited(_flushPending());
     notifyListeners();
+  }
+
+  Future<CustomPresetSaveResult> addCustomPreset(PomodoroPreset preset) async {
+    if (preset.workMinutes < 1 ||
+        preset.breakMinutes < 1 ||
+        preset.workMinutes > 1435 ||
+        preset.breakMinutes > 1435) {
+      return CustomPresetSaveResult.invalid;
+    }
+    if (_customPresets.contains(preset))
+      return CustomPresetSaveResult.duplicate;
+
+    _customPresets.insert(0, preset);
+    notifyListeners();
+    try {
+      await FocusPresetPreferences.save(_customPresets);
+      return CustomPresetSaveResult.saved;
+    } catch (_) {
+      return CustomPresetSaveResult.notPersisted;
+    }
   }
 
   bool toggleRunning() {

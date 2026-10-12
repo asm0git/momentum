@@ -48,29 +48,36 @@ class DebugDemoData {
     final last = _dateOnly(lastDay);
     final grouped = <DateTime, Map<int, int>>{};
 
-    // Give the current week a clear mix of daily totals and categories.
-    const currentWeek = <int, Map<int, int>>{
-      0: {0: 48 * 60, 1: 24 * 60},
-      1: {0: 62 * 60},
-      2: {1: 75 * 60},
-      3: {2: 36 * 60},
-      4: {0: 54 * 60, 2: 18 * 60},
-      5: {1: 42 * 60},
-      6: {0: 30 * 60},
-    };
-    for (final dayEntry in currentWeek.entries) {
-      final date = today.subtract(Duration(days: dayEntry.key));
-      _addToDay(grouped, date, dayEntry.value);
-    }
+    // Use a date-seeded sample so the preview looks varied across weekdays,
+    // while staying stable for the same day during a session or test run.
+    for (
+      var date = first;
+      !date.isAfter(last) && !date.isAfter(today);
+      date = DateTime(date.year, date.month, date.day + 1)
+    ) {
+      final activity = _hashDate(date, 0x1b873593);
+      if (activity % 100 < 22) continue;
 
-    // Add a deterministic pattern across the previous year for the heatmap.
-    for (var offset = 7; offset <= 363; offset++) {
-      if (offset % 7 != 1 && offset % 7 != 3 && offset % 7 != 5) continue;
-      final date = today.subtract(Duration(days: offset));
-      final categoryIndex =
-          (offset ~/ 7 + offset % 3) % _focusCategories.length;
-      final seconds = (20 + (offset * 17) % 150) * 60;
-      _addToDay(grouped, date, {categoryIndex: seconds});
+      final intensity = _hashDate(date, 0x85ebca6b) % 100;
+      final durationRoll = _hashDate(date, 0xc2b2ae35);
+      final minutes = switch (intensity) {
+        < 18 => 10 + durationRoll % 20,
+        < 48 => 30 + durationRoll % 30,
+        < 82 => 60 + durationRoll % 60,
+        _ => 121 + durationRoll % 60,
+      };
+
+      final categoryRoll = _hashDate(date, 0x27d4eb2f);
+      final primaryCategory = categoryRoll % _focusCategories.length;
+      final additions = <int, int>{primaryCategory: minutes * 60};
+      if (_hashDate(date, 0x165667b1) % 4 == 0) {
+        final otherCategory =
+            (primaryCategory + 1 + categoryRoll % 2) % _focusCategories.length;
+        final otherMinutes = minutes ~/ 3;
+        additions[primaryCategory] = (minutes - otherMinutes) * 60;
+        additions[otherCategory] = otherMinutes * 60;
+      }
+      _addToDay(grouped, date, additions);
     }
 
     return {
@@ -108,6 +115,14 @@ class DebugDemoData {
         ifAbsent: () => entry.value,
       );
     }
+  }
+
+  static int _hashDate(DateTime date, int salt) {
+    var hash = date.year * 10000 + date.month * 100 + date.day + salt;
+    hash = (hash * 1664525 + 1013904223) & 0xffffffff;
+    hash ^= hash >> 16;
+    hash = (hash * 1664525 + 1013904223) & 0xffffffff;
+    return (hash ^ (hash >> 16)) & 0xffffffff;
   }
 
   static DateTime _dateOnly(DateTime date) =>

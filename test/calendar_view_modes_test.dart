@@ -37,6 +37,14 @@ void main() {
 
       SharedPreferences.setMockInitialValues({'calendar_view_mode': 'unknown'});
       expect(await CalendarViewPreferences.load(), CalendarViewMode.fullMonth);
+
+      SharedPreferences.setMockInitialValues({
+        'calendar_view_mode': 'fourWeeksWithoutIndicators',
+      });
+      expect(
+        await CalendarViewPreferences.load(),
+        CalendarViewMode.fullMonthWithoutIndicators,
+      );
     },
   );
 
@@ -79,10 +87,10 @@ void main() {
 
     await _pumpCalendar(
       tester,
-      mode: CalendarViewMode.fourWeeksWithoutIndicators,
+      mode: CalendarViewMode.fullMonthWithoutIndicators,
       initialDate: DateTime(2025, 1, 15),
     );
-    expect(find.byType(WeekWidget), findsNWidgets(4));
+    expect(find.byType(WeekWidget), findsNWidgets(5));
 
     await _pumpCalendar(
       tester,
@@ -109,22 +117,66 @@ void main() {
     expect(_indicatorOpacityFor(tester, DateTime(2025, 1, 15)), 0);
   });
 
-  testWidgets('four-week view fades indicators while other views retain them', (
+  testWidgets('all six views show their expected rows and event bars', (
     tester,
   ) async {
-    await _pumpCalendar(
-      tester,
-      mode: CalendarViewMode.oneWeek,
-      initialDate: DateTime(2025, 1, 15),
-    );
-    expect(_indicatorOpacityFor(tester, DateTime(2025, 1, 15)), 1);
+    final date = DateTime(2025, 1, 15);
+    const modes = [
+      (CalendarViewMode.oneWeekWithoutIndicators, 1, 0.0),
+      (CalendarViewMode.oneWeek, 1, 1.0),
+      (CalendarViewMode.twoWeeksWithoutIndicators, 2, 0.0),
+      (CalendarViewMode.twoWeeks, 2, 1.0),
+      (CalendarViewMode.fullMonthWithoutIndicators, 5, 0.0),
+      (CalendarViewMode.fullMonth, 5, 1.0),
+    ];
+
+    for (final (mode, weekCount, opacity) in modes) {
+      await _pumpCalendar(tester, mode: mode, initialDate: date);
+      expect(find.byType(WeekWidget), findsNWidgets(weekCount));
+      expect(_indicatorOpacityFor(tester, date), opacity);
+    }
 
     await _pumpCalendar(
       tester,
-      mode: CalendarViewMode.fourWeeksWithoutIndicators,
-      initialDate: DateTime(2025, 1, 15),
+      mode: CalendarViewMode.fullMonthWithoutIndicators,
+      initialDate: date,
     );
-    expect(_indicatorOpacityFor(tester, DateTime(2025, 1, 15)), 0);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is DayWidget && widget.date == DateTime(2025, 1, 31),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('six view heights stay ordered for four to six month rows', (
+    tester,
+  ) async {
+    final months = [
+      DateTime(2026, 2, 15), // Four rows.
+      DateTime(2025, 1, 15), // Five rows.
+      DateTime(2025, 3, 15), // Six rows.
+    ];
+    const largestToSmallest = [
+      CalendarViewMode.fullMonth,
+      CalendarViewMode.fullMonthWithoutIndicators,
+      CalendarViewMode.twoWeeks,
+      CalendarViewMode.twoWeeksWithoutIndicators,
+      CalendarViewMode.oneWeek,
+      CalendarViewMode.oneWeekWithoutIndicators,
+    ];
+
+    expect(calendarDateOnlyWeekHeight, 64);
+    for (final month in months) {
+      final heights = <double>[];
+      for (final mode in largestToSmallest) {
+        await _pumpCalendar(tester, mode: mode, initialDate: month);
+        heights.add(tester.getSize(find.byType(CalendarWidget)).height);
+      }
+      for (var index = 0; index < heights.length - 1; index++) {
+        expect(heights[index], greaterThan(heights[index + 1]));
+      }
+    }
   });
 
   testWidgets('compact date-picker calendar ignores the calendar view mode', (
@@ -150,10 +202,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      _ResizableCalendarHarness(
-        initialMode: CalendarViewMode.fullMonth,
-        fullMonthWeekCount: 6,
-      ),
+      _ResizableCalendarHarness(initialMode: CalendarViewMode.fullMonth),
     );
     final calendar = find.byKey(const ValueKey('animated-calendar'));
     final todoSection = find.byKey(const ValueKey('todo-section'));
@@ -175,14 +224,14 @@ void main() {
     final finalHeight = tester.getSize(calendar).height;
     final finalTodoTop = tester.getTopLeft(todoSection).dy;
 
-    expect(find.text('Four weeks without task indicators'), findsOneWidget);
+    expect(find.text('Full month without event bars'), findsOneWidget);
     expect(intermediateHeight, lessThan(initialHeight));
     expect(intermediateHeight, greaterThan(finalHeight));
     expect(intermediateTodoTop, lessThan(initialTodoTop));
     expect(intermediateTodoTop, greaterThan(finalTodoTop));
     expect(finalHeight, lessThan(initialHeight));
     expect(finalTodoTop, lessThan(initialTodoTop));
-    expect(find.byType(WeekWidget), findsNWidgets(4));
+    expect(find.byType(WeekWidget), findsNWidgets(6));
   });
 
   testWidgets('minimum one-week mode expands to a week with bars', (
@@ -194,10 +243,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      _ResizableCalendarHarness(
-        initialMode: CalendarViewMode.oneWeek,
-        fullMonthWeekCount: 5,
-      ),
+      _ResizableCalendarHarness(initialMode: CalendarViewMode.oneWeek),
     );
     final calendar = find.byKey(const ValueKey('animated-calendar'));
     final regularHeight = tester.getSize(calendar).height;
@@ -207,7 +253,7 @@ void main() {
       const Offset(0, -100),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Compact one week'), findsOneWidget);
+    expect(find.text('Current week without event bars'), findsOneWidget);
     final compactHeight = tester.getSize(calendar).height;
     expect(compactHeight, lessThan(regularHeight));
     expect(
@@ -220,11 +266,11 @@ void main() {
       const Offset(0, 100),
     );
     await tester.pumpAndSettle();
-    expect(find.text('One week'), findsOneWidget);
+    expect(find.text('Current week with event bars'), findsOneWidget);
     expect(tester.getSize(calendar).height, greaterThan(compactHeight));
   });
 
-  testWidgets('equal-height four-week and full-month modes switch by drag', (
+  testWidgets('whole-month modes retain all rows when bars are hidden', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 1400);
@@ -235,7 +281,6 @@ void main() {
     await tester.pumpWidget(
       _ResizableCalendarHarness(
         initialMode: CalendarViewMode.fullMonth,
-        fullMonthWeekCount: 4,
         initialDate: DateTime(2026, 2, 15),
       ),
     );
@@ -248,41 +293,67 @@ void main() {
 
     await tester.drag(
       find.byKey(const ValueKey('calendar-resize-handle')),
-      const Offset(0, -24),
+      const Offset(0, -48),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Four weeks without task indicators'), findsOneWidget);
-    expect(tester.getSize(calendar).height, closeTo(fullMonthHeight, 0.1));
+    expect(find.text('Full month without event bars'), findsOneWidget);
+    expect(find.byType(WeekWidget), findsNWidgets(4));
+    expect(tester.getSize(calendar).height, lessThan(fullMonthHeight));
 
     await tester.drag(
       find.byKey(const ValueKey('calendar-resize-handle')),
-      const Offset(0, 24),
+      const Offset(0, 48),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Full month'), findsOneWidget);
+    expect(find.text('Full month with event bars'), findsOneWidget);
     expect(tester.getSize(calendar).height, closeTo(fullMonthHeight, 0.1));
   });
 
-  testWidgets('a long drag can skip intermediate modes', (tester) async {
+  testWidgets('any vertical movement changes one adjacent view', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(390, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(
-      _ResizableCalendarHarness(
-        initialMode: CalendarViewMode.fullMonth,
-        fullMonthWeekCount: 6,
-      ),
+      _ResizableCalendarHarness(initialMode: CalendarViewMode.twoWeeks),
     );
-    await tester.drag(
-      find.byKey(const ValueKey('calendar-resize-handle')),
-      const Offset(0, -3 * calendarItemsWeekHeight),
-    );
+    final resizeHandle = find.byKey(const ValueKey('calendar-resize-handle'));
+    await tester.tap(resizeHandle);
     await tester.pumpAndSettle();
+    expect(find.text('Two weeks with event bars'), findsOneWidget);
 
-    expect(find.text('Two weeks'), findsOneWidget);
-    expect(find.byType(WeekWidget), findsNWidgets(2));
+    await tester.drag(resizeHandle, const Offset(0, -1));
+    await tester.pumpAndSettle();
+    expect(find.text('Two weeks without event bars'), findsOneWidget);
+
+    await tester.drag(resizeHandle, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('Current week with event bars'), findsOneWidget);
+    expect(find.byType(WeekWidget), findsOneWidget);
+
+    await tester.drag(resizeHandle, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('Current week without event bars'), findsOneWidget);
+
+    await tester.drag(resizeHandle, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('Current week without event bars'), findsOneWidget);
+
+    for (final expectedMode in [
+      'Current week with event bars',
+      'Two weeks without event bars',
+      'Two weeks with event bars',
+      'Full month without event bars',
+      'Full month with event bars',
+      'Full month with event bars',
+    ]) {
+      await tester.drag(resizeHandle, const Offset(0, 300));
+      await tester.pumpAndSettle();
+      expect(find.text(expectedMode), findsOneWidget);
+    }
   });
 
   testWidgets('resize handle exposes its current value and size actions', (
@@ -290,10 +361,7 @@ void main() {
   ) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(
-      _ResizableCalendarHarness(
-        initialMode: CalendarViewMode.fullMonth,
-        fullMonthWeekCount: 5,
-      ),
+      _ResizableCalendarHarness(initialMode: CalendarViewMode.fullMonth),
     );
 
     final data = tester
@@ -302,7 +370,7 @@ void main() {
         )
         .getSemanticsData();
     expect(data.label, 'Calendar height');
-    expect(data.value, 'Full month');
+    expect(data.value, 'Full month with event bars');
     expect(data.hasAction(SemanticsAction.decrease), isTrue);
     expect(data.hasAction(SemanticsAction.increase), isFalse);
     semantics.dispose();
@@ -400,14 +468,10 @@ double _indicatorOpacityFor(WidgetTester tester, DateTime date) {
 }
 
 class _ResizableCalendarHarness extends StatefulWidget {
-  _ResizableCalendarHarness({
-    required this.initialMode,
-    required this.fullMonthWeekCount,
-    DateTime? initialDate,
-  }) : initialDate = initialDate ?? DateTime(2025, 3, 15);
+  _ResizableCalendarHarness({required this.initialMode, DateTime? initialDate})
+    : initialDate = initialDate ?? DateTime(2025, 3, 15);
 
   final CalendarViewMode initialMode;
-  final int fullMonthWeekCount;
   final DateTime initialDate;
 
   @override
@@ -440,7 +504,6 @@ class _ResizableCalendarHarnessState extends State<_ResizableCalendarHarness> {
               ),
               CalendarResizeHandle(
                 mode: _mode,
-                fullMonthWeekCount: widget.fullMonthWeekCount,
                 onModeChanged: (mode) => setState(() => _mode = mode),
               ),
               Text(_mode.label, key: const ValueKey('todo-section')),

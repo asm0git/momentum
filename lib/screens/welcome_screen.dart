@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../app_theme.dart';
 
+/// Opening screen that leads users to calendar setup.
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
@@ -41,6 +42,7 @@ class WelcomeScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(AppRadii.focusPreset),
                     ),
                   ),
+                  // Replace this route so Back does not reopen onboarding.
                   onPressed: () => Navigator.of(
                     context,
                   ).pushReplacementNamed('/calendars', arguments: true),

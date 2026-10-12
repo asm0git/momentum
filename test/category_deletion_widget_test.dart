@@ -39,6 +39,44 @@ void main() {
     await tempDirectory.delete(recursive: true);
   });
 
+  testWidgets('To-Do creates a category from the top action', (tester) async {
+    await tester.pumpWidget(_app(planner));
+
+    final actionFinder = find.descendant(
+      of: find.byKey(const ValueKey('todo-new-category')),
+      matching: find.byType(OutlinedButton),
+    );
+    expect(actionFinder, findsOneWidget);
+    expect(
+      tester
+          .widget<OutlinedButton>(actionFinder)
+          .style
+          ?.backgroundColor
+          ?.resolve({}),
+      AppColors.surface,
+    );
+    expect(find.byIcon(Icons.add_circle_outline), findsOneWidget);
+
+    await tester.tap(actionFinder);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Projects');
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      for (
+        var attempt = 0;
+        attempt < 50 && planner.categories.isEmpty;
+        attempt++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    });
+    await tester.pump();
+
+    expect(planner.categories.single.title, 'Projects');
+    expect(find.text('Projects'), findsOneWidget);
+  });
+
   testWidgets('canceling category deletion leaves the category intact', (
     tester,
   ) async {
@@ -51,6 +89,32 @@ void main() {
 
     await _openCategoryDeleteDialog(tester, 'Empty');
     expect(find.text('Delete category?'), findsOneWidget);
+    final title = tester.widget<Text>(find.text('Delete category?'));
+    _expectTypography(
+      title.style,
+      appTheme.textTheme.bodyMedium!.copyWith(color: AppColors.primary),
+    );
+    final description = tester.widget<Text>(
+      find.textContaining('This cannot be undone.'),
+    );
+    _expectTypography(
+      description.style,
+      appTheme.textTheme.bodyMedium!.copyWith(
+        color: AppColors.onSurface,
+        fontWeight: FontWeight.w400,
+      ),
+    );
+    expect(
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Padding &&
+              widget.padding == const EdgeInsets.all(AppSpacing.md),
+        ),
+      ),
+      findsAtLeastNWidgets(1),
+    );
 
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
@@ -198,6 +262,15 @@ void main() {
     expect(planner.categories, isEmpty);
     expect(planner.items, isEmpty);
   });
+}
+
+void _expectTypography(TextStyle? actual, TextStyle expected) {
+  expect(actual?.fontFamily, expected.fontFamily);
+  expect(actual?.fontSize, expected.fontSize);
+  expect(actual?.fontWeight, expected.fontWeight);
+  expect(actual?.letterSpacing, expected.letterSpacing);
+  expect(actual?.height, expected.height);
+  expect(actual?.color, expected.color);
 }
 
 Future<void> _waitForCategoryCount(

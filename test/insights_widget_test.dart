@@ -40,7 +40,14 @@ void main() {
     await tempDirectory.delete(recursive: true);
   });
 
-  testWidgets('focus heatmap ends at the current date', (tester) async {
+  testWidgets('focus heatmap fits the screen and ends on the present date', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
       ChangeNotifierProvider<PlannerState>.value(
         value: planner,
@@ -58,8 +65,31 @@ void main() {
     String cellKey(DateTime date) =>
         'insights-heatmap-cell-${date.toIso8601String().substring(0, 10)}';
 
-    expect(find.byKey(ValueKey(cellKey(today))), findsOneWidget);
+    final todayCell = find.byKey(ValueKey(cellKey(today)));
+    expect(todayCell, findsOneWidget);
     expect(find.byKey(ValueKey(cellKey(tomorrow))), findsNothing);
+    expect(find.byKey(const ValueKey('insights-heatmap-scroll')), findsNothing);
+    final gridRect = tester.getRect(
+      find.byKey(const ValueKey('insights-heatmap-grid')),
+    );
+    final todayRect = tester.getRect(todayCell);
+    expect(
+      todayRect.left >= gridRect.left && todayRect.right <= gridRect.right,
+      isTrue,
+    );
+    final visibleCells = find
+        .byWidgetPredicate(
+          (widget) =>
+              widget is Container &&
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'insights-heatmap-cell-',
+              ),
+        )
+        .evaluate()
+        .length;
+    expect(visibleCells, greaterThan(90));
+    expect(visibleCells, lessThan(364));
   });
 
   testWidgets(

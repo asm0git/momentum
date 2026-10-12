@@ -23,45 +23,56 @@ class DialogActionButtons extends StatelessWidget {
     final textStyle = Theme.of(
       context,
     ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.normal);
+    final cancelStyle = FilledButton.styleFrom(
+      backgroundColor: AppColors.surface,
+      foregroundColor: AppColors.primary,
+      shape: const StadiumBorder(),
+      minimumSize: const Size(0, 42),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: textStyle,
+    );
+    final actionStyle = FilledButton.styleFrom(
+      backgroundColor: actionColor,
+      foregroundColor: AppColors.onPrimary,
+      shape: const StadiumBorder(),
+      minimumSize: const Size(0, 42),
+      padding: EdgeInsets.zero,
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      textStyle: textStyle,
+    ).copyWith(
+      backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+        if (states.contains(WidgetState.disabled)) return AppColors.disabled;
+        return actionColor;
+      }),
+    );
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.surface,
-            foregroundColor: AppColors.onSurface,
-            minimumSize: const Size(0, 48),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: textStyle,
+    return Container(
+      key: const ValueKey('dialog-action-buttons'),
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.background),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: FilledButton(
+              style: cancelStyle,
+              onPressed: onCancel,
+              child: Text(cancelLabel),
+            ),
           ),
-          onPressed: onCancel,
-          child: Text(cancelLabel),
-        ),
-        const SizedBox(height: AppSpacing.xxs),
-        FilledButton(
-          style:
-              FilledButton.styleFrom(
-                backgroundColor: actionColor,
-                foregroundColor: AppColors.onPrimary,
-                minimumSize: const Size(0, 48),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                textStyle: textStyle,
-              ).copyWith(
-                backgroundColor: WidgetStateProperty.resolveWith<Color?>((
-                  states,
-                ) {
-                  if (states.contains(WidgetState.disabled)) {
-                    return AppColors.disabled;
-                  }
-                  return actionColor;
-                }),
-              ),
-          onPressed: onAction,
-          child: Text(actionLabel),
-        ),
-      ],
+          Expanded(
+            child: FilledButton(
+              style: actionStyle,
+              onPressed: onAction,
+              child: Text(actionLabel),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

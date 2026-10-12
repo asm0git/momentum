@@ -123,6 +123,8 @@ class TaskListContainer extends StatelessWidget {
     final row = onDelete != null && supportsSwipeDelete
         ? SwipeToRevealDelete(
             onDelete: () => onDelete!(item),
+            deleteCircleScale: 0.95,
+            deleteRightInset: AppSpacing.xxs,
             child: itemWidget,
           )
         : itemWidget;
