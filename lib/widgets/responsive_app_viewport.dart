@@ -29,23 +29,25 @@ class ResponsiveAppViewport extends StatelessWidget {
             : mediaQuery.size.height;
         final usePhoneFrame = availableWidth > _wideScreenBreakpoint;
 
-        final appHeight = (usePhoneFrame
-                ? math.min(
-                    _phoneHeight,
-                    math.max(0, availableHeight - _wideScreenGutter * 2),
-                  )
-                : availableHeight)
-            .toDouble();
-        final appWidth = (usePhoneFrame
-                ? math.min(
-                    _phoneWidth,
-                    math.min(
-                      availableWidth - _wideScreenGutter * 2,
-                      appHeight * _phoneWidth / _phoneHeight,
-                    ),
-                  )
-                : math.min(_phoneWidth, availableWidth))
-            .toDouble();
+        final appHeight =
+            (usePhoneFrame
+                    ? math.min(
+                        _phoneHeight,
+                        math.max(0, availableHeight - _wideScreenGutter * 2),
+                      )
+                    : availableHeight)
+                .toDouble();
+        final appWidth =
+            (usePhoneFrame
+                    ? math.min(
+                        _phoneWidth,
+                        math.min(
+                          availableWidth - _wideScreenGutter * 2,
+                          appHeight * _phoneWidth / _phoneHeight,
+                        ),
+                      )
+                    : math.min(_phoneWidth, availableWidth))
+                .toDouble();
         final appSize = Size(appWidth, appHeight);
         final app = MediaQuery(
           data: mediaQuery.copyWith(size: appSize),

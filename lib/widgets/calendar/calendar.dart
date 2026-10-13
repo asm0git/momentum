@@ -1,9 +1,9 @@
 import 'package:flutter/gestures.dart' show kTouchSlop;
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
-import '../calendar_view_mode.dart';
-import '../data_models.dart';
+import '../../app_theme.dart';
+import '../../calendar_view_mode.dart';
+import '../../data_models.dart';
 import 'week.dart';
 
 class CalendarWidget extends StatefulWidget {

@@ -113,9 +113,9 @@ class _SwipeToRevealDeleteState extends State<SwipeToRevealDelete>
                                 final horizontalOffset = rightInset == null
                                     ? 0.0
                                     : (SwipeToRevealDelete.actionWidth -
-                                              diameter) /
-                                          2 -
-                                        rightInset;
+                                                  diameter) /
+                                              2 -
+                                          rightInset;
                                 return Transform.translate(
                                   offset: Offset(horizontalOffset, 0),
                                   child: SizedBox.square(
@@ -165,8 +165,7 @@ class _SwipeToRevealDeleteState extends State<SwipeToRevealDelete>
                   final rawOffset =
                       -SwipeToRevealDelete.actionWidth * _controller.value;
                   final alignedOffset =
-                      (rawOffset * devicePixelRatio).round() /
-                      devicePixelRatio;
+                      (rawOffset * devicePixelRatio).round() / devicePixelRatio;
                   return Transform.translate(
                     offset: Offset(alignedOffset, 0),
                     child: IgnorePointer(

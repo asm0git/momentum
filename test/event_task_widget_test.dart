@@ -10,7 +10,7 @@ import 'package:momentum/state/planner_state.dart';
 import 'package:momentum/widgets/add_item_popup.dart';
 import 'package:momentum/widgets/task_list_container.dart';
 import 'package:momentum/widgets/task_widget.dart';
-import 'package:momentum/widgets/days.dart';
+import 'package:momentum/widgets/calendar/days.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 

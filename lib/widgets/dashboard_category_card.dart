@@ -128,10 +128,10 @@ class DashboardCategoryCard extends StatelessWidget {
                     style: textTheme.labelMedium?.copyWith(
                       color: AppColors.onSurface,
                     ),
-                ),
-                Text(
-                  _formatPreviewDate(context, item),
-                  maxLines: 1,
+                  ),
+                  Text(
+                    _formatPreviewDate(context, item),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: textTheme.labelMedium?.copyWith(
                       color: AppColors.onSurface,

@@ -32,20 +32,22 @@ class DialogActionButtons extends StatelessWidget {
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       textStyle: textStyle,
     );
-    final actionStyle = FilledButton.styleFrom(
-      backgroundColor: actionColor,
-      foregroundColor: AppColors.onPrimary,
-      shape: const StadiumBorder(),
-      minimumSize: const Size(0, 42),
-      padding: EdgeInsets.zero,
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      textStyle: textStyle,
-    ).copyWith(
-      backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
-        if (states.contains(WidgetState.disabled)) return AppColors.disabled;
-        return actionColor;
-      }),
-    );
+    final actionStyle =
+        FilledButton.styleFrom(
+          backgroundColor: actionColor,
+          foregroundColor: AppColors.onPrimary,
+          shape: const StadiumBorder(),
+          minimumSize: const Size(0, 42),
+          padding: EdgeInsets.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: textStyle,
+        ).copyWith(
+          backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
+            if (states.contains(WidgetState.disabled))
+              return AppColors.disabled;
+            return actionColor;
+          }),
+        );
 
     return Container(
       key: const ValueKey('dialog-action-buttons'),

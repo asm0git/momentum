@@ -6,10 +6,10 @@ import 'package:momentum/calendar_view_mode.dart';
 import 'package:momentum/screens/calendar_screen.dart';
 import 'package:momentum/services/calendar_view_preferences.dart';
 import 'package:momentum/state/planner_state.dart';
-import 'package:momentum/widgets/calendar.dart';
-import 'package:momentum/widgets/calendar_resize_handle.dart';
-import 'package:momentum/widgets/days.dart';
-import 'package:momentum/widgets/week.dart';
+import 'package:momentum/widgets/calendar/calendar.dart';
+import 'package:momentum/widgets/calendar/calendar_resize_handle.dart';
+import 'package:momentum/widgets/calendar/days.dart';
+import 'package:momentum/widgets/calendar/week.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

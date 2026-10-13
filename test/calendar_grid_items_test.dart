@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/app_theme.dart';
 import 'package:momentum/calendar_view_mode.dart';
 import 'package:momentum/data_models.dart';
-import 'package:momentum/widgets/calendar.dart';
-import 'package:momentum/widgets/week.dart';
+import 'package:momentum/widgets/calendar/calendar.dart';
+import 'package:momentum/widgets/calendar/week.dart';
 
 void main() {
   testWidgets('calendar shows three chronological bars then overflow', (

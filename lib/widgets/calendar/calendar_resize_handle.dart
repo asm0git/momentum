@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
-import '../calendar_view_mode.dart';
+import '../../app_theme.dart';
+import '../../calendar_view_mode.dart';
 
 class CalendarResizeHandle extends StatefulWidget {
   const CalendarResizeHandle({

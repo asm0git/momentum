@@ -227,9 +227,7 @@ void main() {
       _app(
         planner,
         const DashboardScreen(),
-        routes: {
-          '/todo': (_) => TodoScreen(initialCategoryId: category.id),
-        },
+        routes: {'/todo': (_) => TodoScreen(initialCategoryId: category.id)},
       ),
     );
     await tester.pumpAndSettle();
@@ -262,11 +260,10 @@ Widget _app(
   PlannerState planner,
   Widget child, {
   Map<String, WidgetBuilder> routes = const {},
-}) =>
-    ChangeNotifierProvider<PlannerState>.value(
-      value: planner,
-      child: MaterialApp(theme: appTheme, home: child, routes: routes),
-    );
+}) => ChangeNotifierProvider<PlannerState>.value(
+  value: planner,
+  child: MaterialApp(theme: appTheme, home: child, routes: routes),
+);
 
 class _ReactivePlannerViews extends StatelessWidget {
   const _ReactivePlannerViews();

@@ -30,10 +30,7 @@ class CircularIconButton extends StatelessWidget {
     // Animate color changes when the parent supplies a duration.
     return AnimatedContainer(
       duration: duration,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: backgroundColor, shape: BoxShape.circle),
       child: IconButton(
         onPressed: onPressed,
         icon: Icon(icon, color: foregroundColor),
