@@ -275,4 +275,73 @@ void main() {
       expect(categoryTotals.single.totalSeconds, 5);
     },
   );
+
+  test('automatic event focus aggregation groups by day and category', () {
+    final from = DateTime(2026, 10, 9, 23, 59, 58);
+    final midnight = DateTime(2026, 10, 10);
+    final through = DateTime(2026, 10, 10, 0, 0, 5);
+    const firstCategory = FocusTaskSelection(
+      taskId: 1,
+      taskTitle: 'First event',
+      categoryId: 4,
+      categoryTitle: 'School',
+      categoryIcon: 'mi_school',
+      isEvent: true,
+    );
+    const overlappingCategory = FocusTaskSelection(
+      taskId: 2,
+      taskTitle: 'Overlapping event',
+      categoryId: 5,
+      categoryTitle: 'Personal',
+      categoryIcon: 'mi_person',
+      isEvent: true,
+    );
+    const laterSameCategory = FocusTaskSelection(
+      taskId: 3,
+      taskTitle: 'Later event',
+      categoryId: 4,
+      categoryTitle: 'School',
+      categoryIcon: 'mi_school',
+      isEvent: true,
+    );
+
+    final buckets = aggregateAutomaticFocusBuckets(
+      intervals: [
+        ScheduledEventFocusInterval(
+          midnight.add(const Duration(seconds: 2)),
+          through,
+          laterSameCategory,
+        ),
+        ScheduledEventFocusInterval(
+          from.add(const Duration(seconds: 1)),
+          midnight.add(const Duration(seconds: 3)),
+          overlappingCategory,
+        ),
+        ScheduledEventFocusInterval(
+          from,
+          midnight.add(const Duration(seconds: 2)),
+          firstCategory,
+        ),
+      ],
+      from: from,
+      through: through,
+    );
+
+    expect(
+      [
+        for (final bucket in buckets)
+          (
+            date: bucket.date,
+            categoryId: bucket.selection.categoryId,
+            seconds: bucket.seconds,
+          ),
+      ],
+      [
+        (date: DateTime(2026, 10, 9), categoryId: 4, seconds: 2),
+        (date: DateTime(2026, 10, 10), categoryId: 4, seconds: 4),
+        (date: DateTime(2026, 10, 10), categoryId: 5, seconds: 1),
+      ],
+    );
+    expect(buckets[1].selection, firstCategory);
+  });
 }

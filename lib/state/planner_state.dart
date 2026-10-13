@@ -11,6 +11,105 @@ import '../services/canvas_backend_client.dart';
 import 'calendar_sync_coordinator.dart';
 import 'focus_history_source.dart';
 
+/// A scheduled event's active window and the category used for focus history.
+class ScheduledEventFocusInterval {
+  const ScheduledEventFocusInterval(this.start, this.end, this.selection);
+
+  final DateTime start;
+  final DateTime end;
+  final FocusTaskSelection selection;
+}
+
+/// Focus seconds grouped for one local day and category.
+class AutomaticFocusBucket {
+  const AutomaticFocusBucket({
+    required this.date,
+    required this.selection,
+    required this.seconds,
+  });
+
+  final DateTime date;
+  final FocusTaskSelection selection;
+  final int seconds;
+}
+
+/// Splits event windows at their boundaries and local midnight, then groups
+/// covered seconds by day and category. Overlaps prefer the earliest event.
+List<AutomaticFocusBucket> aggregateAutomaticFocusBuckets({
+  required Iterable<ScheduledEventFocusInterval> intervals,
+  required DateTime from,
+  required DateTime through,
+}) {
+  if (!through.isAfter(from)) return const [];
+
+  final eventIntervals = intervals.toList()
+    ..sort((first, second) {
+      final byStart = first.start.compareTo(second.start);
+      if (byStart != 0) return byStart;
+      return first.selection.taskId.compareTo(second.selection.taskId);
+    });
+  final boundaries = <DateTime>{from, through};
+  for (final interval in eventIntervals) {
+    if (interval.start.isAfter(from) && interval.start.isBefore(through)) {
+      boundaries.add(interval.start);
+    }
+    if (interval.end.isAfter(from) && interval.end.isBefore(through)) {
+      boundaries.add(interval.end);
+    }
+  }
+
+  var midnight = DateTime(from.year, from.month, from.day + 1);
+  while (midnight.isBefore(through)) {
+    boundaries.add(midnight);
+    midnight = DateTime(midnight.year, midnight.month, midnight.day + 1);
+  }
+
+  final orderedBoundaries = boundaries.toList()..sort();
+  final totals = <DateTime, Map<int, _MutableAutomaticFocusBucket>>{};
+  for (var index = 0; index + 1 < orderedBoundaries.length; index++) {
+    final start = orderedBoundaries[index];
+    final end = orderedBoundaries[index + 1];
+    if (!end.isAfter(start)) continue;
+
+    ScheduledEventFocusInterval? active;
+    for (final interval in eventIntervals) {
+      if (!start.isBefore(interval.start) && !end.isAfter(interval.end)) {
+        active = interval;
+        break;
+      }
+    }
+    if (active == null) continue;
+
+    final seconds = end.difference(start).inSeconds;
+    if (seconds <= 0) continue;
+    final day = dateOnly(start);
+    final byCategory = totals.putIfAbsent(
+      day,
+      () => <int, _MutableAutomaticFocusBucket>{},
+    );
+    final categoryId = active.selection.categoryId;
+    final bucket = byCategory[categoryId];
+    if (bucket == null) {
+      byCategory[categoryId] = _MutableAutomaticFocusBucket(
+        selection: active.selection,
+        seconds: seconds,
+      );
+    } else {
+      bucket.seconds += seconds;
+    }
+  }
+
+  return [
+    for (final dayEntry in totals.entries)
+      for (final bucket in dayEntry.value.values)
+        AutomaticFocusBucket(
+          date: dayEntry.key,
+          selection: bucket.selection,
+          seconds: bucket.seconds,
+        ),
+  ];
+}
+
 class PlannerState extends ChangeNotifier implements FocusHistorySource {
   PlannerState({
     PlannerRepository? repository,
@@ -58,7 +157,8 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   Object? get error => _error;
   @override
   int get focusHistoryRevision => _focusHistoryRevision;
-  LinkedAccount? get canvasAccount => accountForProvider(CalendarProvider.canvas);
+  LinkedAccount? get canvasAccount =>
+      accountForProvider(CalendarProvider.canvas);
   LinkedAccount? accountForProvider(CalendarProvider provider) =>
       _linkedAccounts
           .where(
@@ -573,27 +673,20 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
 
   Future<CanvasConnectionStatus> refreshProviderStatus(
     CalendarProvider provider,
-  ) =>
-      _calendarSync.refreshProviderStatus(provider);
+  ) => _calendarSync.refreshProviderStatus(provider);
 
   Future<void> syncCanvas({bool replaceExistingImports = false}) =>
-      _calendarSync.syncCanvas(
-        replaceExistingImports: replaceExistingImports,
-      );
+      _calendarSync.syncCanvas(replaceExistingImports: replaceExistingImports);
 
   Future<void> syncProvider(
     CalendarProvider provider, {
     bool replaceExistingImports = false,
-  }) =>
-      _calendarSync.syncProvider(
-        provider,
-        replaceExistingImports: replaceExistingImports,
-      );
+  }) => _calendarSync.syncProvider(
+    provider,
+    replaceExistingImports: replaceExistingImports,
+  );
 
-  Future<void> connectCalendarIcsFeed(
-    CalendarProvider provider,
-    String url,
-  ) =>
+  Future<void> connectCalendarIcsFeed(CalendarProvider provider, String url) =>
       _calendarSync.connectCalendarIcsFeed(provider, url);
 
   Future<void> disconnectCanvas() => _calendarSync.disconnectCanvas();
@@ -613,69 +706,37 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     _isRecordingAutomaticEventFocus = true;
     try {
       final intervals = _eventFocusIntervals(from, through);
-      final boundaries = <DateTime>{from, through};
-      for (final interval in intervals) {
-        if (interval.start.isAfter(from) && interval.start.isBefore(through)) {
-          boundaries.add(interval.start);
-        }
-        if (interval.end.isAfter(from) && interval.end.isBefore(through)) {
-          boundaries.add(interval.end);
-        }
-      }
-      var midnight = DateTime(from.year, from.month, from.day + 1);
-      while (midnight.isBefore(through)) {
-        boundaries.add(midnight);
-        midnight = DateTime(midnight.year, midnight.month, midnight.day + 1);
-      }
-
-      final orderedBoundaries = boundaries.toList()..sort();
-      final totals = <DateTime, Map<int, _AutomaticFocusBucket>>{};
-      for (var index = 0; index + 1 < orderedBoundaries.length; index++) {
-        final start = orderedBoundaries[index];
-        final end = orderedBoundaries[index + 1];
-        if (!end.isAfter(start)) continue;
-        _ScheduledEventFocus? active;
-        for (final interval in intervals) {
-          if (!start.isBefore(interval.start) && !end.isAfter(interval.end)) {
-            active = interval;
-            break;
-          }
-        }
-        if (active == null) continue;
-
-        final seconds = end.difference(start).inSeconds;
-        if (seconds <= 0) continue;
-        final day = dateOnly(start);
-        final byCategory = totals.putIfAbsent(
-          day,
-          () => <int, _AutomaticFocusBucket>{},
+      final buckets = aggregateAutomaticFocusBuckets(
+        intervals: intervals,
+        from: from,
+        through: through,
+      );
+      if (buckets.isNotEmpty) {
+        await _repository.addFocusSecondsBatch(
+          buckets.map(
+            (bucket) => (
+              date: bucket.date,
+              seconds: bucket.seconds,
+              selection: bucket.selection,
+            ),
+          ),
         );
-        final categoryId = active.selection.categoryId;
-        final bucket = byCategory[categoryId];
-        if (bucket == null) {
-          byCategory[categoryId] = _AutomaticFocusBucket(
-            selection: active.selection,
-            seconds: seconds,
-          );
-        } else {
-          bucket.seconds += seconds;
+        _automaticEventFocusCursor = through;
+        if (!_isDisposed) {
+          _focusHistoryRevision++;
+          notifyListeners();
         }
-      }
-
-      for (final dayEntry in totals.entries) {
-        for (final bucket in dayEntry.value.values) {
-          await addFocusSeconds(dayEntry.key, bucket.seconds, bucket.selection);
-        }
+      } else {
+        _automaticEventFocusCursor = through;
       }
     } catch (_) {
-      // Keep the app usable if local storage is temporarily unavailable.
+      // Keep the cursor unchanged so the next interval retries the full batch.
     } finally {
-      _automaticEventFocusCursor = through;
       _isRecordingAutomaticEventFocus = false;
     }
   }
 
-  List<_ScheduledEventFocus> _eventFocusIntervals(
+  List<ScheduledEventFocusInterval> _eventFocusIntervals(
     DateTime from,
     DateTime through,
   ) {
@@ -694,7 +755,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
       from,
     ).subtract(Duration(days: longestDurationDays + 1));
     final lastDay = dateOnly(through);
-    final result = <_ScheduledEventFocus>[];
+    final result = <ScheduledEventFocusInterval>[];
 
     for (final series in events) {
       for (final occurrenceDate in recurrenceDatesInRange(
@@ -721,7 +782,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
               categoryIcon: 'mi_timer',
               isEvent: true,
             );
-        result.add(_ScheduledEventFocus(start, end, selection));
+        result.add(ScheduledEventFocusInterval(start, end, selection));
       }
     }
 
@@ -872,16 +933,11 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   }
 }
 
-class _ScheduledEventFocus {
-  const _ScheduledEventFocus(this.start, this.end, this.selection);
-
-  final DateTime start;
-  final DateTime end;
-  final FocusTaskSelection selection;
-}
-
-class _AutomaticFocusBucket {
-  _AutomaticFocusBucket({required this.selection, required this.seconds});
+class _MutableAutomaticFocusBucket {
+  _MutableAutomaticFocusBucket({
+    required this.selection,
+    required this.seconds,
+  });
 
   final FocusTaskSelection selection;
   int seconds;

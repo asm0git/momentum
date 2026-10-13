@@ -659,38 +659,48 @@ class PlannerRepository {
     DateTime date,
     int seconds,
     FocusTaskSelection selection,
+  ) => addFocusSecondsBatch([
+    (date: date, seconds: seconds, selection: selection),
+  ]);
+
+  Future<void> addFocusSecondsBatch(
+    Iterable<({DateTime date, int seconds, FocusTaskSelection selection})>
+    entries,
   ) async {
-    if (seconds <= 0) return;
+    final writes = entries.where((entry) => entry.seconds > 0).toList();
+    if (writes.isEmpty) return;
     final db = await _databaseHelper.database;
-    final focusDate = dateOnly(date).toIso8601String();
     await db.transaction((txn) async {
-      await txn.rawInsert(
-        '''
-        INSERT INTO focus_daily_totals (focus_date, total_seconds)
-        VALUES (?, ?)
-        ON CONFLICT(focus_date) DO UPDATE SET
-          total_seconds = total_seconds + excluded.total_seconds
-        ''',
-        [focusDate, seconds],
-      );
-      await txn.rawInsert(
-        '''
-        INSERT INTO focus_daily_category_totals
-          (focus_date, category_id, category_title, category_icon, total_seconds)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(focus_date, category_id) DO UPDATE SET
-          category_title = excluded.category_title,
-          category_icon = excluded.category_icon,
-          total_seconds = total_seconds + excluded.total_seconds
-        ''',
-        [
-          focusDate,
-          selection.categoryId,
-          selection.categoryTitle,
-          selection.categoryIcon,
-          seconds,
-        ],
-      );
+      for (final entry in writes) {
+        final focusDate = dateOnly(entry.date).toIso8601String();
+        await txn.rawInsert(
+          '''
+          INSERT INTO focus_daily_totals (focus_date, total_seconds)
+          VALUES (?, ?)
+          ON CONFLICT(focus_date) DO UPDATE SET
+            total_seconds = total_seconds + excluded.total_seconds
+          ''',
+          [focusDate, entry.seconds],
+        );
+        await txn.rawInsert(
+          '''
+          INSERT INTO focus_daily_category_totals
+            (focus_date, category_id, category_title, category_icon, total_seconds)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(focus_date, category_id) DO UPDATE SET
+            category_title = excluded.category_title,
+            category_icon = excluded.category_icon,
+            total_seconds = total_seconds + excluded.total_seconds
+          ''',
+          [
+            focusDate,
+            entry.selection.categoryId,
+            entry.selection.categoryTitle,
+            entry.selection.categoryIcon,
+            entry.seconds,
+          ],
+        );
+      }
     });
   }
 
