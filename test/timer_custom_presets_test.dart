@@ -87,4 +87,12 @@ void main() {
     expect(find.text('That preset already exists.'), findsOneWidget);
     expect(focusTimer.customPresets, [preset, existingPreset]);
   });
+
+  test('invalid saved presets fall back to an empty list', () async {
+    SharedPreferences.setMockInitialValues({
+      'focus_timer_custom_presets': '{invalid json',
+    });
+
+    expect(await FocusPresetPreferences.load(), isEmpty);
+  });
 }

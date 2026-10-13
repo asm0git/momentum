@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -36,7 +37,13 @@ class FocusPresetPreferences {
         if (!presets.contains(preset)) presets.add(preset);
       }
       return List.unmodifiable(presets);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'Could not load saved focus presets; using an empty list.',
+        name: 'momentum.focus_preset_preferences',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return const [];
     }
   }
