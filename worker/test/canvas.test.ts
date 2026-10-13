@@ -8,10 +8,6 @@ import {
   splitContextBatches,
 } from '../src/canvas';
 import worker, {
-  fetchGooglePages,
-  fetchGraphPages,
-  mapGoogleEvent,
-  mapOutlookEvent,
   cleanupExpiredState,
   type Env,
 } from '../src/index';
@@ -171,7 +167,7 @@ describe('Canvas import helpers', () => {
     const apiLimiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
     const oauthLimiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
     const response = await worker.fetch(
-      new Request('https://momentum.example.com/api/google/oauth/start', {
+      new Request('https://momentum.example.com/api/canvas/oauth/start', {
         headers: { 'cf-connecting-ip': '198.51.100.10' },
       }),
       {
@@ -229,88 +225,20 @@ describe('Canvas import helpers', () => {
     await cleanupExpiredState(db);
 
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(prepared).toHaveLength(6);
+    expect(prepared).toHaveLength(4);
     expect(prepared.map(({ sql }) => sql).join('\n')).toContain(
-      'DELETE FROM provider_oauth_states WHERE expires_at <= ?',
+      'DELETE FROM oauth_states WHERE expires_at <= ?',
     );
     expect(prepared.map(({ sql }) => sql).join('\n')).toContain(
-      'DELETE FROM provider_connections',
+      'DELETE FROM calendar_ics_feeds',
+    );
+    expect(prepared.map(({ sql }) => sql).join('\n')).not.toContain(
+      'provider_oauth_states',
+    );
+    expect(prepared.map(({ sql }) => sql).join('\n')).not.toContain(
+      'provider_connections',
     );
     expect(prepared.every(({ values }) => values.length === 1)).toBe(true);
   });
 
-  it('maps Google all-day occurrences with stable per-event IDs', () => {
-    expect(
-      mapGoogleEvent('primary@example.test', {
-        id: 'series_instance_20261012',
-        recurringEventId: 'series',
-        summary: 'Lecture',
-        start: { date: '2026-10-12' },
-        end: { date: '2026-10-13' },
-      }),
-    ).toEqual({
-      externalId: 'primary@example.test:series_instance_20261012',
-      title: 'Lecture',
-      start: '2026-10-12T00:00:00',
-      end: '2026-10-12T00:00:00',
-      allDay: true,
-      description: '',
-      location: null,
-    });
-  });
-
-  it('maps Outlook UTC dates, notes, locations, and all-day ranges', () => {
-    expect(
-      mapOutlookEvent('calendar-1', {
-        id: 'evt-8',
-        subject: 'Project day',
-        body: { content: 'Bring the draft' },
-        start: { dateTime: '2026-10-12T00:00:00.0000000', timeZone: 'UTC' },
-        end: { dateTime: '2026-10-13T00:00:00.0000000', timeZone: 'UTC' },
-        isAllDay: true,
-        location: { displayName: 'Library' },
-      }),
-    ).toEqual({
-      externalId: 'calendar-1:evt-8',
-      title: 'Project day',
-      start: '2026-10-12T00:00:00',
-      end: '2026-10-12T00:00:00',
-      allDay: true,
-      description: 'Bring the draft',
-      location: 'Library',
-    });
-  });
-
-  it('follows Google and Microsoft pagination links', async () => {
-    const fetcher = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ items: [{ id: 'a' }], nextPageToken: 'next' }),
-        ),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: 'b' }] })));
-    await expect(
-      fetchGooglePages(
-        'https://www.googleapis.com/calendar/v3/users/me/calendarList',
-        'token',
-      ),
-    ).resolves.toEqual([{ id: 'a' }, { id: 'b' }]);
-    fetcher
-      .mockReset()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            value: [{ id: 'a' }],
-            '@odata.nextLink':
-              'https://graph.microsoft.com/v1.0/me/events?$skip=1',
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ value: [{ id: 'b' }] })));
-    await expect(
-      fetchGraphPages('https://graph.microsoft.com/v1.0/me/events', 'token'),
-    ).resolves.toEqual([{ id: 'a' }, { id: 'b' }]);
-    fetcher.mockRestore();
-  });
 });

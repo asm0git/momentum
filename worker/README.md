@@ -143,6 +143,10 @@ once for this Momentum copy.
    If Wrangler asks whether it should apply the migrations, type `y` and press
    Enter. Look for a success message before continuing.
 
+   Migrations run in order. Migration `0004` removes the unused Google and
+   Outlook OAuth token tables while preserving Canvas OAuth and all published
+   calendar feed data.
+
    The `--local` option creates a database for testing on your computer. The
    separate Cloudflare database is used only when you deploy the app online.
 

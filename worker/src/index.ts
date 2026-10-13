@@ -21,13 +21,6 @@ export interface Env {
   CANVAS_CLIENT_SECRET: string;
   CANVAS_REDIRECT_URI: string;
   TOKEN_ENCRYPTION_KEY: string;
-  GOOGLE_CLIENT_ID?: string;
-  GOOGLE_CLIENT_SECRET?: string;
-  GOOGLE_REDIRECT_URI?: string;
-  MICROSOFT_CLIENT_ID?: string;
-  MICROSOFT_CLIENT_SECRET?: string;
-  MICROSOFT_REDIRECT_URI?: string;
-  MICROSOFT_TENANT_ID?: string;
   API_RATE_LIMITER?: RateLimit;
   OAUTH_RATE_LIMITER?: RateLimit;
   SYNC_RATE_LIMITER?: RateLimit;
@@ -68,7 +61,6 @@ export default {
         return await providerRequest(
           request,
           env,
-          url,
           providerRoute[1] as ExternalProvider,
           providerRoute[2],
         );
@@ -162,13 +154,8 @@ export async function cleanupExpiredState(db: D1Database): Promise<void> {
   const now = nowSeconds();
   await db.batch([
     db.prepare('DELETE FROM oauth_states WHERE expires_at <= ?').bind(now),
-    db.prepare('DELETE FROM provider_oauth_states WHERE expires_at <= ?').bind(now),
     db.prepare(`
       DELETE FROM canvas_connections
-      WHERE session_id IN (SELECT session_id FROM sessions WHERE expires_at <= ?)
-    `).bind(now),
-    db.prepare(`
-      DELETE FROM provider_connections
       WHERE session_id IN (SELECT session_id FROM sessions WHERE expires_at <= ?)
     `).bind(now),
     db.prepare(`
@@ -422,20 +409,6 @@ async function disconnect(request: Request, env: Env): Promise<Response> {
 }
 
 type ExternalProvider = 'canvas' | 'google' | 'outlook';
-type OAuthProvider = 'google' | 'outlook';
-
-interface ProviderConnectionRow {
-  session_id: string;
-  provider: OAuthProvider;
-  remote_user_id: string;
-  account_name: string;
-  account_email: string | null;
-  encrypted_access_token: string;
-  encrypted_refresh_token: string | null;
-  access_expires_at: number | null;
-  last_sync_time: string | null;
-}
-
 interface CalendarIcsFeedRow {
   session_id: string;
   provider: ExternalProvider;
@@ -447,7 +420,6 @@ interface CalendarIcsFeedRow {
 async function providerRequest(
   request: Request,
   env: Env,
-  url: URL,
   provider: ExternalProvider,
   endpoint: string,
 ): Promise<Response> {
@@ -467,212 +439,6 @@ async function providerRequest(
     default:
       return json({ error: 'Not found.' }, 404);
   }
-}
-
-async function providerOAuthStart(
-  request: Request,
-  env: Env,
-  provider: OAuthProvider,
-): Promise<Response> {
-  let config: ReturnType<typeof providerOAuthConfig>;
-  try {
-    config = providerOAuthConfig(provider, env);
-  } catch {
-    return appRedirect(
-      env,
-      `calendar_provider=${provider}&${provider}_error=provider_not_configured`,
-    );
-  }
-  const { sessionId, cookie } = await getOrCreateSession(request, env);
-  const state = randomId();
-  await env.DB.prepare(
-    'INSERT INTO provider_oauth_states (state, session_id, provider, expires_at) VALUES (?, ?, ?, ?)',
-  )
-    .bind(state, sessionId, provider, nowSeconds() + 10 * 60)
-    .run();
-
-  const authorize = new URL(config.authorizeEndpoint);
-  authorize.searchParams.set('client_id', config.clientId);
-  authorize.searchParams.set('redirect_uri', config.redirectUri);
-  authorize.searchParams.set('response_type', 'code');
-  authorize.searchParams.set('state', state);
-  authorize.searchParams.set('scope', config.scopes.join(' '));
-  if (provider === 'google') {
-    authorize.searchParams.set('access_type', 'offline');
-    authorize.searchParams.set('include_granted_scopes', 'true');
-    authorize.searchParams.set('prompt', 'consent');
-  } else {
-    authorize.searchParams.set('response_mode', 'query');
-  }
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: authorize.toString(),
-      'Cache-Control': 'no-store',
-      'Set-Cookie': cookie,
-    },
-  });
-}
-
-async function providerOAuthCallback(
-  request: Request,
-  env: Env,
-  url: URL,
-  provider: OAuthProvider,
-): Promise<Response> {
-  const fail = (reason: string) =>
-    appRedirect(
-      env,
-      `calendar_provider=${provider}&${provider}_error=${encodeURIComponent(reason)}`,
-    );
-  if (url.searchParams.has('error')) {
-    const state = url.searchParams.get('state');
-    if (state) {
-      await env.DB.prepare('DELETE FROM provider_oauth_states WHERE state = ?')
-        .bind(state)
-        .run();
-    }
-    return fail('authorization_cancelled');
-  }
-
-  const state = url.searchParams.get('state');
-  const code = url.searchParams.get('code');
-  const sessionId = readCookie(request, SESSION_COOKIE);
-  if (!state || !code || !sessionId) return fail('authorization_expired');
-  const stateRow = await env.DB.prepare(`
-    SELECT state, session_id, provider FROM provider_oauth_states
-    WHERE state = ? AND expires_at > ?
-  `)
-    .bind(state, nowSeconds())
-    .first<{ state: string; session_id: string; provider: string }>();
-  await env.DB.prepare('DELETE FROM provider_oauth_states WHERE state = ?')
-    .bind(state)
-    .run();
-  if (
-    !stateRow ||
-    stateRow.session_id !== sessionId ||
-    stateRow.provider !== provider
-  ) {
-    return fail('authorization_expired');
-  }
-
-  const config = providerOAuthConfig(provider, env);
-  const tokenResponse = await fetch(config.tokenEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      redirect_uri: config.redirectUri,
-      code,
-    }),
-  });
-  if (!tokenResponse.ok) return fail('token_exchange_failed');
-  const token = (await tokenResponse.json()) as Record<string, unknown>;
-  if (typeof token.access_token !== 'string') {
-    return fail('invalid_token_response');
-  }
-
-  const accessToken = token.access_token;
-  const profileResponse = await fetch(config.profileEndpoint, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!profileResponse.ok) return fail('profile_lookup_failed');
-  const profile = (await profileResponse.json()) as any;
-  const remoteUserId = String(profile.sub ?? profile.id ?? '');
-  if (!remoteUserId) return fail('profile_lookup_failed');
-  const accountName = String(
-    profile.name ?? profile.displayName ?? profile.userPrincipalName ??
-      profile.mail ?? `${provider} account`,
-  );
-  const accountEmail = String(
-    profile.email ?? profile.mail ?? profile.userPrincipalName ?? '',
-  ) || null;
-  await env.DB.prepare(`
-    INSERT INTO provider_connections
-      (session_id, provider, remote_user_id, account_name, account_email,
-       encrypted_access_token, encrypted_refresh_token, access_expires_at,
-       last_sync_time)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
-    ON CONFLICT(session_id, provider) DO UPDATE SET
-      remote_user_id = excluded.remote_user_id,
-      account_name = excluded.account_name,
-      account_email = excluded.account_email,
-      encrypted_access_token = excluded.encrypted_access_token,
-      encrypted_refresh_token = excluded.encrypted_refresh_token,
-      access_expires_at = excluded.access_expires_at,
-      last_sync_time = NULL
-  `)
-    .bind(
-      sessionId,
-      provider,
-      remoteUserId,
-      accountName,
-      accountEmail,
-      await encrypt(accessToken, env.TOKEN_ENCRYPTION_KEY),
-      typeof token.refresh_token === 'string'
-        ? await encrypt(token.refresh_token, env.TOKEN_ENCRYPTION_KEY)
-        : null,
-      typeof token.expires_in === 'number'
-        ? nowSeconds() + token.expires_in
-        : null,
-    )
-    .run();
-  return appRedirect(
-    env,
-    `calendar_provider=${provider}&${provider}_connected=1`,
-    sessionCookie(sessionId),
-  );
-}
-
-function providerOAuthConfig(provider: OAuthProvider, env: Env) {
-  if (provider === 'google') {
-    const clientId = env.GOOGLE_CLIENT_ID;
-    const clientSecret = env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = env.GOOGLE_REDIRECT_URI;
-    if (!clientId || !clientSecret || !redirectUri) {
-      throw new Error('Google Calendar OAuth is not configured on the backend.');
-    }
-    return {
-      clientId,
-      clientSecret,
-      redirectUri,
-      authorizeEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-      tokenEndpoint: 'https://oauth2.googleapis.com/token',
-      profileEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
-      scopes: [
-        'openid',
-        'email',
-        'profile',
-        'https://www.googleapis.com/auth/calendar.events.readonly',
-        'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-      ],
-    };
-  }
-  const clientId = env.MICROSOFT_CLIENT_ID;
-  const clientSecret = env.MICROSOFT_CLIENT_SECRET;
-  const redirectUri = env.MICROSOFT_REDIRECT_URI;
-  if (!clientId || !clientSecret || !redirectUri) {
-    throw new Error('Outlook OAuth is not configured on the backend.');
-  }
-  const tenant = env.MICROSOFT_TENANT_ID || 'common';
-  return {
-    clientId,
-    clientSecret,
-    redirectUri,
-    authorizeEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
-    tokenEndpoint: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
-    profileEndpoint:
-      'https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName',
-    scopes: [
-      'openid',
-      'profile',
-      'email',
-      'offline_access',
-      'https://graph.microsoft.com/Calendars.Read',
-    ],
-  };
 }
 
 async function providerStatus(
@@ -735,11 +501,6 @@ async function connectCalendarIcsFeed(
       remoteUserId,
       await encrypt(feedUrl, env.TOKEN_ENCRYPTION_KEY),
     )
-    .run();
-  await env.DB.prepare(
-    'DELETE FROM provider_connections WHERE session_id = ? AND provider = ?',
-  )
-    .bind(sessionId, provider)
     .run();
   if (provider === 'canvas') {
     await env.DB.prepare('DELETE FROM canvas_connections WHERE session_id = ?')
@@ -838,38 +599,8 @@ async function disconnectProvider(
         .bind(sessionId)
         .run();
     }
-    await env.DB.prepare(
-      'DELETE FROM provider_connections WHERE session_id = ? AND provider = ?',
-    )
-      .bind(sessionId, provider)
-      .run();
-    await env.DB.prepare(
-      'DELETE FROM provider_oauth_states WHERE session_id = ? AND provider = ?',
-    )
-      .bind(sessionId, provider)
-      .run();
   }
   return json({ disconnected: true });
-}
-
-async function providerConnectionForRequest(
-  request: Request,
-  env: Env,
-  provider: OAuthProvider,
-): Promise<ProviderConnectionRow | null> {
-  const sessionId = readCookie(request, SESSION_COOKIE);
-  if (!sessionId) return null;
-  const session = await env.DB.prepare(
-    'SELECT session_id FROM sessions WHERE session_id = ? AND expires_at > ?',
-  )
-    .bind(sessionId, nowSeconds())
-    .first();
-  if (!session) return null;
-  return env.DB.prepare(
-    'SELECT * FROM provider_connections WHERE session_id = ? AND provider = ?',
-  )
-    .bind(sessionId, provider)
-    .first<ProviderConnectionRow>();
 }
 
 async function getOrCreateSession(
@@ -903,229 +634,6 @@ async function syncExternalCalendar(
   provider: ExternalProvider,
 ): Promise<Response> {
   return syncCalendarIcsFeed(request, env, provider);
-}
-
-async function validProviderAccessToken(
-  connection: ProviderConnectionRow,
-  env: Env,
-): Promise<string> {
-  if (
-    connection.access_expires_at == null ||
-    connection.access_expires_at > nowSeconds() + 60
-  ) {
-    return decrypt(connection.encrypted_access_token, env.TOKEN_ENCRYPTION_KEY);
-  }
-  if (!connection.encrypted_refresh_token) {
-    throw new Error('Calendar authorization expired. Reconnect your account.');
-  }
-  const provider = connection.provider;
-  const config = providerOAuthConfig(provider, env);
-  const refreshToken = await decrypt(
-    connection.encrypted_refresh_token,
-    env.TOKEN_ENCRYPTION_KEY,
-  );
-  const response = await fetch(config.tokenEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: config.clientId,
-      client_secret: config.clientSecret,
-      refresh_token: refreshToken,
-      ...(provider === 'outlook' ? { scope: config.scopes.join(' ') } : {}),
-    }),
-  });
-  if (!response.ok) {
-    throw new Error('Calendar authorization expired. Reconnect your account.');
-  }
-  const refreshed = (await response.json()) as any;
-  const accessToken = String(refreshed.access_token ?? '');
-  if (!accessToken) throw new Error('Calendar authorization could not refresh.');
-  const nextRefreshToken = String(refreshed.refresh_token ?? refreshToken);
-  await env.DB.prepare(`
-    UPDATE provider_connections SET encrypted_access_token = ?,
-      encrypted_refresh_token = ?, access_expires_at = ?
-    WHERE session_id = ? AND provider = ?
-  `)
-    .bind(
-      await encrypt(accessToken, env.TOKEN_ENCRYPTION_KEY),
-      await encrypt(nextRefreshToken, env.TOKEN_ENCRYPTION_KEY),
-      typeof refreshed.expires_in === 'number'
-        ? nowSeconds() + refreshed.expires_in
-        : null,
-      connection.session_id,
-      provider,
-    )
-    .run();
-  return accessToken;
-}
-
-async function syncGoogleCalendar(
-  token: string,
-  start: Date,
-  end: Date,
-): Promise<any[]> {
-  const calendars = await fetchGooglePages(
-    'https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250',
-    token,
-  );
-  const events: any[] = [];
-  for (const calendar of calendars) {
-    if (!calendar.id || calendar.deleted) continue;
-    const url = new URL(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events`,
-    );
-    url.searchParams.set('singleEvents', 'true');
-    url.searchParams.set('showDeleted', 'false');
-    url.searchParams.set('maxResults', '2500');
-    url.searchParams.set('timeMin', start.toISOString());
-    url.searchParams.set('timeMax', end.toISOString());
-    const records = await fetchGooglePages(url.toString(), token);
-    for (const record of records) {
-      const mapped = mapGoogleEvent(String(calendar.id), record);
-      if (mapped) events.push(mapped);
-    }
-  }
-  return events;
-}
-
-async function fetchGooglePages(urlValue: string, token: string): Promise<any[]> {
-  const url = new URL(urlValue);
-  if (url.origin !== 'https://www.googleapis.com') {
-    throw new Error('Google returned an unsafe pagination link.');
-  }
-  const rows: any[] = [];
-  let pageToken: string | undefined;
-  let pages = 0;
-  do {
-    if (++pages > 1000) throw new Error('Google returned too many pages.');
-    const page = new URL(url);
-    if (pageToken) page.searchParams.set('pageToken', pageToken);
-    const response = await fetch(page, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!response.ok) throw new Error(`Google Calendar API failed (${response.status}).`);
-    const body = (await response.json()) as any;
-    if (!Array.isArray(body.items)) throw new Error('Google returned an invalid page.');
-    rows.push(...body.items);
-    pageToken = body.nextPageToken;
-  } while (pageToken);
-  return rows;
-}
-
-export function mapGoogleEvent(calendarId: string, event: any): any | null {
-  if (!event.id || event.status === 'cancelled') return null;
-  const start = event.start?.dateTime ?? event.start?.date;
-  const end = event.end?.dateTime ?? event.end?.date;
-  if (!start || !end) return null;
-  const allDay = typeof event.start?.date === 'string';
-  const startValue = allDay ? `${String(start).slice(0, 10)}T00:00:00` : String(start);
-  let endValue = String(end);
-  if (allDay) {
-    const exclusiveEnd = new Date(`${String(end).slice(0, 10)}T00:00:00Z`);
-    exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() - 1);
-    endValue = `${exclusiveEnd.toISOString().slice(0, 10)}T00:00:00`;
-  }
-  return {
-    externalId: `${calendarId}:${event.id}`,
-    title: String(event.summary ?? 'Untitled event'),
-    start: startValue,
-    end: endValue,
-    allDay,
-    description: String(event.description ?? ''),
-    location: event.location == null ? null : String(event.location),
-  };
-}
-
-async function syncOutlookCalendar(
-  token: string,
-  start: Date,
-  end: Date,
-): Promise<any[]> {
-  const calendars = await fetchGraphPages<any>(
-    'https://graph.microsoft.com/v1.0/me/calendars?$select=id,name&$top=100',
-    token,
-  );
-  const events: any[] = [];
-  for (const calendar of calendars) {
-    if (!calendar.id) continue;
-    const url = new URL(
-      `https://graph.microsoft.com/v1.0/me/calendars/${encodeURIComponent(calendar.id)}/calendarView`,
-    );
-    url.searchParams.set('startDateTime', start.toISOString());
-    url.searchParams.set('endDateTime', end.toISOString());
-    url.searchParams.set('$select', 'id,subject,body,start,end,isAllDay,location');
-    url.searchParams.set('$top', '1000');
-    const records = await fetchGraphPages<any>(url.toString(), token);
-    for (const record of records) {
-      const mapped = mapOutlookEvent(String(calendar.id), record);
-      if (mapped) events.push(mapped);
-    }
-  }
-  return events;
-}
-
-async function fetchGraphPages<T>(urlValue: string, token: string): Promise<T[]> {
-  let next: string | null = urlValue;
-  const rows: T[] = [];
-  let pages = 0;
-  while (next) {
-    if (++pages > 1000) throw new Error('Outlook returned too many pages.');
-    const page = new URL(next);
-    if (
-      page.origin !== 'https://graph.microsoft.com' ||
-      !page.pathname.startsWith('/v1.0/')
-    ) {
-      throw new Error('Outlook returned an unsafe pagination link.');
-    }
-    const response = await fetch(page, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Prefer: 'IdType="ImmutableId", outlook.timezone="UTC", outlook.body-content-type="text"',
-      },
-    });
-    if (!response.ok) throw new Error(`Outlook Calendar API failed (${response.status}).`);
-    const body = (await response.json()) as any;
-    if (!Array.isArray(body.value)) throw new Error('Outlook returned an invalid page.');
-    rows.push(...(body.value as T[]));
-    next = typeof body['@odata.nextLink'] === 'string'
-      ? body['@odata.nextLink']
-      : null;
-  }
-  return rows;
-}
-
-export function mapOutlookEvent(calendarId: string, event: any): any | null {
-  if (!event.id || !event.start?.dateTime || !event.end?.dateTime) return null;
-  const allDay = event.isAllDay === true;
-  const rawStart = normalizeGraphTime(String(event.start.dateTime));
-  const rawEnd = normalizeGraphTime(String(event.end.dateTime));
-  let start = rawStart;
-  let end = rawEnd;
-  if (allDay) {
-    const firstDay = rawStart.slice(0, 10);
-    const exclusiveEnd = new Date(`${rawEnd.slice(0, 10)}T00:00:00Z`);
-    exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() - 1);
-    start = `${firstDay}T00:00:00`;
-    end = `${exclusiveEnd.toISOString().slice(0, 10)}T00:00:00`;
-  }
-  return {
-    externalId: `${calendarId}:${event.id}`,
-    title: String(event.subject ?? 'Untitled event'),
-    start,
-    end,
-    allDay,
-    description: String(event.body?.content ?? ''),
-    location: event.location?.displayName == null
-      ? null
-      : String(event.location.displayName),
-  };
-}
-
-function normalizeGraphTime(value: string): string {
-  const trimmed = value.replace(/\.(\d{6})\d+(?=([zZ]|[+-]\d\d:\d\d)?$)/, '.$1');
-  if (/([zZ]|[+-]\d\d:\d\d)$/.test(trimmed)) return trimmed;
-  return `${trimmed}Z`;
 }
 
 async function connectionForRequest(
@@ -1327,8 +835,3 @@ export {
   normalizeCanvasSiteUrl,
   splitContextBatches,
 } from './canvas';
-
-export {
-  fetchGooglePages,
-  fetchGraphPages,
-};
