@@ -204,6 +204,36 @@ describe('Canvas import helpers', () => {
     expect(syncLimiter.limit).toHaveBeenCalledWith({ key: 'sync:session-123' });
   });
 
+  it('rejects a state-changing browser-session request without an Origin', async () => {
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/google/sync', {
+        method: 'POST',
+        headers: { Cookie: '__Host-momentum_session=session-123' },
+      }),
+      { APP_ORIGIN: 'https://momentum.example.com' } as Env,
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: 'Origin header required for state-changing requests.',
+    });
+  });
+
+  it('checks mutation Origin against APP_ORIGIN, not the Worker request URL', async () => {
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/google/sync', {
+        method: 'POST',
+        headers: { Origin: 'https://momentum.example.com' },
+      }),
+      { APP_ORIGIN: 'https://app.momentum.example.com' } as Env,
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: 'Cross-origin request rejected.',
+    });
+  });
+
   it('cleans expired OAuth state, connections, and sessions in one D1 batch', async () => {
     const prepared: Array<{ sql: string; values: unknown[] }> = [];
     const db = {

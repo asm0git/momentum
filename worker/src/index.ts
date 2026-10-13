@@ -53,7 +53,10 @@ export default {
       const isCanvasRoute = url.pathname.startsWith('/api/canvas/');
       if (!isCanvasRoute && !providerRoute) return env.ASSETS.fetch(request);
 
-      if (request.method !== 'GET') assertSameOrigin(request, url);
+      if (request.method !== 'GET') {
+        const originError = mutationOriginError(request, env.APP_ORIGIN);
+        if (originError) return json({ error: originError }, 403);
+      }
       const limited = await enforcePublicApiLimits(request, env, url);
       if (limited) return limited;
 
@@ -796,11 +799,22 @@ function appRedirect(env: Env, query = '', cookie?: string): Response {
   return new Response(null, { status: 302, headers });
 }
 
-function assertSameOrigin(request: Request, requestUrl: URL): void {
+function mutationOriginError(
+  request: Request,
+  appOrigin: string,
+): string | null {
   const origin = request.headers.get('Origin');
-  if (origin && new URL(origin).origin !== requestUrl.origin) {
-    throw new Error('Cross-origin request rejected.');
+  if (!origin) {
+    return 'Origin header required for state-changing requests.';
   }
+  try {
+    if (new URL(origin).origin !== new URL(appOrigin).origin) {
+      return 'Cross-origin request rejected.';
+    }
+  } catch {
+    return 'Cross-origin request rejected.';
+  }
+  return null;
 }
 
 function randomId(): string {
