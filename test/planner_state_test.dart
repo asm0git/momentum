@@ -89,4 +89,149 @@ void main() {
       expect(planner.categories.single.title, 'Personal');
     },
   );
+
+  test('category projection selects the next incomplete recurrence', () async {
+    final category = await planner.addCategory(
+      TaskCategory(title: 'Study', iconName: 'mi_school', items: []),
+    );
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final tomorrow = todayDate.add(const Duration(days: 1));
+    await planner.saveTask(
+      Task(
+        categoryId: category.id,
+        title: 'Daily reading',
+        date: todayDate,
+        time: const TimeOfDay(hour: 9, minute: 0),
+        estimatedDuration: const Duration(minutes: 25),
+        isChecked: false,
+        repeat: RecurrenceRule.daily,
+        repeatUntil: tomorrow,
+      ),
+    );
+    final todayOccurrence = planner
+        .itemsForDate(todayDate)
+        .whereType<Task>()
+        .single;
+
+    await planner.setTaskCompleted(todayOccurrence, true);
+
+    final projected = planner
+        .itemsForCategory(category.id!)
+        .whereType<Task>()
+        .single;
+    expect(projected.occurrenceDate, tomorrow);
+    expect(projected.isChecked, isFalse);
+  });
+
+  test(
+    'To-Do hides expired imports and advances to the next occurrence',
+    () async {
+      final category = await planner.addCategory(
+        TaskCategory(title: 'Imported', iconName: 'mi_school', items: []),
+      );
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final yesterday = today.subtract(const Duration(days: 1));
+      final tomorrow = today.add(const Duration(days: 1));
+      final fixedNow = DateTime(today.year, today.month, today.day, 23, 59);
+
+      await planner.saveTask(
+        Task(
+          categoryId: category.id,
+          title: 'Expired import',
+          date: yesterday,
+          time: const TimeOfDay(hour: 8, minute: 0),
+          estimatedDuration: const Duration(minutes: 25),
+          isChecked: false,
+          sourcePlatform: 'canvas',
+        ),
+      );
+      await planner.saveTask(
+        Task(
+          categoryId: category.id,
+          title: 'Manual task',
+          date: yesterday,
+          time: const TimeOfDay(hour: 8, minute: 0),
+          estimatedDuration: const Duration(minutes: 25),
+          isChecked: false,
+        ),
+      );
+      await planner.saveTask(
+        Task(
+          categoryId: category.id,
+          title: 'Imported daily task',
+          date: today,
+          time: const TimeOfDay(hour: 8, minute: 0),
+          estimatedDuration: const Duration(minutes: 25),
+          isChecked: false,
+          repeat: RecurrenceRule.daily,
+          repeatUntil: tomorrow,
+          sourcePlatform: 'canvas',
+        ),
+      );
+
+      final visible = planner.todoItemsForCategory(category.id!, now: fixedNow);
+
+      expect(visible.map((item) => item.title), [
+        'Manual task',
+        'Imported daily task',
+      ]);
+      expect(
+        visible
+            .whereType<Task>()
+            .singleWhere((task) => task.title == 'Imported daily task')
+            .occurrenceDate,
+        tomorrow,
+      );
+    },
+  );
+
+  test('focus candidates sort by time, then category and title', () async {
+    final alpha = await planner.addCategory(
+      TaskCategory(title: 'Alpha', iconName: 'mi_school', items: []),
+    );
+    final work = await planner.addCategory(
+      TaskCategory(title: 'Work', iconName: 'mi_work', items: []),
+    );
+    final today = DateTime.now();
+    final tomorrow = DateTime(today.year, today.month, today.day + 1);
+
+    await planner.saveTask(
+      Task(
+        categoryId: work.id,
+        title: 'Zeta task',
+        date: tomorrow,
+        time: const TimeOfDay(hour: 9, minute: 0),
+        estimatedDuration: const Duration(minutes: 25),
+        isChecked: false,
+      ),
+    );
+    await planner.saveTask(
+      Task(
+        categoryId: alpha.id,
+        title: 'Beta task',
+        date: tomorrow,
+        time: const TimeOfDay(hour: 9, minute: 0),
+        estimatedDuration: const Duration(minutes: 25),
+        isChecked: false,
+      ),
+    );
+    await planner.saveTask(
+      Task(
+        categoryId: work.id,
+        title: 'Early task',
+        date: tomorrow,
+        time: const TimeOfDay(hour: 8, minute: 0),
+        estimatedDuration: const Duration(minutes: 25),
+        isChecked: false,
+      ),
+    );
+
+    expect(planner.selectableFocusItems.map((item) => item.taskTitle), [
+      'Early task',
+      'Beta task',
+      'Zeta task',
+    ]);
+  });
 }

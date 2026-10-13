@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 
 import '../data/debug_demo_data.dart';
-import '../data/model_serialization.dart';
 import '../data/planner_repository.dart';
 import '../data/recurrence.dart';
 import '../data_models.dart';
@@ -9,6 +8,7 @@ import '../services/calendar_backend_client.dart';
 import 'automatic_event_focus_coordinator.dart';
 import 'calendar_sync_coordinator.dart';
 import 'focus_history_source.dart';
+import 'planner_snapshot_queries.dart';
 export 'automatic_event_focus_coordinator.dart'
     show
         AutomaticFocusBucket,
@@ -43,12 +43,14 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
       clock: _clock,
       enabled: _automaticFocusTimerEnabled,
     );
+    _snapshotQueries = _createSnapshotQueries();
   }
 
   final PlannerRepository _repository;
   final ProviderCalendarBackend _calendarBackend;
   late final CalendarSyncCoordinator _calendarSync;
   late final AutomaticEventFocusCoordinator _automaticEventFocus;
+  late PlannerSnapshotQueries _snapshotQueries;
   final bool _autoSyncCalendarsOnStartup;
   final DateTime Function() _clock;
   final bool _automaticFocusTimerEnabled;
@@ -61,6 +63,13 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   Object? _error;
   bool _isDisposed = false;
   int _focusHistoryRevision = 0;
+
+  PlannerSnapshotQueries _createSnapshotQueries() => PlannerSnapshotQueries(
+    categories: _categories,
+    items: _items,
+    taskOccurrenceCompletionKeys: _taskOccurrenceCompletionKeys,
+    categoryDisplayIconName: categoryDisplayIconName,
+  );
 
   List<TaskCategory> get categories => List.unmodifiable(_categories);
   List<PlannerItem> get items => List.unmodifiable(_items);
@@ -133,10 +142,8 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   Uri providerOAuthStartUri(CalendarProvider provider, {String? siteUrl}) =>
       _calendarSync.providerOAuthStartUri(provider, siteUrl: siteUrl);
 
-  PlannerItem? get nextUpcomingItem {
-    final now = DateTime.now();
-    return _nextUpcomingFrom(_items, now);
-  }
+  PlannerItem? get nextUpcomingItem =>
+      _snapshotQueries.nextUpcomingItem(DateTime.now());
 
   FocusTaskSelection? get defaultFocusSelection {
     final activeEvent = eventFocusSelectionAt(DateTime.now());
@@ -144,167 +151,42 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   }
 
   PlannerItem? nextUpcomingItemForCategory(int categoryId, DateTime now) =>
-      _nextUpcomingFrom(
-        _items.where((item) => item.categoryId == categoryId),
-        now,
-      );
+      _snapshotQueries.nextUpcomingItemForCategory(categoryId, now);
 
-  List<PlannerItem> itemsForDate(DateTime date) => _itemsForRange(date, date);
+  List<PlannerItem> itemsForDate(DateTime date) =>
+      _snapshotQueries.itemsForDate(date);
 
   List<PlannerItem> itemsForRange(DateTime firstDay, DateTime lastDay) =>
-      _itemsForRange(firstDay, lastDay);
+      _snapshotQueries.itemsForRange(firstDay, lastDay);
 
   /// Returns one visible row per category item. Recurring items are represented
   /// by their next date, with task completion scoped to that occurrence.
-  List<PlannerItem> itemsForCategory(int categoryId) {
-    final today = dateOnly(DateTime.now());
-    final result = <PlannerItem>[];
-    for (final series in _items.where(
-      (item) => item.categoryId == categoryId,
-    )) {
-      if (!isRecurring(series)) {
-        result.add(series);
-        continue;
-      }
-      for (final occurrence in _incompleteOccurrences(series, from: today)) {
-        result.add(occurrence);
-        break;
-      }
-    }
-    result.sort(_compareItems);
-    return result;
-  }
+  List<PlannerItem> itemsForCategory(int categoryId) =>
+      _snapshotQueries.itemsForCategory(categoryId, now: DateTime.now());
 
   /// The To-Do screen hides imported items after their scheduled time passes.
   /// The underlying planner snapshot and database remain unchanged.
-  List<PlannerItem> todoItemsForCategory(int categoryId, {DateTime? now}) {
-    final currentTime = now ?? DateTime.now();
-    final result = <PlannerItem>[];
-    for (final candidate in itemsForCategory(categoryId)) {
-      if (!_isImported(candidate)) {
-        result.add(candidate);
-        continue;
-      }
-
-      final series = seriesFor(candidate);
-      if (!isRecurring(series)) {
-        if (!_hasEnded(candidate, currentTime)) result.add(candidate);
-        continue;
-      }
-
-      for (final occurrence in _incompleteOccurrences(
-        series,
-        from: dateOnly(currentTime),
-      )) {
-        if (_hasEnded(occurrence, currentTime)) continue;
-        result.add(occurrence);
-        break;
-      }
-    }
-    result.sort(_compareItems);
-    return List.unmodifiable(result);
-  }
-
-  Iterable<PlannerItem> _incompleteOccurrences(
-    PlannerItem series, {
-    required DateTime from,
-  }) sync* {
-    for (final occurrenceDate in recurrenceDatesInRange(
-      series,
-      from: from,
-      through: DateTime(9999, 12, 31),
-    )) {
-      final completed =
-          series is Task &&
-          series.id != null &&
-          _taskOccurrenceCompletionKeys.contains(
-            taskOccurrenceKey(series.id!, occurrenceDate),
-          );
-      if (completed) continue;
-      yield occurrenceForDate(series, occurrenceDate, isCompleted: completed);
-    }
-  }
+  List<PlannerItem> todoItemsForCategory(int categoryId, {DateTime? now}) =>
+      _snapshotQueries.todoItemsForCategory(
+        categoryId,
+        now: now ?? DateTime.now(),
+      );
 
   /// Incomplete tasks and not-yet-ended events available to the Pomodoro
   /// selector. Each recurring series appears once at its next occurrence.
-  List<FocusTaskSelection> get selectableFocusItems {
-    final now = DateTime.now();
-    final candidates = <(DateTime, FocusTaskSelection)>[];
-
-    for (final category in _categories) {
-      final categoryId = category.id;
-      if (categoryId == null) continue;
-      for (final task in todoItemsForCategory(categoryId).whereType<Task>()) {
-        if (task.isChecked || task.id == null) continue;
-        candidates.add((
-          _scheduledDate(task),
-          FocusTaskSelection(
-            taskId: task.id!,
-            taskTitle: task.title,
-            categoryId: categoryId,
-            categoryTitle: category.title,
-            categoryIcon: categoryDisplayIconName(category),
-          ),
-        ));
-      }
-    }
-
-    for (final series in _items.whereType<Event>()) {
-      final occurrence = _nextSelectableEventOccurrence(series, now);
-      if (occurrence == null) continue;
-      final selection = focusSelectionForItem(occurrence);
-      if (selection != null) {
-        candidates.add((_scheduledDate(occurrence), selection));
-      }
-    }
-
-    candidates.sort((first, second) {
-      final byDate = first.$1.compareTo(second.$1);
-      if (byDate != 0) return byDate;
-      final byCategory = first.$2.categoryTitle.toLowerCase().compareTo(
-        second.$2.categoryTitle.toLowerCase(),
-      );
-      return byCategory != 0
-          ? byCategory
-          : first.$2.taskTitle.toLowerCase().compareTo(
-              second.$2.taskTitle.toLowerCase(),
-            );
-    });
-    return List.unmodifiable(candidates.map((candidate) => candidate.$2));
-  }
+  List<FocusTaskSelection> get selectableFocusItems =>
+      _snapshotQueries.selectableFocusItems(DateTime.now());
 
   /// Incomplete categorized tasks, with recurring series represented once.
   List<FocusTaskSelection> get selectableFocusTasks =>
-      List.unmodifiable(selectableFocusItems.where((item) => !item.isEvent));
+      _snapshotQueries.selectableFocusTasks(DateTime.now());
 
-  FocusTaskSelection? focusSelectionForItem(PlannerItem? item) {
-    if (item == null) return null;
-    final category = _categories
-        .where((candidate) => candidate.id == item.categoryId)
-        .firstOrNull;
-    if (item is Task && category == null) return null;
-    if (item.id == null && item is Task) return null;
-    return FocusTaskSelection(
-      taskId: item.id ?? 0,
-      taskTitle: item.title,
-      categoryId: category?.id ?? -1,
-      categoryTitle: category?.title ?? 'Unassigned',
-      categoryIcon: category == null
-          ? 'mi_timer'
-          : categoryDisplayIconName(category),
-      isEvent: item is Event,
-    );
-  }
+  FocusTaskSelection? focusSelectionForItem(PlannerItem? item) =>
+      _snapshotQueries.focusSelectionForItem(item);
 
   /// Resolves a generated calendar occurrence to the saved series record.
-  PlannerItem seriesFor(PlannerItem occurrence) {
-    final id = occurrence.id;
-    if (id == null) return occurrence;
-    return _items.firstWhere(
-      (item) => item.runtimeType == occurrence.runtimeType && item.id == id,
-      orElse: () => occurrence,
-    );
-  }
+  PlannerItem seriesFor(PlannerItem occurrence) =>
+      _snapshotQueries.seriesFor(occurrence);
 
   Future<void> initialize() async {
     _isLoading = true;
@@ -341,6 +223,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     _items = items;
     _taskOccurrenceCompletionKeys = occurrenceCompletions;
     _linkedAccounts = accounts;
+    _snapshotQueries = _createSnapshotQueries();
     _error = null;
   }
 
@@ -576,135 +459,6 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     _focusHistoryRevision++;
     notifyListeners();
   }
-
-  List<PlannerItem> _itemsForRange(DateTime firstDay, DateTime lastDay) {
-    final from = dateOnly(firstDay);
-    final through = dateOnly(lastDay);
-    final result = <PlannerItem>[];
-    for (final series in _items) {
-      for (final occurrenceDate in recurrenceDatesInRange(
-        series,
-        from: from,
-        through: through,
-      )) {
-        final completed =
-            series is Task &&
-            series.id != null &&
-            _taskOccurrenceCompletionKeys.contains(
-              taskOccurrenceKey(series.id!, occurrenceDate),
-            );
-        result.add(
-          occurrenceForDate(series, occurrenceDate, isCompleted: completed),
-        );
-      }
-    }
-    result.sort(_compareItems);
-    return result;
-  }
-
-  Event? _nextSelectableEventOccurrence(Event series, DateTime now) {
-    for (final occurrenceDate in recurrenceDatesInRange(
-      series,
-      from: dateOnly(now),
-      through: DateTime(9999, 12, 31),
-    )) {
-      final occurrence = occurrenceForDate(series, occurrenceDate) as Event;
-      if (!_hasEnded(occurrence, now)) return occurrence;
-    }
-    return null;
-  }
-
-  bool _isImported(PlannerItem item) => switch (item) {
-    Task task => task.sourcePlatform?.trim().isNotEmpty ?? false,
-    Event event => event.sourcePlatform?.trim().isNotEmpty ?? false,
-    _ => false,
-  };
-
-  bool _hasEnded(PlannerItem item, DateTime now) {
-    if (item is Task) return !taskDateTime(item).isAfter(now);
-    if (item is Event) {
-      if (item.allDay) {
-        final endExclusive = dateOnly(
-          item.endDate,
-        ).add(const Duration(days: 1));
-        return !endExclusive.isAfter(now);
-      }
-      var end = eventEndDateTime(item);
-      if (!end.isAfter(eventStartDateTime(item))) {
-        end = end.add(const Duration(days: 1));
-      }
-      return !end.isAfter(now);
-    }
-    return false;
-  }
-
-  PlannerItem? _nextUpcomingFrom(Iterable<PlannerItem> source, DateTime now) {
-    final today = dateOnly(now);
-    PlannerItem? next;
-    DateTime? nextAt;
-    for (final series in source) {
-      for (final occurrenceDate in recurrenceDatesInRange(
-        series,
-        from: today,
-        through: DateTime(9999, 12, 31),
-      )) {
-        final completed =
-            series is Task &&
-            (isRecurring(series)
-                ? series.id != null &&
-                      _taskOccurrenceCompletionKeys.contains(
-                        taskOccurrenceKey(series.id!, occurrenceDate),
-                      )
-                : series.isChecked);
-        if (completed) continue;
-        final occurrence = occurrenceForDate(
-          series,
-          occurrenceDate,
-          isCompleted: completed,
-        );
-        final startsAt = _scheduledDate(occurrence);
-        final allDayIsToday =
-            occurrence is Event &&
-            occurrence.allDay &&
-            _sameDay(occurrence.date, today);
-        if (startsAt.isBefore(now) && !allDayIsToday) continue;
-        if (nextAt == null || startsAt.isBefore(nextAt)) {
-          next = occurrence;
-          nextAt = startsAt;
-        }
-        break;
-      }
-    }
-    return next;
-  }
-
-  int _compareItems(PlannerItem first, PlannerItem second) =>
-      _scheduledDate(first).compareTo(_scheduledDate(second));
-
-  DateTime _scheduledDate(PlannerItem item) {
-    if (item is Task) {
-      return DateTime(
-        item.date.year,
-        item.date.month,
-        item.date.day,
-        item.time.hour,
-        item.time.minute,
-      );
-    }
-    final event = item as Event;
-    return DateTime(
-      event.date.year,
-      event.date.month,
-      event.date.day,
-      event.start.hour,
-      event.start.minute,
-    );
-  }
-
-  bool _sameDay(DateTime first, DateTime second) =>
-      first.year == second.year &&
-      first.month == second.month &&
-      first.day == second.day;
 
   @override
   void dispose() {
