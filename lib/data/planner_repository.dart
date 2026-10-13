@@ -408,21 +408,12 @@ class PlannerRepository {
       }
 
       if (removeMissingTasks) {
-        final importedIds = payload.tasks
-            .map((task) => task.externalId)
-            .toSet();
-        final existingTasks = await txn.query(
-          'tasks',
-          columns: ['id', 'external_id'],
-          where: 'src_platform = ?',
-          whereArgs: [provider],
+        await _removeMissingImportedItems(
+          txn,
+          table: 'tasks',
+          provider: provider,
+          importedIds: payload.tasks.map((task) => task.externalId).toSet(),
         );
-        for (final row in existingTasks) {
-          final externalId = row['external_id'] as String?;
-          if (externalId == null || !importedIds.contains(externalId)) {
-            await txn.delete('tasks', where: 'id = ?', whereArgs: [row['id']]);
-          }
-        }
       }
 
       for (final imported in payload.events) {
@@ -478,24 +469,35 @@ class PlannerRepository {
       }
 
       if (removeMissingEvents) {
-        final importedIds = payload.events
-            .map((event) => event.externalId)
-            .toSet();
-        final existingEvents = await txn.query(
-          'events',
-          columns: ['id', 'external_id'],
-          where: 'src_platform = ?',
-          whereArgs: [provider],
+        await _removeMissingImportedItems(
+          txn,
+          table: 'events',
+          provider: provider,
+          importedIds: payload.events.map((event) => event.externalId).toSet(),
         );
-        for (final row in existingEvents) {
-          final externalId = row['external_id'] as String?;
-          if (externalId == null || !importedIds.contains(externalId)) {
-            await txn.delete('events', where: 'id = ?', whereArgs: [row['id']]);
-          }
-        }
       }
       return account;
     });
+  }
+
+  Future<void> _removeMissingImportedItems(
+    Transaction txn, {
+    required String table,
+    required String provider,
+    required Set<String> importedIds,
+  }) async {
+    final rows = await txn.query(
+      table,
+      columns: ['id', 'external_id'],
+      where: 'src_platform = ?',
+      whereArgs: [provider],
+    );
+    for (final row in rows) {
+      final externalId = row['external_id'] as String?;
+      if (externalId == null || !importedIds.contains(externalId)) {
+        await txn.delete(table, where: 'id = ?', whereArgs: [row['id']]);
+      }
+    }
   }
 
   Future<List<PlannerItem>> getAllItems() async {
