@@ -45,7 +45,7 @@ Map<String, Object?> taskToMap(Task task) => {
   'estimated_duration_minutes': task.estimatedDuration.inMinutes,
   'priority': task.priority,
   'is_completed': task.isChecked ? 1 : 0,
-  'src_platform': task.srcPlatform,
+  'src_platform': task.sourcePlatform,
   'external_id': task.externalId,
 };
 
@@ -67,7 +67,7 @@ Task taskFromMap(Map<String, Object?> map) {
     isChecked: map['is_completed'] == 1,
     description: map['description'] as String? ?? '',
     priority: map['priority'] as int?,
-    srcPlatform: map['src_platform'] as String?,
+    sourcePlatform: map['src_platform'] as String?,
     externalId: map['external_id'] as String?,
   );
 }
@@ -90,7 +90,7 @@ Map<String, Object?> eventToMap(Event event) => {
           event.repeatUntil!.day,
         ).toIso8601String(),
   'notes': event.notes,
-  'src_platform': event.srcPlatform,
+  'src_platform': event.sourcePlatform,
   'external_id': event.externalId,
 };
 
@@ -113,7 +113,7 @@ Event eventFromMap(Map<String, Object?> map) {
     repeatUntil: map['repeat_until'] == null
         ? null
         : DateTime.parse(map['repeat_until']! as String),
-    srcPlatform: map['src_platform'] as String?,
+    sourcePlatform: map['src_platform'] as String?,
     externalId: map['external_id'] as String?,
   );
 }

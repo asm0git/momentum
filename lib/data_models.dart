@@ -114,7 +114,7 @@ class Task extends PlannerItem {
     this.occurrenceDate,
     this.description = '',
     this.priority,
-    this.srcPlatform,
+    this.sourcePlatform,
     this.externalId,
   });
 
@@ -128,7 +128,7 @@ class Task extends PlannerItem {
   DateTime? occurrenceDate;
   String description;
   int? priority;
-  String? srcPlatform;
+  String? sourcePlatform;
   String? externalId;
 }
 
@@ -148,7 +148,7 @@ class Event extends PlannerItem {
     this.repeat = 'Never',
     this.repeatUntil,
     this.occurrenceDate,
-    this.srcPlatform,
+    this.sourcePlatform,
     this.externalId,
   }) : endDate = endDate ?? date;
 
@@ -163,7 +163,7 @@ class Event extends PlannerItem {
   DateTime? repeatUntil;
   // Set only on a generated calendar instance; the database stores the series.
   DateTime? occurrenceDate;
-  String? srcPlatform;
+  String? sourcePlatform;
   String? externalId;
 }
 

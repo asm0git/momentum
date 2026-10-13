@@ -332,7 +332,7 @@ void main() {
           repeatUntil: repeatUntil,
           description: 'Before edit',
           priority: 2,
-          srcPlatform: 'canvas',
+          sourcePlatform: 'canvas',
           externalId: 'assignment-17',
         ),
       ),
@@ -368,7 +368,7 @@ void main() {
     expect(task.isChecked, isTrue);
     expect(task.description, 'Updated notes');
     expect(task.priority, 2);
-    expect(task.srcPlatform, 'canvas');
+    expect(task.sourcePlatform, 'canvas');
     expect(task.externalId, 'assignment-17');
     expect(tester.takeException(), isNull);
   });
@@ -398,7 +398,7 @@ void main() {
           notes: 'Before edit',
           repeat: 'Every month',
           repeatUntil: repeatUntil,
-          srcPlatform: 'outlook',
+          sourcePlatform: 'outlook',
           externalId: 'event-42',
         ),
       ),
@@ -436,7 +436,7 @@ void main() {
     expect(event.notes, 'Updated event notes');
     expect(event.repeat, 'Every month');
     expect(event.repeatUntil, repeatUntil);
-    expect(event.srcPlatform, 'outlook');
+    expect(event.sourcePlatform, 'outlook');
     expect(event.externalId, 'event-42');
     expect(tester.takeException(), isNull);
   });

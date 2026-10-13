@@ -358,7 +358,7 @@ class _AddItemPopupState extends State<AddItemPopup> {
           isChecked: previous is Task ? previous.isChecked : false,
           description: _notesController.text.trim(),
           priority: previous is Task ? previous.priority : null,
-          srcPlatform: previous is Task ? previous.srcPlatform : null,
+          sourcePlatform: previous is Task ? previous.sourcePlatform : null,
           externalId: previous is Task ? previous.externalId : null,
         );
         final saved = await state.saveTask(task);
@@ -382,7 +382,7 @@ class _AddItemPopupState extends State<AddItemPopup> {
         notes: _eventNotesController.text.trim(),
         repeat: _repeat,
         repeatUntil: _repeatUntil,
-        srcPlatform: previous is Event ? previous.srcPlatform : null,
+        sourcePlatform: previous is Event ? previous.sourcePlatform : null,
         externalId: previous is Event ? previous.externalId : null,
       );
       final saved = await state.saveEvent(event);

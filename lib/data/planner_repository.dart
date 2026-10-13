@@ -382,7 +382,7 @@ class PlannerRepository {
                 estimatedDuration: Duration.zero,
                 isChecked: false,
                 description: imported.description,
-                srcPlatform: provider,
+                sourcePlatform: provider,
                 externalId: imported.externalId,
               ),
             ),
@@ -396,7 +396,7 @@ class PlannerRepository {
             ..date = DateTime(due.year, due.month, due.day)
             ..time = TimeOfDay(hour: due.hour, minute: due.minute)
             ..description = imported.description
-            ..srcPlatform = provider
+            ..sourcePlatform = provider
             ..externalId = imported.externalId;
           await txn.update(
             'tasks',
@@ -440,7 +440,7 @@ class PlannerRepository {
                 allDay: imported.allDay,
                 location: imported.location,
                 notes: imported.description,
-                srcPlatform: provider,
+                sourcePlatform: provider,
                 externalId: imported.externalId,
               ),
             ),
@@ -457,7 +457,7 @@ class PlannerRepository {
             ..allDay = imported.allDay
             ..location = imported.location
             ..notes = imported.description
-            ..srcPlatform = provider
+            ..sourcePlatform = provider
             ..externalId = imported.externalId;
           await txn.update(
             'events',

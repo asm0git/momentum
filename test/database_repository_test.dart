@@ -52,7 +52,7 @@ void main() {
       repeatUntil: DateTime(2026, 11, 7),
       description: 'Chapter 3',
       priority: 2,
-      srcPlatform: 'local',
+      sourcePlatform: 'local',
       externalId: 'external-1',
     );
     final event = Event(
@@ -69,7 +69,7 @@ void main() {
       notes: 'Bring notes',
       repeat: 'Every week',
       repeatUntil: DateTime(2026, 11, 7),
-      srcPlatform: 'local',
+      sourcePlatform: 'local',
       externalId: 'event-1',
     );
     final plan = DailyPlan(
@@ -511,7 +511,7 @@ void main() {
         (await repository.getCategory(account.categoryId!))?.iconName,
         CalendarProvider.canvas.categoryIcon,
       );
-      expect(task.srcPlatform, 'canvas');
+      expect(task.sourcePlatform, 'canvas');
       expect(task.externalId, 'assignment:course_8:3');
       expect(event.externalId, 'event:99');
       task.isChecked = true;

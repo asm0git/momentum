@@ -55,7 +55,7 @@ PlannerItem occurrenceForDate(
       occurrenceDate: day,
       description: item.description,
       priority: item.priority,
-      srcPlatform: item.srcPlatform,
+      sourcePlatform: item.sourcePlatform,
       externalId: item.externalId,
     );
   }
@@ -78,7 +78,7 @@ PlannerItem occurrenceForDate(
       repeat: item.repeat,
       repeatUntil: item.repeatUntil,
       occurrenceDate: day,
-      srcPlatform: item.srcPlatform,
+      sourcePlatform: item.sourcePlatform,
       externalId: item.externalId,
     );
   }

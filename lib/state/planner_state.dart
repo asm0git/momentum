@@ -186,9 +186,9 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
           category.items.any(
             (item) =>
                 (item is Task &&
-                    item.srcPlatform?.toLowerCase() == provider.key) ||
+                    item.sourcePlatform?.toLowerCase() == provider.key) ||
                 (item is Event &&
-                    item.srcPlatform?.toLowerCase() == provider.key),
+                    item.sourcePlatform?.toLowerCase() == provider.key),
           )) {
         return provider;
       }
@@ -823,8 +823,8 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   }
 
   bool _isImported(PlannerItem item) => switch (item) {
-    Task task => task.srcPlatform?.trim().isNotEmpty ?? false,
-    Event event => event.srcPlatform?.trim().isNotEmpty ?? false,
+    Task task => task.sourcePlatform?.trim().isNotEmpty ?? false,
+    Event event => event.sourcePlatform?.trim().isNotEmpty ?? false,
     _ => false,
   };
 
