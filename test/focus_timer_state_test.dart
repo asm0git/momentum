@@ -156,7 +156,7 @@ void main() {
           isChecked: false,
           time: const TimeOfDay(hour: 9, minute: 0),
           estimatedDuration: Duration.zero,
-          repeat: 'Daily',
+          repeat: RecurrenceRule.daily,
           repeatUntil: DateTime(today.year, today.month, today.day + 5),
         ),
       );

@@ -78,7 +78,7 @@ void main() {
       end: const TimeOfDay(hour: 17, minute: 0),
       isCurrent: false,
       allDay: true,
-      repeat: 'Every week',
+      repeat: RecurrenceRule.weekly,
     );
 
     await _pumpWeeks(

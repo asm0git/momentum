@@ -34,7 +34,7 @@ Map<String, Object?> taskToMap(Task task) => {
   'title': task.title,
   'description': task.description,
   'due': taskDateTime(task).toIso8601String(),
-  'repeat': task.repeat,
+  'repeat': _recurrenceRuleToDatabaseValue(task.repeat),
   'repeat_until': task.repeatUntil == null
       ? null
       : DateTime(
@@ -60,7 +60,7 @@ Task taskFromMap(Map<String, Object?> map) {
     estimatedDuration: Duration(
       minutes: map['estimated_duration_minutes']! as int,
     ),
-    repeat: map['repeat'] as String? ?? 'Never',
+    repeat: _recurrenceRuleFromDatabaseValue(map['repeat']),
     repeatUntil: map['repeat_until'] == null
         ? null
         : DateTime.parse(map['repeat_until']! as String),
@@ -81,7 +81,7 @@ Map<String, Object?> eventToMap(Event event) => {
   'location': event.location,
   'is_all_day': event.allDay ? 1 : 0,
   'is_current': event.isCurrent ? 1 : 0,
-  'repeat': event.repeat,
+  'repeat': _recurrenceRuleToDatabaseValue(event.repeat),
   'repeat_until': event.repeatUntil == null
       ? null
       : DateTime(
@@ -109,7 +109,7 @@ Event eventFromMap(Map<String, Object?> map) {
     allDay: map['is_all_day'] == 1,
     location: map['location'] as String?,
     notes: map['notes'] as String? ?? '',
-    repeat: map['repeat'] as String? ?? 'Never',
+    repeat: _recurrenceRuleFromDatabaseValue(map['repeat']),
     repeatUntil: map['repeat_until'] == null
         ? null
         : DateTime.parse(map['repeat_until']! as String),
@@ -130,6 +130,24 @@ TaskCategory categoryFromMap(Map<String, Object?> map) => TaskCategory(
   iconName: map['icon_name']! as String,
   items: const [],
 );
+
+String _recurrenceRuleToDatabaseValue(RecurrenceRule rule) => switch (rule) {
+  RecurrenceRule.never => 'Never',
+  RecurrenceRule.daily => 'Every day',
+  RecurrenceRule.weekly => 'Every week',
+  RecurrenceRule.monthly => 'Every month',
+  RecurrenceRule.yearly => 'Every year',
+};
+
+RecurrenceRule _recurrenceRuleFromDatabaseValue(Object? value) =>
+    switch (value) {
+      'Never' => RecurrenceRule.never,
+      'Every day' => RecurrenceRule.daily,
+      'Every week' => RecurrenceRule.weekly,
+      'Every month' => RecurrenceRule.monthly,
+      'Every year' => RecurrenceRule.yearly,
+      _ => RecurrenceRule.never,
+    };
 
 Map<String, Object?> dailyPlanToMap(DailyPlan plan) => {
   if (plan.id != null) 'id': plan.id,

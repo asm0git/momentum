@@ -144,7 +144,7 @@ void main() {
           time: const TimeOfDay(hour: 9, minute: 0),
           estimatedDuration: const Duration(minutes: 30),
           isChecked: false,
-          repeat: 'Every week',
+          repeat: RecurrenceRule.weekly,
           repeatUntil: DateTime(2026, 12, 1),
         ),
       );
@@ -157,7 +157,7 @@ void main() {
           end: const TimeOfDay(hour: 12, minute: 0),
           isCurrent: false,
           allDay: false,
-          repeat: 'Every month',
+          repeat: RecurrenceRule.monthly,
           repeatUntil: DateTime(2027, 1, 1),
         ),
       );
@@ -208,8 +208,14 @@ void main() {
     expect(planner.categories.map((item) => item.id), [destination.id]);
     expect(planner.items.whereType<Task>().single.categoryId, destination.id);
     expect(planner.items.whereType<Event>().single.categoryId, destination.id);
-    expect(planner.items.whereType<Task>().single.repeat, 'Every week');
-    expect(planner.items.whereType<Event>().single.repeat, 'Every month');
+    expect(
+      planner.items.whereType<Task>().single.repeat,
+      RecurrenceRule.weekly,
+    );
+    expect(
+      planner.items.whereType<Event>().single.repeat,
+      RecurrenceRule.monthly,
+    );
   });
 
   testWidgets('deleting category contents removes its tasks and events', (

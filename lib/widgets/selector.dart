@@ -4,16 +4,16 @@ import '../app_theme.dart';
 import 'category_icon_picker.dart';
 
 /// A value and label that can optionally include a category icon.
-class SelectorOption {
+class SelectorOption<T> {
   const SelectorOption({required this.label, this.value, this.iconName});
 
-  final String? value;
+  final T? value;
   final String label;
   final String? iconName;
 }
 
 /// Shared dropdown used by planner forms and filters.
-class Selector extends StatelessWidget {
+class Selector<T> extends StatelessWidget {
   const Selector({
     super.key,
     required this.options,
@@ -25,16 +25,16 @@ class Selector extends StatelessWidget {
     this.contentColor = AppColors.primary,
   });
 
-  final List<SelectorOption> options;
-  final String? selectedValue;
+  final List<SelectorOption<T>> options;
+  final T? selectedValue;
   final String placeholder;
-  final ValueChanged<String?>? onChanged;
+  final ValueChanged<T?>? onChanged;
   final AlignmentGeometry alignment;
   final bool isExpanded;
   final Color contentColor;
 
   Widget _optionContent(
-    SelectorOption option,
+    SelectorOption<T> option,
     TextStyle style, {
     required String label,
   }) {
@@ -67,7 +67,7 @@ class Selector extends StatelessWidget {
     );
 
     return DropdownButtonHideUnderline(
-      child: DropdownButton<String?>(
+      child: DropdownButton<T?>(
         value: selectedValue,
         isDense: true,
         isExpanded: isExpanded,
@@ -92,7 +92,7 @@ class Selector extends StatelessWidget {
         hint: Text(placeholder, style: placeholderStyle),
         items: [
           for (final option in options)
-            DropdownMenuItem<String?>(
+            DropdownMenuItem<T?>(
               value: option.value,
               child: _optionContent(option, style, label: option.label),
             ),

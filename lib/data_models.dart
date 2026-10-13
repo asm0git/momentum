@@ -86,6 +86,8 @@ enum CalendarProvider {
   };
 }
 
+enum RecurrenceRule { never, daily, weekly, monthly, yearly }
+
 abstract class PlannerItem {
   PlannerItem({
     this.id,
@@ -109,7 +111,7 @@ class Task extends PlannerItem {
     required this.isChecked,
     required this.time,
     required this.estimatedDuration,
-    this.repeat = 'Never',
+    this.repeat = RecurrenceRule.never,
     this.repeatUntil,
     this.occurrenceDate,
     this.description = '',
@@ -121,7 +123,7 @@ class Task extends PlannerItem {
   bool isChecked;
   TimeOfDay time;
   Duration estimatedDuration;
-  String repeat;
+  RecurrenceRule repeat;
   DateTime? repeatUntil;
   // Set only on a generated calendar/to-do instance of a recurring series.
   // This value is not serialized into the tasks table.
@@ -145,7 +147,7 @@ class Event extends PlannerItem {
     DateTime? endDate,
     this.location,
     this.notes = '',
-    this.repeat = 'Never',
+    this.repeat = RecurrenceRule.never,
     this.repeatUntil,
     this.occurrenceDate,
     this.sourcePlatform,
@@ -159,7 +161,7 @@ class Event extends PlannerItem {
   bool allDay;
   String? location;
   String notes;
-  String repeat;
+  RecurrenceRule repeat;
   DateTime? repeatUntil;
   // Set only on a generated calendar instance; the database stores the series.
   DateTime? occurrenceDate;

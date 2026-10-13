@@ -3,7 +3,7 @@ import '../data_models.dart';
 DateTime dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
-bool isRecurring(PlannerItem item) => _repeatFor(item) != 'Never';
+bool isRecurring(PlannerItem item) => _repeatFor(item) != RecurrenceRule.never;
 
 String taskOccurrenceKey(int taskId, DateTime date) {
   final day = dateOnly(date);
@@ -90,47 +90,43 @@ DateTime? _nextOnOrAfter(PlannerItem item, DateTime target) {
   final start = dateOnly(item.date);
   final from = dateOnly(target);
   final rule = _repeatFor(item);
-  if (rule == 'Never') {
-    return !start.isBefore(from) && _withinUntil(item, start) ? start : null;
-  }
-
   DateTime candidate;
   switch (rule) {
-    case 'Every day':
+    case RecurrenceRule.never:
+      return !start.isBefore(from) && _withinUntil(item, start) ? start : null;
+    case RecurrenceRule.daily:
       final days = from.isAfter(start) ? from.difference(start).inDays : 0;
       candidate = start.add(Duration(days: days));
       break;
-    case 'Every week':
+    case RecurrenceRule.weekly:
       final days = from.isAfter(start) ? from.difference(start).inDays : 0;
       final weeks = (days / 7).ceil();
       candidate = start.add(Duration(days: weeks * 7));
       break;
-    case 'Every month':
+    case RecurrenceRule.monthly:
       var months = _monthDifference(start, from).clamp(0, 120000).toInt();
       candidate = _inMonth(start, months);
       if (candidate.isBefore(from)) candidate = _inMonth(start, ++months);
       break;
-    case 'Every year':
+    case RecurrenceRule.yearly:
       var years = (from.year - start.year).clamp(0, 10000).toInt();
       candidate = _inYear(start, years);
       if (candidate.isBefore(from)) candidate = _inYear(start, ++years);
       break;
-    default:
-      return !start.isBefore(from) && _withinUntil(item, start) ? start : null;
   }
   return _withinUntil(item, candidate) ? candidate : null;
 }
 
 DateTime? _nextAfter(PlannerItem item, DateTime date) {
-  if (_repeatFor(item) == 'Never') return null;
+  if (_repeatFor(item) == RecurrenceRule.never) return null;
   final nextTarget = dateOnly(date).add(const Duration(days: 1));
   return _nextOnOrAfter(item, nextTarget);
 }
 
-String _repeatFor(PlannerItem item) => switch (item) {
+RecurrenceRule _repeatFor(PlannerItem item) => switch (item) {
   Task task => task.repeat,
   Event event => event.repeat,
-  _ => 'Never',
+  _ => RecurrenceRule.never,
 };
 
 DateTime? _untilFor(PlannerItem item) => switch (item) {

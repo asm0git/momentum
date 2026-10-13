@@ -13,6 +13,14 @@ import 'time_picker_dialog.dart';
 
 enum _PopupItemType { event, task }
 
+String _repeatLabel(RecurrenceRule rule) => switch (rule) {
+  RecurrenceRule.never => 'Never',
+  RecurrenceRule.daily => 'Every day',
+  RecurrenceRule.weekly => 'Every week',
+  RecurrenceRule.monthly => 'Every month',
+  RecurrenceRule.yearly => 'Every year',
+};
+
 const _newCategoryValue = '__new_category__';
 const _noneCategoryValue = '__none_category__';
 
@@ -52,7 +60,7 @@ class _AddItemPopupState extends State<AddItemPopup> {
   DateTime _endDate = DateTime.now();
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
-  String _repeat = 'Never';
+  RecurrenceRule _repeat = RecurrenceRule.never;
   DateTime? _repeatUntil;
   String? _validationMessage;
 
@@ -152,10 +160,10 @@ class _AddItemPopupState extends State<AddItemPopup> {
     });
   }
 
-  void _setRepeat(String value) {
+  void _setRepeat(RecurrenceRule value) {
     setState(() {
       _repeat = value;
-      if (value == 'Never') _repeatUntil = null;
+      if (value == RecurrenceRule.never) _repeatUntil = null;
     });
   }
 
@@ -467,9 +475,9 @@ class _EventFields extends StatelessWidget {
   final ValueChanged<DateTime> onEndDateChanged;
   final TimeOfDay endTime;
   final ValueChanged<TimeOfDay> onEndTimeChanged;
-  final String repeat;
+  final RecurrenceRule repeat;
   final DateTime? repeatUntil;
-  final ValueChanged<String> onRepeatChanged;
+  final ValueChanged<RecurrenceRule> onRepeatChanged;
   final ValueChanged<DateTime?> onRepeatUntilChanged;
 
   @override
@@ -581,9 +589,9 @@ class _TaskFields extends StatelessWidget {
   final ValueChanged<TimeOfDay> onDeadlineTimeChanged;
   final Duration estimatedDuration;
   final ValueChanged<Duration> onEstimatedDurationChanged;
-  final String repeat;
+  final RecurrenceRule repeat;
   final DateTime? repeatUntil;
-  final ValueChanged<String> onRepeatChanged;
+  final ValueChanged<RecurrenceRule> onRepeatChanged;
   final ValueChanged<DateTime?> onRepeatUntilChanged;
   final TextEditingController notesController;
 
@@ -645,18 +653,18 @@ class _RepeatFields extends StatelessWidget {
     required this.onRepeatUntilChanged,
   });
 
-  static const _repeatOptions = [
-    'Never',
-    'Every day',
-    'Every week',
-    'Every month',
-    'Every year',
+  static const List<RecurrenceRule> _repeatOptions = [
+    RecurrenceRule.never,
+    RecurrenceRule.daily,
+    RecurrenceRule.weekly,
+    RecurrenceRule.monthly,
+    RecurrenceRule.yearly,
   ];
 
-  final String repeat;
+  final RecurrenceRule repeat;
   final DateTime? repeatUntil;
   final DateTime startDate;
-  final ValueChanged<String> onRepeatChanged;
+  final ValueChanged<RecurrenceRule> onRepeatChanged;
   final ValueChanged<DateTime?> onRepeatUntilChanged;
 
   Future<void> _pickUntil(BuildContext context) async {
@@ -684,7 +692,7 @@ class _RepeatFields extends StatelessWidget {
               Selector(
                 options: [
                   for (final option in _repeatOptions)
-                    SelectorOption(value: option, label: option),
+                    SelectorOption(value: option, label: _repeatLabel(option)),
                 ],
                 selectedValue: repeat,
                 placeholder: 'Repeat',
@@ -696,7 +704,7 @@ class _RepeatFields extends StatelessWidget {
             ],
           ),
         ),
-        if (repeat != 'Never') ...[
+        if (repeat != RecurrenceRule.never) ...[
           Divider(
             height: 1,
             thickness: 1,

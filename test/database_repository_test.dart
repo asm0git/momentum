@@ -48,7 +48,7 @@ void main() {
       time: const TimeOfDay(hour: 9, minute: 25),
       estimatedDuration: const Duration(minutes: 65),
       isChecked: true,
-      repeat: 'Every week',
+      repeat: RecurrenceRule.weekly,
       repeatUntil: DateTime(2026, 11, 7),
       description: 'Chapter 3',
       priority: 2,
@@ -67,7 +67,7 @@ void main() {
       allDay: false,
       location: 'Room 2',
       notes: 'Bring notes',
-      repeat: 'Every week',
+      repeat: RecurrenceRule.weekly,
       repeatUntil: DateTime(2026, 11, 7),
       sourcePlatform: 'local',
       externalId: 'event-1',
@@ -95,12 +95,22 @@ void main() {
     expect(taskCopy.estimatedDuration, const Duration(minutes: 65));
     expect(taskCopy.isChecked, isTrue);
     expect(taskCopy.description, 'Chapter 3');
-    expect(taskCopy.repeat, 'Every week');
+    expect(taskToMap(task)['repeat'], 'Every week');
+    expect(taskCopy.repeat, RecurrenceRule.weekly);
     expect(taskCopy.repeatUntil, DateTime(2026, 11, 7));
     final eventCopy = eventFromMap(eventToMap(event));
     expect(eventStartDateTime(eventCopy), DateTime(2026, 10, 7, 23, 30));
     expect(eventEndDateTime(eventCopy), DateTime(2026, 10, 8, 0, 15));
-    expect(eventCopy.repeat, 'Every week');
+    expect(eventToMap(event)['repeat'], 'Every week');
+    expect(eventCopy.repeat, RecurrenceRule.weekly);
+    expect(
+      taskFromMap({...taskToMap(task), 'repeat': 'Every fortnight'}).repeat,
+      RecurrenceRule.never,
+    );
+    expect(
+      eventFromMap({...eventToMap(event), 'repeat': 'Every fortnight'}).repeat,
+      RecurrenceRule.never,
+    );
     expect(eventCopy.repeatUntil, DateTime(2026, 11, 7));
     expect(dailyPlanFromMap(dailyPlanToMap(plan)).orderedTaskIds, [7, 10]);
     final accountCopy = linkedAccountFromMap(linkedAccountToMap(account));
@@ -377,7 +387,7 @@ void main() {
           time: const TimeOfDay(hour: 17, minute: 0),
           estimatedDuration: const Duration(hours: 1),
           isChecked: false,
-          repeat: 'Every week',
+          repeat: RecurrenceRule.weekly,
         ),
       );
       final occurrenceDate = DateTime(2026, 10, 14);
@@ -429,7 +439,7 @@ void main() {
           time: const TimeOfDay(hour: 17, minute: 0),
           estimatedDuration: const Duration(hours: 1),
           isChecked: false,
-          repeat: 'Every week',
+          repeat: RecurrenceRule.weekly,
           repeatUntil: DateTime(2026, 12, 1),
         ),
       );
@@ -447,7 +457,7 @@ void main() {
           end: const TimeOfDay(hour: 19, minute: 0),
           isCurrent: false,
           allDay: false,
-          repeat: 'Every month',
+          repeat: RecurrenceRule.monthly,
           repeatUntil: DateTime(2027, 1, 1),
         ),
       );
@@ -464,10 +474,10 @@ void main() {
       final movedTask = await repository.getTask(task.id!);
       final movedEvent = await repository.getEvent(event.id!);
       expect(movedTask?.categoryId, destination.id);
-      expect(movedTask?.repeat, 'Every week');
+      expect(movedTask?.repeat, RecurrenceRule.weekly);
       expect(movedTask?.repeatUntil, DateTime(2026, 12, 1));
       expect(movedEvent?.categoryId, destination.id);
-      expect(movedEvent?.repeat, 'Every month');
+      expect(movedEvent?.repeat, RecurrenceRule.monthly);
       expect(movedEvent?.repeatUntil, DateTime(2027, 1, 1));
       expect(await repository.getTaskOccurrenceCompletionKeys(), {
         taskOccurrenceKey(task.id!, DateTime(2026, 10, 14)),
@@ -814,7 +824,7 @@ void main() {
         time: const TimeOfDay(hour: 9, minute: 0),
         estimatedDuration: const Duration(minutes: 30),
         isChecked: false,
-        repeat: 'Every week',
+        repeat: RecurrenceRule.weekly,
         repeatUntil: DateTime(2026, 10, 15),
       ),
     );
@@ -850,7 +860,7 @@ void main() {
       time: const TimeOfDay(hour: 8, minute: 0),
       estimatedDuration: Duration.zero,
       isChecked: false,
-      repeat: 'Every day',
+      repeat: RecurrenceRule.daily,
       repeatUntil: DateTime(2026, 10, 3),
     );
     expect(
@@ -868,7 +878,7 @@ void main() {
       time: const TimeOfDay(hour: 9, minute: 0),
       estimatedDuration: Duration.zero,
       isChecked: false,
-      repeat: 'Every week',
+      repeat: RecurrenceRule.weekly,
       repeatUntil: DateTime(2026, 10, 15),
     );
     expect(
@@ -887,7 +897,7 @@ void main() {
       end: const TimeOfDay(hour: 10, minute: 0),
       isCurrent: false,
       allDay: false,
-      repeat: 'Every month',
+      repeat: RecurrenceRule.monthly,
       repeatUntil: DateTime(2026, 4, 30),
     );
     expect(
@@ -911,7 +921,7 @@ void main() {
       end: const TimeOfDay(hour: 0, minute: 0),
       isCurrent: false,
       allDay: true,
-      repeat: 'Every year',
+      repeat: RecurrenceRule.yearly,
       repeatUntil: DateTime(2028, 2, 29),
     );
     expect(
@@ -993,7 +1003,7 @@ void main() {
       );
       repository = PlannerRepository(databaseHelper: databaseHelper);
       expect((await repository.getTasks()).single.title, 'Keep me');
-      expect((await repository.getTasks()).single.repeat, 'Never');
+      expect((await repository.getTasks()).single.repeat, RecurrenceRule.never);
       expect((await repository.getEvents()).single.title, 'Existing event');
     },
   );

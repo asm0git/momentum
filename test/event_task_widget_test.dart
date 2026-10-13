@@ -328,7 +328,7 @@ void main() {
           time: const TimeOfDay(hour: 15, minute: 30),
           estimatedDuration: const Duration(minutes: 45),
           isChecked: true,
-          repeat: 'Every week',
+          repeat: RecurrenceRule.weekly,
           repeatUntil: repeatUntil,
           description: 'Before edit',
           priority: 2,
@@ -345,6 +345,14 @@ void main() {
         AddItemPopup(initialItem: original, onSaved: (item) => saved = item),
       ),
     );
+    final recurrenceDropdown = find.byWidgetPredicate(
+      (widget) => widget is DropdownButton<RecurrenceRule?>,
+    );
+    expect(recurrenceDropdown, findsOneWidget);
+    await tester.tap(recurrenceDropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Every week').last);
+    await tester.pumpAndSettle();
     final fields = find.byType(TextField);
     await tester.enterText(fields.first, 'Review chapter');
     await tester.enterText(fields.last, 'Updated notes');
@@ -363,7 +371,7 @@ void main() {
     expect(task.date, DateTime(2026, 10, 20));
     expect(task.time, const TimeOfDay(hour: 15, minute: 30));
     expect(task.estimatedDuration, const Duration(minutes: 45));
-    expect(task.repeat, 'Every week');
+    expect(task.repeat, RecurrenceRule.weekly);
     expect(task.repeatUntil, repeatUntil);
     expect(task.isChecked, isTrue);
     expect(task.description, 'Updated notes');
@@ -396,7 +404,7 @@ void main() {
           allDay: false,
           location: 'Room 4',
           notes: 'Before edit',
-          repeat: 'Every month',
+          repeat: RecurrenceRule.monthly,
           repeatUntil: repeatUntil,
           sourcePlatform: 'outlook',
           externalId: 'event-42',
@@ -434,7 +442,7 @@ void main() {
     expect(event.allDay, isFalse);
     expect(event.location, 'Room 4');
     expect(event.notes, 'Updated event notes');
-    expect(event.repeat, 'Every month');
+    expect(event.repeat, RecurrenceRule.monthly);
     expect(event.repeatUntil, repeatUntil);
     expect(event.sourcePlatform, 'outlook');
     expect(event.externalId, 'event-42');
