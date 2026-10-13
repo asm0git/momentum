@@ -163,7 +163,8 @@ class _TodoScreenState extends State<TodoScreen> {
     if (category == null || !mounted) return;
     try {
       await context.read<PlannerState>().addCategory(category);
-    } catch (_) {
+    } catch (error) {
+      debugPrint('Could not create category: $error');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not create this category.')),
