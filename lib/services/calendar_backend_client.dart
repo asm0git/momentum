@@ -8,8 +8,8 @@ import 'canvas_cookie_client_stub.dart'
     if (dart.library.js_interop) 'canvas_cookie_client_web.dart'
     as cookie;
 
-class CanvasConnectionStatus {
-  const CanvasConnectionStatus({
+class CalendarConnectionStatus {
+  const CalendarConnectionStatus({
     required this.connected,
     this.providerUrl,
     this.accountName,
@@ -25,8 +25,8 @@ class CanvasConnectionStatus {
   final String? remoteUserId;
   final DateTime? lastSyncTime;
 
-  factory CanvasConnectionStatus.fromJson(Map<String, dynamic> json) =>
-      CanvasConnectionStatus(
+  factory CalendarConnectionStatus.fromJson(Map<String, dynamic> json) =>
+      CalendarConnectionStatus(
         connected: json['connected'] == true,
         providerUrl: json['providerUrl'] as String?,
         accountName: json['accountName'] as String?,
@@ -38,23 +38,16 @@ class CanvasConnectionStatus {
       );
 }
 
-abstract interface class CanvasBackend {
-  Uri oauthStartUri(String siteUrl);
-  Future<CanvasConnectionStatus> status();
-  Future<CanvasSyncPayload> sync();
-  Future<void> disconnect();
-}
-
 abstract interface class ProviderCalendarBackend {
   Uri providerOAuthStartUri(CalendarProvider provider, {String? siteUrl});
   Future<void> connectCalendarIcsFeed(CalendarProvider provider, String url);
-  Future<CanvasConnectionStatus> providerStatus(CalendarProvider provider);
-  Future<CanvasSyncPayload> syncProvider(CalendarProvider provider);
+  Future<CalendarConnectionStatus> providerStatus(CalendarProvider provider);
+  Future<CalendarSyncPayload> syncProvider(CalendarProvider provider);
   Future<void> disconnectProvider(CalendarProvider provider);
 }
 
-class CanvasBackendClient implements CanvasBackend, ProviderCalendarBackend {
-  CanvasBackendClient({http.Client? client})
+class CalendarBackendClient implements ProviderCalendarBackend {
+  CalendarBackendClient({http.Client? client})
     : _client = client ?? cookie.createCanvasHttpClient();
 
   static const _configuredBaseUrl = String.fromEnvironment(
@@ -77,10 +70,6 @@ class CanvasBackendClient implements CanvasBackend, ProviderCalendarBackend {
       _apiRoot.resolve('${provider.key}/$endpoint');
 
   @override
-  Uri oauthStartUri(String siteUrl) =>
-      providerOAuthStartUri(CalendarProvider.canvas, siteUrl: siteUrl);
-
-  @override
   Uri providerOAuthStartUri(CalendarProvider provider, {String? siteUrl}) {
     final uri = _providerUri(provider, 'oauth/start');
     if (provider == CalendarProvider.canvas) {
@@ -93,15 +82,11 @@ class CanvasBackendClient implements CanvasBackend, ProviderCalendarBackend {
   }
 
   @override
-  Future<CanvasConnectionStatus> status() =>
-      providerStatus(CalendarProvider.canvas);
-
-  @override
-  Future<CanvasConnectionStatus> providerStatus(
+  Future<CalendarConnectionStatus> providerStatus(
     CalendarProvider provider,
   ) async {
     final response = await _client.get(_providerUri(provider, 'status'));
-    return CanvasConnectionStatus.fromJson(_decodeResponse(response));
+    return CalendarConnectionStatus.fromJson(_decodeResponse(response));
   }
 
   @override
@@ -118,16 +103,13 @@ class CanvasBackendClient implements CanvasBackend, ProviderCalendarBackend {
   }
 
   @override
-  Future<CanvasSyncPayload> sync() => syncProvider(CalendarProvider.canvas);
-
-  @override
-  Future<CanvasSyncPayload> syncProvider(CalendarProvider provider) async {
+  Future<CalendarSyncPayload> syncProvider(CalendarProvider provider) async {
     final response = await _client.post(_providerUri(provider, 'sync'));
     final json = _decodeResponse(response);
     final tasks = (json['tasks'] as List<dynamic>? ?? const [])
         .cast<Map<String, dynamic>>()
         .map(
-          (task) => CanvasTaskImport(
+          (task) => CalendarTaskImport(
             externalId: task['externalId'] as String,
             title: task['title'] as String,
             due: DateTime.parse(task['due'] as String).toLocal(),
@@ -138,7 +120,7 @@ class CanvasBackendClient implements CanvasBackend, ProviderCalendarBackend {
     final events = (json['events'] as List<dynamic>? ?? const [])
         .cast<Map<String, dynamic>>()
         .map(
-          (event) => CanvasEventImport(
+          (event) => CalendarEventImport(
             externalId: event['externalId'] as String,
             title: event['title'] as String,
             start: DateTime.parse(event['start'] as String).toLocal(),
@@ -150,7 +132,7 @@ class CanvasBackendClient implements CanvasBackend, ProviderCalendarBackend {
         )
         .toList(growable: false);
 
-    return CanvasSyncPayload(
+    return CalendarSyncPayload(
       accountName: json['accountName'] as String? ?? provider.title,
       accountEmail: json['accountEmail'] as String?,
       remoteUserId: json['remoteUserId']?.toString() ?? '',
@@ -161,9 +143,6 @@ class CanvasBackendClient implements CanvasBackend, ProviderCalendarBackend {
       providerName: provider.key,
     );
   }
-
-  @override
-  Future<void> disconnect() => disconnectProvider(CalendarProvider.canvas);
 
   @override
   Future<void> disconnectProvider(CalendarProvider provider) async {

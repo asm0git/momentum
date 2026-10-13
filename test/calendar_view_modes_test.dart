@@ -384,7 +384,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final planner = PlannerState(autoSyncCanvasOnStartup: false);
+    final planner = PlannerState(autoSyncCalendarsOnStartup: false);
     addTearDown(planner.dispose);
 
     await tester.pumpWidget(
@@ -416,7 +416,7 @@ void main() {
 
   testWidgets('calendar screen restores the saved view mode', (tester) async {
     SharedPreferences.setMockInitialValues({'calendar_view_mode': 'twoWeeks'});
-    final planner = PlannerState(autoSyncCanvasOnStartup: false);
+    final planner = PlannerState(autoSyncCalendarsOnStartup: false);
     addTearDown(planner.dispose);
 
     await tester.pumpWidget(

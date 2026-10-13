@@ -223,8 +223,8 @@ class LinkedAccount {
   DateTime? lastSyncTime;
 }
 
-class CanvasTaskImport {
-  const CanvasTaskImport({
+class CalendarTaskImport {
+  const CalendarTaskImport({
     required this.externalId,
     required this.title,
     required this.due,
@@ -237,8 +237,8 @@ class CanvasTaskImport {
   final String description;
 }
 
-class CanvasEventImport {
-  const CanvasEventImport({
+class CalendarEventImport {
+  const CalendarEventImport({
     required this.externalId,
     required this.title,
     required this.start,
@@ -257,8 +257,8 @@ class CanvasEventImport {
   final String? location;
 }
 
-class CanvasSyncPayload {
-  const CanvasSyncPayload({
+class CalendarSyncPayload {
+  const CalendarSyncPayload({
     required this.accountName,
     required this.accountEmail,
     required this.remoteUserId,
@@ -274,7 +274,7 @@ class CanvasSyncPayload {
   final String remoteUserId;
   final String providerUrl;
   final DateTime syncedAt;
-  final List<CanvasTaskImport> tasks;
-  final List<CanvasEventImport> events;
+  final List<CalendarTaskImport> tasks;
+  final List<CalendarEventImport> events;
   final String providerName;
 }

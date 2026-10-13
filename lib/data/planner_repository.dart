@@ -255,18 +255,10 @@ class PlannerRepository {
         0;
   }
 
-  /// Applies a complete Canvas response in one local transaction. Existing
-  /// completion state and item IDs are retained when a remote item is refreshed.
-  Future<LinkedAccount> applyCanvasSync(
-    CanvasSyncPayload payload, {
-    bool replaceExistingImports = false,
-  }) => applyCalendarSync(
-    payload,
-    replaceExistingImports: replaceExistingImports,
-  );
-
+  /// Applies a provider response in one transaction. Missing imported rows are
+  /// retained unless replacement or cleanup is explicitly requested.
   Future<LinkedAccount> applyCalendarSync(
-    CanvasSyncPayload payload, {
+    CalendarSyncPayload payload, {
     bool replaceExistingImports = false,
     bool removeMissingTasks = false,
     bool removeMissingEvents = false,

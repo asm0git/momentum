@@ -227,7 +227,7 @@ void main() {
   test(
     'provider calendar sync upserts imported events without duplicates',
     () async {
-      final firstSync = CanvasSyncPayload(
+      final firstSync = CalendarSyncPayload(
         accountName: 'Student Calendar',
         accountEmail: 'student@example.test',
         remoteUserId: 'google-user-4',
@@ -235,7 +235,7 @@ void main() {
         syncedAt: DateTime(2026, 10, 9, 10),
         tasks: const [],
         events: [
-          CanvasEventImport(
+          CalendarEventImport(
             externalId: 'primary:event-19',
             title: 'Study group',
             start: DateTime(2026, 10, 12, 9),
@@ -256,7 +256,7 @@ void main() {
       expect(initialEvents.single.categoryId, account.categoryId);
 
       await repository.applyCalendarSync(
-        CanvasSyncPayload(
+        CalendarSyncPayload(
           accountName: 'Student Calendar',
           accountEmail: 'student@example.test',
           remoteUserId: 'google-user-4',
@@ -264,7 +264,7 @@ void main() {
           syncedAt: DateTime(2026, 10, 9, 11),
           tasks: const [],
           events: [
-            CanvasEventImport(
+            CalendarEventImport(
               externalId: 'primary:event-19',
               title: 'Study group moved',
               start: DateTime(2026, 10, 12, 11),
@@ -479,14 +479,14 @@ void main() {
   test(
     'Canvas sync upserts stable IDs and keeps local task completion',
     () async {
-      final first = CanvasSyncPayload(
+      final first = CalendarSyncPayload(
         accountName: 'Canvas Student',
         accountEmail: 'student@example.test',
         remoteUserId: '42',
         providerUrl: 'https://canvas.example.test',
         syncedAt: DateTime(2026, 10, 7, 9),
         tasks: [
-          CanvasTaskImport(
+          CalendarTaskImport(
             externalId: 'assignment:course_8:3',
             title: 'Essay',
             due: DateTime(2026, 10, 8, 17),
@@ -494,7 +494,7 @@ void main() {
           ),
         ],
         events: [
-          CanvasEventImport(
+          CalendarEventImport(
             externalId: 'event:99',
             title: 'Lecture',
             start: DateTime(2026, 10, 9, 10),
@@ -503,7 +503,7 @@ void main() {
           ),
         ],
       );
-      final account = await repository.applyCanvasSync(first);
+      final account = await repository.applyCalendarSync(first);
       final task = (await repository.getTasks()).single;
       final event = (await repository.getEvents()).single;
       expect(account.categoryId, isNotNull);
@@ -517,22 +517,22 @@ void main() {
       task.isChecked = true;
       await repository.updateTask(task);
 
-      await repository.applyCanvasSync(
-        CanvasSyncPayload(
+      await repository.applyCalendarSync(
+        CalendarSyncPayload(
           accountName: 'Canvas Student',
           accountEmail: 'student@example.test',
           remoteUserId: '42',
           providerUrl: 'https://canvas.example.test',
           syncedAt: DateTime(2026, 10, 7, 10),
           tasks: [
-            CanvasTaskImport(
+            CalendarTaskImport(
               externalId: 'assignment:course_8:3',
               title: 'Essay updated',
               due: DateTime(2026, 10, 10, 17),
               description: 'Updated description',
             ),
           ],
-          events: first.events,
+          events: const [],
         ),
       );
       final tasksAfterSync = await repository.getTasks();
@@ -544,20 +544,36 @@ void main() {
       expect(tasksAfterSync.single.date, DateTime(2026, 10, 10));
       expect(eventsAfterSync, hasLength(1));
       expect(eventsAfterSync.single.id, event.id);
+
+      await repository.applyCalendarSync(
+        CalendarSyncPayload(
+          accountName: 'Canvas Student',
+          accountEmail: 'student@example.test',
+          remoteUserId: '42',
+          providerUrl: 'https://canvas.example.test',
+          syncedAt: DateTime(2026, 10, 7, 11),
+          tasks: const [],
+          events: const [],
+        ),
+        removeMissingTasks: true,
+        removeMissingEvents: true,
+      );
+      expect(await repository.getTasks(), isEmpty);
+      expect(await repository.getEvents(), isEmpty);
     },
   );
 
   test(
     'a failed Canvas batch leaves stored records and sync metadata intact',
     () async {
-      final baseline = CanvasSyncPayload(
+      final baseline = CalendarSyncPayload(
         accountName: 'Canvas Student',
         accountEmail: null,
         remoteUserId: '42',
         providerUrl: 'https://canvas.example.test',
         syncedAt: DateTime(2026, 10, 7, 9),
         tasks: [
-          CanvasTaskImport(
+          CalendarTaskImport(
             externalId: 'assignment:course_8:3',
             title: 'Original title',
             due: DateTime(2026, 10, 8, 17),
@@ -565,7 +581,7 @@ void main() {
         ],
         events: const [],
       );
-      final account = await repository.applyCanvasSync(baseline);
+      final account = await repository.applyCalendarSync(baseline);
       final db = await databaseHelper.database;
       await db.execute('''
       CREATE TRIGGER reject_canvas_record BEFORE INSERT ON tasks
@@ -574,20 +590,20 @@ void main() {
     ''');
 
       await expectLater(
-        repository.applyCanvasSync(
-          CanvasSyncPayload(
+        repository.applyCalendarSync(
+          CalendarSyncPayload(
             accountName: 'Canvas Student',
             accountEmail: null,
             remoteUserId: '42',
             providerUrl: 'https://canvas.example.test',
             syncedAt: DateTime(2026, 10, 7, 10),
             tasks: [
-              CanvasTaskImport(
+              CalendarTaskImport(
                 externalId: 'assignment:course_8:3',
                 title: 'Changed title',
                 due: DateTime(2026, 10, 10, 17),
               ),
-              CanvasTaskImport(
+              CalendarTaskImport(
                 externalId: 'assignment:course_8:4',
                 title: 'Reject this row',
                 due: DateTime(2026, 10, 11, 17),

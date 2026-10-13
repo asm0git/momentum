@@ -7,7 +7,7 @@ import '../data/model_serialization.dart';
 import '../data/planner_repository.dart';
 import '../data/recurrence.dart';
 import '../data_models.dart';
-import '../services/canvas_backend_client.dart';
+import '../services/calendar_backend_client.dart';
 import 'calendar_sync_coordinator.dart';
 import 'focus_history_source.dart';
 
@@ -113,22 +113,15 @@ List<AutomaticFocusBucket> aggregateAutomaticFocusBuckets({
 class PlannerState extends ChangeNotifier implements FocusHistorySource {
   PlannerState({
     PlannerRepository? repository,
-    CanvasBackend? canvasBackend,
     ProviderCalendarBackend? calendarBackend,
-    bool? autoSyncCanvasOnStartup,
+    bool? autoSyncCalendarsOnStartup,
     this.includeDebugDemoData = false,
   }) : _repository = repository ?? PlannerRepository(),
-       _autoSyncCanvasOnStartup = autoSyncCanvasOnStartup ?? kIsWeb {
-    final legacyBackend = canvasBackend ?? CanvasBackendClient();
-    final providerBackend =
-        calendarBackend ??
-        (legacyBackend is ProviderCalendarBackend
-            ? legacyBackend
-            : CanvasBackendClient());
+       _calendarBackend = calendarBackend ?? CalendarBackendClient(),
+       _autoSyncCalendarsOnStartup = autoSyncCalendarsOnStartup ?? kIsWeb {
     _calendarSync = CalendarSyncCoordinator(
       repository: _repository,
-      canvasBackend: legacyBackend,
-      calendarBackend: providerBackend,
+      calendarBackend: _calendarBackend,
       reloadSnapshot: _reloadSnapshot,
       accountForProvider: accountForProvider,
       isParentDisposed: () => _isDisposed,
@@ -136,8 +129,9 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   }
 
   final PlannerRepository _repository;
+  final ProviderCalendarBackend _calendarBackend;
   late final CalendarSyncCoordinator _calendarSync;
-  final bool _autoSyncCanvasOnStartup;
+  final bool _autoSyncCalendarsOnStartup;
   final bool includeDebugDemoData;
   List<TaskCategory> _categories = [];
   List<PlannerItem> _items = [];
@@ -157,8 +151,6 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   Object? get error => _error;
   @override
   int get focusHistoryRevision => _focusHistoryRevision;
-  LinkedAccount? get canvasAccount =>
-      accountForProvider(CalendarProvider.canvas);
   LinkedAccount? accountForProvider(CalendarProvider provider) =>
       _linkedAccounts
           .where(
@@ -214,21 +206,12 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     return category.iconName;
   }
 
-  CanvasConnectionStatus? statusForProvider(CalendarProvider provider) =>
+  CalendarConnectionStatus? statusForProvider(CalendarProvider provider) =>
       _calendarSync.statusForProvider(provider);
   bool isProviderSyncing(CalendarProvider provider) =>
       _calendarSync.isProviderSyncing(provider);
   Object? errorForProvider(CalendarProvider provider) =>
       _calendarSync.errorForProvider(provider);
-  CanvasConnectionStatus? get canvasConnectionStatus =>
-      _calendarSync.canvasConnectionStatus;
-  bool get isCanvasConnected => _calendarSync.isCanvasConnected;
-  bool get isCanvasSyncing => _calendarSync.isCanvasSyncing;
-  double get canvasSyncProgress => _calendarSync.canvasSyncProgress;
-  Object? get canvasError => _calendarSync.canvasError;
-
-  Uri canvasOAuthStartUri(String siteUrl) =>
-      _calendarSync.canvasOAuthStartUri(siteUrl);
 
   Uri providerOAuthStartUri(CalendarProvider provider, {String? siteUrl}) =>
       _calendarSync.providerOAuthStartUri(provider, siteUrl: siteUrl);
@@ -423,7 +406,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
       const Duration(seconds: 10),
       (_) => unawaited(_recordAutomaticEventFocus()),
     );
-    if (_autoSyncCanvasOnStartup) {
+    if (_autoSyncCalendarsOnStartup) {
       _calendarSync.startBackgroundRefresh();
     }
   }
@@ -668,28 +651,24 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     return next;
   }
 
-  Future<CanvasConnectionStatus> refreshCanvasStatus() =>
-      _calendarSync.refreshCanvasStatus();
-
-  Future<CanvasConnectionStatus> refreshProviderStatus(
+  Future<CalendarConnectionStatus> refreshProviderStatus(
     CalendarProvider provider,
   ) => _calendarSync.refreshProviderStatus(provider);
-
-  Future<void> syncCanvas({bool replaceExistingImports = false}) =>
-      _calendarSync.syncCanvas(replaceExistingImports: replaceExistingImports);
 
   Future<void> syncProvider(
     CalendarProvider provider, {
     bool replaceExistingImports = false,
+    bool removeMissingTasks = false,
+    bool removeMissingEvents = false,
   }) => _calendarSync.syncProvider(
     provider,
     replaceExistingImports: replaceExistingImports,
+    removeMissingTasks: removeMissingTasks,
+    removeMissingEvents: removeMissingEvents,
   );
 
   Future<void> connectCalendarIcsFeed(CalendarProvider provider, String url) =>
       _calendarSync.connectCalendarIcsFeed(provider, url);
-
-  Future<void> disconnectCanvas() => _calendarSync.disconnectCanvas();
 
   Future<void> disconnectProvider(CalendarProvider provider) =>
       _calendarSync.disconnectProvider(provider);
