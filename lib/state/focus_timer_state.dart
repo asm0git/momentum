@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/pomodoro_preset.dart';
 import '../data/recurrence.dart';
-import '../data_models.dart';
+import '../models/focus_models.dart';
 import '../services/focus_preset_preferences.dart';
 import 'focus_history_source.dart';
 
@@ -45,6 +45,7 @@ class FocusTimerState extends ChangeNotifier {
   FocusHistorySource? _focusHistorySource;
   Timer? _ticker;
   bool _isTicking = false;
+  bool _hasPendingFocusHistoryWriteFailure = false;
   Future<void>? _flushInProgress;
   int _lastFocusHistoryRevision = 0;
   final Map<DateTime, int> _pendingSeconds = {};
@@ -59,6 +60,8 @@ class FocusTimerState extends ChangeNotifier {
   FocusPhase get phase => _phase;
   bool get isRunning => _isRunning;
   FocusTaskSelection? get selectedTask => _selectedTask;
+  bool get hasPendingFocusHistoryWriteFailure =>
+      _hasPendingFocusHistoryWriteFailure;
   int get totalFocusSecondsToday =>
       _persistedToday + (_pendingSeconds[_focusDate] ?? 0);
   int get phaseDurationSeconds =>
@@ -182,6 +185,8 @@ class FocusTimerState extends ChangeNotifier {
   @visibleForTesting
   Future<void> flushPendingForTesting() => _flushPending();
 
+  Future<void> retryPendingFocusHistoryWrite() => _flushPending();
+
   void _advanceTime(DateTime now) {
     final lastTick = _lastTick;
     if (lastTick == null || !now.isAfter(lastTick)) return;
@@ -303,6 +308,7 @@ class FocusTimerState extends ChangeNotifier {
         },
     };
     var wroteSeconds = false;
+    var writeFailed = false;
     final flush = () async {
       try {
         for (final dayEntry in snapshot.entries) {
@@ -334,12 +340,21 @@ class FocusTimerState extends ChangeNotifier {
         }
       } catch (error) {
         // Keep uncommitted seconds in memory so the next flush can retry.
+        writeFailed = true;
+        if (!_hasPendingFocusHistoryWriteFailure) {
+          _hasPendingFocusHistoryWriteFailure = true;
+          if (hasListeners) notifyListeners();
+        }
         debugPrint(
           'Could not save pending focus time; it will be retried: $error',
         );
       }
       if (wroteSeconds) {
         await _reloadToday(_focusDate);
+      }
+      if (!writeFailed && _hasPendingFocusHistoryWriteFailure) {
+        _hasPendingFocusHistoryWriteFailure = false;
+        if (hasListeners) notifyListeners();
       }
     }();
     _flushInProgress = flush;

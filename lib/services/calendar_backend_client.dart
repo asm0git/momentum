@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import '../data_models.dart';
+import '../models/calendar_models.dart';
 import 'canvas_cookie_client_stub.dart'
     if (dart.library.js_interop) 'canvas_cookie_client_web.dart'
     as cookie;

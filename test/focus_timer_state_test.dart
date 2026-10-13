@@ -412,12 +412,14 @@ void main() {
       timer.toggleRunning();
       await timer.flushPendingForTesting();
 
+      expect(timer.hasPendingFocusHistoryWriteFailure, isTrue);
       expect(timer.totalFocusSecondsToday, 5);
       expect(await planner.getFocusSecondsForDate(now), 0);
 
       await database.execute('DROP TRIGGER fail_focus_category_total');
-      await timer.flushPendingForTesting();
+      await timer.retryPendingFocusHistoryWrite();
 
+      expect(timer.hasPendingFocusHistoryWriteFailure, isFalse);
       expect(await planner.getFocusSecondsForDate(now), 5);
       expect(
         (await planner.getFocusCategoryTotalsForRange(

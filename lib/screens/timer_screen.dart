@@ -109,6 +109,27 @@ class _TimerScreenState extends State<TimerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (focusTimer.hasPendingFocusHistoryWriteFailure)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.screenEdgePadding,
+                          vertical: AppSpacing.xs,
+                        ),
+                        child: MaterialBanner(
+                          content: const Text(
+                            'Focus time is not saved yet. It is still available to retry.',
+                          ),
+                          leading: const Icon(Icons.sync_problem_outlined),
+                          actions: [
+                            TextButton(
+                              key: const ValueKey('timer-retry-focus-history'),
+                              onPressed:
+                                  focusTimer.retryPendingFocusHistoryWrite,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
                     _blurWhenRunning(
                       focusTimer.isRunning,
                       SizedBox(
