@@ -145,6 +145,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   Timer? _automaticEventFocusTimer;
   DateTime? _automaticEventFocusCursor;
   bool _isRecordingAutomaticEventFocus = false;
+  bool _automaticEventFocusFailureLogged = false;
   List<LinkedAccount> _linkedAccounts = [];
   bool _isLoading = true;
   Object? _error;
@@ -709,15 +710,21 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
           ),
         );
         _automaticEventFocusCursor = through;
+        _automaticEventFocusFailureLogged = false;
         if (!_isDisposed) {
           _focusHistoryRevision++;
           notifyListeners();
         }
       } else {
         _automaticEventFocusCursor = through;
+        _automaticEventFocusFailureLogged = false;
       }
-    } catch (_) {
+    } catch (error) {
       // Keep the cursor unchanged so the next interval retries the full batch.
+      if (!_automaticEventFocusFailureLogged) {
+        debugPrint('Automatic focus recording failed; retrying: $error');
+        _automaticEventFocusFailureLogged = true;
+      }
     } finally {
       _isRecordingAutomaticEventFocus = false;
     }
