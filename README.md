@@ -181,7 +181,6 @@ Provider logos identify the calendar services represented in the app; they do no
 - [`sqflite`, `sqflite_common_ffi`, and `sqflite_common_ffi_web`](https://github.com/tekartik/sqflite): Alexandre Roux / Tekartik and contributors. BSD 2-Clause
 - [`shared_preferences`](https://pub.dev/packages/shared_preferences): The Flutter Authors. BSD 3-Clause
 - [`device_preview`](https://github.com/aloisdeniel/flutter_device_preview): Aloïs Deniel and contributors. MIT
-- [`cupertino_icons`](https://pub.dev/packages/cupertino_icons): Vladimir Kharlampidi and contributors. MIT; covers the Cupertino icon font supplied by this package
 - [`sqlite3.dart`](https://github.com/simolus3/sqlite3.dart): Simon Binder and contributors. MIT
 - [SQLite](https://www.sqlite.org/copyright.html): SQLite authors. Public domain; used by the database, including the WebAssembly build in `web/sqlite3.wasm`
 - [Wrangler](https://github.com/cloudflare/workers-sdk) and [`@cloudflare/workers-types`](https://github.com/cloudflare/workerd): Cloudflare and contributors. MIT or Apache 2.0

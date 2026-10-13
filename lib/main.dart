@@ -1,12 +1,3 @@
-// This is your app. It runs as it is: press run and you get the screen below.
-//
-// Nothing here is precious. Change the title, change the colors, delete the
-// counter, add your own screens. It exists so that the repository is a working
-// Flutter app from minute one instead of an empty folder.
-//
-// Everything in this file is Module 4 and 5 material: StatelessWidget,
-// StatefulWidget, setState, Scaffold, AppBar, Column, Card, FilledButton.
-
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
