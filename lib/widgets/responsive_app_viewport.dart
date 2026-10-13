@@ -41,10 +41,7 @@ class ResponsiveAppViewport extends StatelessWidget {
             (usePhoneFrame
                     ? math.min(
                         _phoneWidth,
-                        math.min(
-                          availableWidth - _wideScreenGutter * 2,
-                          appHeight * _phoneWidth / _phoneHeight,
-                        ),
+                        availableWidth - _wideScreenGutter * 2,
                       )
                     : math.min(_phoneWidth, availableWidth))
                 .toDouble();
