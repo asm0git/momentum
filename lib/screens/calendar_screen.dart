@@ -41,8 +41,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       final savedMode = await CalendarViewPreferences.load();
       if (!mounted || _calendarViewModeChanged) return;
       setState(() => _calendarViewMode = savedMode);
-    } catch (_) {
+    } catch (error) {
       // Keep the full-month view if the saved preference cannot be read.
+      debugPrint('Could not restore the saved calendar view: $error');
     }
   }
 
@@ -56,8 +57,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Future<void> _saveCalendarViewMode(CalendarViewMode mode) async {
     try {
       await CalendarViewPreferences.save(mode);
-    } catch (_) {
+    } catch (error) {
       // Keep the changed view for this visit if storage is unavailable.
+      debugPrint('Could not save the calendar view preference: $error');
     }
   }
 
