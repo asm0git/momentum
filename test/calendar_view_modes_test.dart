@@ -3,6 +3,7 @@ import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/app_theme.dart';
 import 'package:momentum/calendar_view_mode.dart';
+import 'package:momentum/data_models.dart';
 import 'package:momentum/screens/calendar_screen.dart';
 import 'package:momentum/services/calendar_view_preferences.dart';
 import 'package:momentum/state/planner_state.dart';
@@ -10,6 +11,7 @@ import 'package:momentum/widgets/calendar/calendar.dart';
 import 'package:momentum/widgets/calendar/calendar_resize_handle.dart';
 import 'package:momentum/widgets/calendar/days.dart';
 import 'package:momentum/widgets/calendar/week.dart';
+import 'package:momentum/widgets/category_icon_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -429,6 +431,87 @@ void main() {
 
     expect(find.byType(WeekWidget), findsNWidgets(2));
   });
+
+  testWidgets('agenda resolves category icons by id and handles missing ones', (
+    tester,
+  ) async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final matchingTask = Task(
+      id: 1,
+      categoryId: 7,
+      title: 'Categorized agenda task',
+      date: today,
+      time: const TimeOfDay(hour: 10, minute: 0),
+      estimatedDuration: const Duration(minutes: 25),
+      isChecked: false,
+    );
+    final uncategorizedTask = Task(
+      id: 2,
+      categoryId: 99,
+      title: 'Missing category agenda task',
+      date: today,
+      time: const TimeOfDay(hour: 11, minute: 0),
+      estimatedDuration: const Duration(minutes: 25),
+      isChecked: false,
+    );
+    final planner = _CalendarPlannerState(
+      categories: [
+        TaskCategory(
+          id: 7,
+          title: 'Study',
+          iconName: 'mi_school',
+          items: [matchingTask],
+        ),
+      ],
+      items: [matchingTask, uncategorizedTask],
+    );
+    addTearDown(planner.dispose);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<PlannerState>.value(
+        value: planner,
+        child: MaterialApp(theme: appTheme, home: const CalendarScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Categorized agenda task'), findsWidgets);
+    expect(find.text('Missing category agenda task'), findsWidgets);
+    final icons = tester.widgetList<CategoryIcon>(find.byType(CategoryIcon));
+    expect(icons, hasLength(1));
+    expect(icons.single.iconName, 'mi_school');
+  });
+}
+
+class _CalendarPlannerState extends PlannerState {
+  _CalendarPlannerState({
+    required List<TaskCategory> categories,
+    required List<PlannerItem> items,
+  }) : _categories = categories,
+       _items = items,
+       super(
+         autoSyncCalendarsOnStartup: false,
+         startAutomaticEventFocusTimer: false,
+       );
+
+  final List<TaskCategory> _categories;
+  final List<PlannerItem> _items;
+
+  @override
+  List<TaskCategory> get categories => _categories;
+
+  @override
+  List<PlannerItem> get items => _items;
+
+  @override
+  List<PlannerItem> itemsForDate(DateTime date) => _items
+      .where(
+        (item) =>
+            item.date.year == date.year &&
+            item.date.month == date.month &&
+            item.date.day == date.day,
+      )
+      .toList();
 }
 
 Future<void> _pumpCalendar(

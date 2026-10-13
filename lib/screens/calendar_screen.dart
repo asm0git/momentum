@@ -67,12 +67,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     final planner = context.watch<PlannerState>();
     final categories = planner.categories;
+    final categoryIconsById = <int, String>{
+      for (final category in categories)
+        if (category.id != null) category.id!: category.iconName,
+    };
     final agendaIcons = {
       for (final item in planner.itemsForDate(_selectedDate))
-        item: categories
-            .where((category) => category.id == item.categoryId)
-            .firstOrNull
-            ?.iconName,
+        item: categoryIconsById[item.categoryId],
     };
     return Scaffold(
       backgroundColor: AppColors.background,
