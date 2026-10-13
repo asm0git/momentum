@@ -1,12 +1,45 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/app_theme.dart';
+import 'package:momentum/data/database_helper.dart';
+import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
+import 'package:momentum/state/planner_state.dart';
+import 'package:momentum/widgets/add_item_popup.dart';
 import 'package:momentum/widgets/task_list_container.dart';
 import 'package:momentum/widgets/task_widget.dart';
 import 'package:momentum/widgets/days.dart';
+import 'package:provider/provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  late Directory tempDirectory;
+  late DatabaseHelper databaseHelper;
+  late PlannerState planner;
+
+  setUpAll(() => sqfliteFfiInit());
+
+  setUp(() async {
+    tempDirectory = await Directory.systemTemp.createTemp('momentum_item_ui_');
+    databaseHelper = DatabaseHelper.forTesting(
+      factory: databaseFactoryFfi,
+      databasePath: '${tempDirectory.path}/planner.db',
+      seedOnCreate: false,
+    );
+    planner = PlannerState(
+      repository: PlannerRepository(databaseHelper: databaseHelper),
+    );
+    await planner.initialize();
+  });
+
+  tearDown(() async {
+    planner.dispose();
+    await databaseHelper.close();
+    await tempDirectory.delete(recursive: true);
+  });
+
   testWidgets('weekend calendar dates use the same normal text color', (
     tester,
   ) async {
@@ -275,4 +308,157 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('editing a recurring task preserves its schedule and metadata', (
+    tester,
+  ) async {
+    _setItemEditorViewport(tester);
+    final category = (await tester.runAsync(
+      () => planner.addCategory(
+        TaskCategory(title: 'Study', iconName: 'mi_school', items: []),
+      ),
+    ))!;
+    final repeatUntil = DateTime(2026, 11, 10);
+    final original = (await tester.runAsync(
+      () => planner.saveTask(
+        Task(
+          categoryId: category.id,
+          title: 'Review notes',
+          date: DateTime(2026, 10, 20),
+          time: const TimeOfDay(hour: 15, minute: 30),
+          estimatedDuration: const Duration(minutes: 45),
+          isChecked: true,
+          repeat: 'Every week',
+          repeatUntil: repeatUntil,
+          description: 'Before edit',
+          priority: 2,
+          srcPlatform: 'canvas',
+          externalId: 'assignment-17',
+        ),
+      ),
+    ))!;
+    PlannerItem? saved;
+
+    await tester.pumpWidget(
+      _itemEditorApp(
+        planner,
+        AddItemPopup(initialItem: original, onSaved: (item) => saved = item),
+      ),
+    );
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.first, 'Review chapter');
+    await tester.enterText(fields.last, 'Updated notes');
+    await tester.ensureVisible(find.text('Save changes'));
+    await tester.tap(find.text('Save changes'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(saved, isA<Task>());
+    final task = saved! as Task;
+    expect(task.id, original.id);
+    expect(task.categoryId, category.id);
+    expect(task.title, 'Review chapter');
+    expect(task.date, DateTime(2026, 10, 20));
+    expect(task.time, const TimeOfDay(hour: 15, minute: 30));
+    expect(task.estimatedDuration, const Duration(minutes: 45));
+    expect(task.repeat, 'Every week');
+    expect(task.repeatUntil, repeatUntil);
+    expect(task.isChecked, isTrue);
+    expect(task.description, 'Updated notes');
+    expect(task.priority, 2);
+    expect(task.srcPlatform, 'canvas');
+    expect(task.externalId, 'assignment-17');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('editing a recurring event preserves its schedule and metadata', (
+    tester,
+  ) async {
+    _setItemEditorViewport(tester);
+    final category = (await tester.runAsync(
+      () => planner.addCategory(
+        TaskCategory(title: 'Work', iconName: 'mi_work', items: []),
+      ),
+    ))!;
+    final repeatUntil = DateTime(2026, 12, 1);
+    final original = (await tester.runAsync(
+      () => planner.saveEvent(
+        Event(
+          categoryId: category.id,
+          title: 'Project review',
+          date: DateTime(2026, 10, 20),
+          start: const TimeOfDay(hour: 14, minute: 30),
+          endDate: DateTime(2026, 10, 21),
+          end: const TimeOfDay(hour: 1, minute: 0),
+          isCurrent: true,
+          allDay: false,
+          location: 'Room 4',
+          notes: 'Before edit',
+          repeat: 'Every month',
+          repeatUntil: repeatUntil,
+          srcPlatform: 'outlook',
+          externalId: 'event-42',
+        ),
+      ),
+    ))!;
+    PlannerItem? saved;
+
+    await tester.pumpWidget(
+      _itemEditorApp(
+        planner,
+        AddItemPopup(initialItem: original, onSaved: (item) => saved = item),
+      ),
+    );
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.first, 'Updated project review');
+    await tester.enterText(fields.last, 'Updated event notes');
+    await tester.ensureVisible(find.text('Save changes'));
+    await tester.tap(find.text('Save changes'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(saved, isA<Event>());
+    final event = saved! as Event;
+    expect(event.id, original.id);
+    expect(event.categoryId, category.id);
+    expect(event.title, 'Updated project review');
+    expect(event.date, DateTime(2026, 10, 20));
+    expect(event.start, const TimeOfDay(hour: 14, minute: 30));
+    expect(event.endDate, DateTime(2026, 10, 21));
+    expect(event.end, const TimeOfDay(hour: 1, minute: 0));
+    expect(event.isCurrent, isTrue);
+    expect(event.allDay, isFalse);
+    expect(event.location, 'Room 4');
+    expect(event.notes, 'Updated event notes');
+    expect(event.repeat, 'Every month');
+    expect(event.repeatUntil, repeatUntil);
+    expect(event.srcPlatform, 'outlook');
+    expect(event.externalId, 'event-42');
+    expect(tester.takeException(), isNull);
+  });
 }
+
+void _setItemEditorViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(900, 1400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
+Widget _itemEditorApp(PlannerState planner, Widget editor) =>
+    ChangeNotifierProvider<PlannerState>.value(
+      value: planner,
+      child: MaterialApp(
+        theme: appTheme,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: editor,
+          ),
+        ),
+      ),
+    );

@@ -6,6 +6,7 @@ import 'package:momentum/app_theme.dart';
 import 'package:momentum/data/database_helper.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
+import 'package:momentum/screens/dashboard_screen.dart';
 import 'package:momentum/screens/todo_screen.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:provider/provider.dart';
@@ -181,14 +182,90 @@ void main() {
 
     expect(find.text('Selected category'), findsOneWidget);
     expect(find.text('Visible task'), findsOneWidget);
+    expect(find.text('1 pending'), findsOneWidget);
     expect(find.text('None'), findsNothing);
+
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(planner.items.whereType<Task>().single.isChecked, isTrue);
+    expect(find.text('0 pending'), findsOneWidget);
+  });
+
+  testWidgets('dashboard category preview opens To-Do and completes a task', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final category = (await tester.runAsync(
+      () => planner.addCategory(
+        TaskCategory(title: 'Tomorrow', iconName: 'personal', items: []),
+      ),
+    ))!;
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    await tester.runAsync(
+      () => planner.saveTask(
+        Task(
+          categoryId: category.id,
+          title: 'Prepare presentation',
+          date: DateTime(tomorrow.year, tomorrow.month, tomorrow.day),
+          time: const TimeOfDay(hour: 9, minute: 0),
+          estimatedDuration: const Duration(minutes: 30),
+          isChecked: false,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      _app(
+        planner,
+        const DashboardScreen(),
+        routes: {
+          '/todo': (_) => TodoScreen(initialCategoryId: category.id),
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Up next:'), findsOneWidget);
+    expect(find.text('Prepare presentation'), findsWidgets);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('dashboard-category-Tomorrow')),
+    );
+    await tester.tap(find.byKey(const ValueKey('dashboard-category-Tomorrow')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TodoScreen), findsOneWidget);
+    expect(find.text('Prepare presentation'), findsOneWidget);
+    expect(find.text('1 pending'), findsOneWidget);
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(planner.items.whereType<Task>().single.isChecked, isTrue);
+    expect(find.text('0 pending'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 
-Widget _app(PlannerState planner, Widget child) =>
+Widget _app(
+  PlannerState planner,
+  Widget child, {
+  Map<String, WidgetBuilder> routes = const {},
+}) =>
     ChangeNotifierProvider<PlannerState>.value(
       value: planner,
-      child: MaterialApp(theme: appTheme, home: child),
+      child: MaterialApp(theme: appTheme, home: child, routes: routes),
     );
 
 class _ReactivePlannerViews extends StatelessWidget {
