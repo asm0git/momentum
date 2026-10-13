@@ -1,8 +1,31 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/data/debug_demo_data.dart';
+import 'package:momentum/data_models.dart';
 import 'package:momentum/screens/insights_screen.dart';
 
 void main() {
+  test('demo calendar category creates a future read-only event', () {
+    final category = DebugDemoData.googleCalendarCategory(
+      now: DateTime(2026, 10, 14, 10, 30),
+    );
+    final event = category.items.single as Event;
+
+    expect(category.id, DebugDemoData.googleCategoryId);
+    expect(category.title, 'Google Calendar');
+    expect(category.iconName, 'provider_google');
+    expect(event.id, DebugDemoData.googleEventId);
+    expect(event.categoryId, category.id);
+    expect(event.title, 'Project planning');
+    expect(event.date, DateTime(2026, 10, 14));
+    expect(event.start.hour, 12);
+    expect(event.start.minute, 30);
+    expect(event.end.hour, 13);
+    expect(event.end.minute, 30);
+    expect(event.allDay, isFalse);
+    expect(event.sourcePlatform, 'google');
+    expect(event.externalId, 'momentum-debug-google-event');
+  });
+
   test('demo focus data varies across days and all heatmap shades', () {
     final today = DateTime(2026, 10, 12);
     final firstDay = today.subtract(const Duration(days: 363));
