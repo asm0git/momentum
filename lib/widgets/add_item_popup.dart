@@ -395,7 +395,8 @@ class _AddItemPopupState extends State<AddItemPopup> {
       );
       final saved = await state.saveEvent(event);
       widget.onSaved?.call(saved);
-    } catch (_) {
+    } catch (error) {
+      debugPrint('Could not save planner item: $error');
       _showValidationError('Could not save this item.');
     }
   }
@@ -1042,7 +1043,8 @@ class _TitleCategoryFields extends StatelessWidget {
     try {
       final saved = await context.read<PlannerState>().addCategory(category);
       onCategoryChanged(saved.id);
-    } catch (_) {
+    } catch (error) {
+      debugPrint('Could not create category from item editor: $error');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not create this category.')),
