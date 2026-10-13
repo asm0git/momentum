@@ -81,7 +81,8 @@ Future<void> confirmDeleteItem(BuildContext context, PlannerItem item) async {
   if (confirmed != true || !context.mounted) return;
   try {
     await context.read<PlannerState>().deleteItem(item);
-  } catch (_) {
+  } catch (error) {
+    debugPrint('Could not delete item: $error');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not delete this item.')),
@@ -115,7 +116,8 @@ Future<void> confirmDeleteCategory(
       disposition: choice.disposition,
       destinationCategoryId: choice.destinationCategoryId,
     );
-  } catch (_) {
+  } catch (error) {
+    debugPrint('Could not delete category: $error');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not delete this category.')),
