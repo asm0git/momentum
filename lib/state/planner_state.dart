@@ -115,10 +115,14 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     PlannerRepository? repository,
     ProviderCalendarBackend? calendarBackend,
     bool? autoSyncCalendarsOnStartup,
+    @visibleForTesting DateTime Function()? clock,
+    @visibleForTesting bool startAutomaticEventFocusTimer = true,
     this.includeDebugDemoData = false,
   }) : _repository = repository ?? PlannerRepository(),
        _calendarBackend = calendarBackend ?? CalendarBackendClient(),
-       _autoSyncCalendarsOnStartup = autoSyncCalendarsOnStartup ?? kIsWeb {
+       _autoSyncCalendarsOnStartup = autoSyncCalendarsOnStartup ?? kIsWeb,
+       _clock = clock ?? DateTime.now,
+       _automaticFocusTimerEnabled = startAutomaticEventFocusTimer {
     _calendarSync = CalendarSyncCoordinator(
       repository: _repository,
       calendarBackend: _calendarBackend,
@@ -132,6 +136,8 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   final ProviderCalendarBackend _calendarBackend;
   late final CalendarSyncCoordinator _calendarSync;
   final bool _autoSyncCalendarsOnStartup;
+  final DateTime Function() _clock;
+  final bool _automaticFocusTimerEnabled;
   final bool includeDebugDemoData;
   List<TaskCategory> _categories = [];
   List<PlannerItem> _items = [];
@@ -401,11 +407,13 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
       _isLoading = false;
       notifyListeners();
     }
-    _automaticEventFocusCursor ??= DateTime.now();
-    _automaticEventFocusTimer ??= Timer.periodic(
-      const Duration(seconds: 10),
-      (_) => unawaited(_recordAutomaticEventFocus()),
-    );
+    _automaticEventFocusCursor ??= _clock();
+    if (_automaticFocusTimerEnabled) {
+      _automaticEventFocusTimer ??= Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => unawaited(_recordAutomaticEventFocus()),
+      );
+    }
     if (_autoSyncCalendarsOnStartup) {
       _calendarSync.startBackgroundRefresh();
     }
@@ -676,7 +684,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   Future<void> _recordAutomaticEventFocus() async {
     if (_isDisposed || _isRecordingAutomaticEventFocus) return;
     final from = _automaticEventFocusCursor;
-    final through = DateTime.now();
+    final through = _clock();
     if (from == null || !through.isAfter(from)) {
       _automaticEventFocusCursor = through;
       return;
@@ -714,6 +722,10 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
       _isRecordingAutomaticEventFocus = false;
     }
   }
+
+  @visibleForTesting
+  Future<void> recordAutomaticEventFocusForTesting() =>
+      _recordAutomaticEventFocus();
 
   List<ScheduledEventFocusInterval> _eventFocusIntervals(
     DateTime from,

@@ -21,6 +21,7 @@ void main() {
   setUpAll(() => sqfliteFfiInit());
 
   setUp(() async {
+    now = DateTime(2026, 10, 9, 10);
     tempDirectory = await Directory.systemTemp.createTemp('momentum_focus_');
     databaseHelper = DatabaseHelper.forTesting(
       factory: databaseFactoryFfi,
@@ -29,6 +30,9 @@ void main() {
     );
     planner = PlannerState(
       repository: PlannerRepository(databaseHelper: databaseHelper),
+      autoSyncCalendarsOnStartup: false,
+      clock: () => now,
+      startAutomaticEventFocusTimer: false,
     );
     await planner.initialize();
     final category = await planner.addCategory(
@@ -45,7 +49,6 @@ void main() {
       ),
     );
     selection = planner.selectableFocusTasks.single;
-    now = DateTime(2026, 10, 9, 10);
     timer = FocusTimerState(
       workMinutes: 1,
       breakMinutes: 1,
@@ -344,4 +347,87 @@ void main() {
     );
     expect(buckets[1].selection, firstCategory);
   });
+
+  test(
+    'automatic event focus retries a failed batch without duplication',
+    () async {
+      await planner.saveEvent(
+        Event(
+          categoryId: selection.categoryId,
+          title: 'Scheduled study session',
+          date: DateTime(now.year, now.month, now.day),
+          start: TimeOfDay.fromDateTime(now),
+          end: TimeOfDay.fromDateTime(now.add(const Duration(minutes: 1))),
+          isCurrent: false,
+          allDay: false,
+        ),
+      );
+      final database = await databaseHelper.database;
+      await database.execute('''
+      CREATE TRIGGER fail_focus_category_total
+      BEFORE INSERT ON focus_daily_category_totals
+      BEGIN SELECT RAISE(ABORT, 'simulated focus write failure'); END
+    ''');
+      final initialRevision = planner.focusHistoryRevision;
+      now = now.add(const Duration(seconds: 5));
+
+      await planner.recordAutomaticEventFocusForTesting();
+
+      expect(await planner.getFocusSecondsForDate(now), 0);
+      expect(await planner.getFocusCategoryTotalsForRange(now, now), isEmpty);
+      expect(planner.focusHistoryRevision, initialRevision);
+
+      await database.execute('DROP TRIGGER fail_focus_category_total');
+      await planner.recordAutomaticEventFocusForTesting();
+
+      expect(await planner.getFocusSecondsForDate(now), 5);
+      expect(
+        (await planner.getFocusCategoryTotalsForRange(
+          now,
+          now,
+        )).single.totalSeconds,
+        5,
+      );
+      expect(planner.focusHistoryRevision, initialRevision + 1);
+
+      await planner.recordAutomaticEventFocusForTesting();
+      expect(await planner.getFocusSecondsForDate(now), 5);
+      expect(planner.focusHistoryRevision, initialRevision + 1);
+    },
+  );
+
+  test(
+    'timer retries failed focus writes without dropping pending seconds',
+    () async {
+      final database = await databaseHelper.database;
+      await database.execute('''
+        CREATE TRIGGER fail_focus_category_total
+        BEFORE INSERT ON focus_daily_category_totals
+        BEGIN SELECT RAISE(ABORT, 'simulated focus write failure'); END
+      ''');
+
+      timer.toggleRunning();
+      now = now.add(const Duration(seconds: 5));
+      await timer.tickForTesting();
+      timer.toggleRunning();
+      await timer.flushPendingForTesting();
+
+      expect(timer.totalFocusSecondsToday, 5);
+      expect(await planner.getFocusSecondsForDate(now), 0);
+
+      await database.execute('DROP TRIGGER fail_focus_category_total');
+      await timer.flushPendingForTesting();
+
+      expect(await planner.getFocusSecondsForDate(now), 5);
+      expect(
+        (await planner.getFocusCategoryTotalsForRange(
+          now,
+          now,
+        )).single.totalSeconds,
+        5,
+      );
+      await timer.flushPendingForTesting();
+      expect(await planner.getFocusSecondsForDate(now), 5);
+    },
+  );
 }
