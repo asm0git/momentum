@@ -51,7 +51,8 @@ Future<void> main() async {
           ),
           ChangeNotifierProxyProvider<PlannerState, FocusTimerState>(
             create: (_) => FocusTimerState(customPresets: customFocusPresets),
-            update: (_, planner, timer) => timer!..attachPlannerState(planner),
+            update: (_, planner, timer) =>
+                timer!..attachFocusHistorySource(planner),
           ),
         ],
         child: MyApp(initialRoute: initialRoute, firstRun: !completed),

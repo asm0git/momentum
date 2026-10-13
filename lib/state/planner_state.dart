@@ -8,8 +8,10 @@ import '../data/planner_repository.dart';
 import '../data/recurrence.dart';
 import '../data_models.dart';
 import '../services/canvas_backend_client.dart';
+import 'calendar_sync_coordinator.dart';
+import 'focus_history_source.dart';
 
-class PlannerState extends ChangeNotifier {
+class PlannerState extends ChangeNotifier implements FocusHistorySource {
   PlannerState({
     PlannerRepository? repository,
     CanvasBackend? canvasBackend,
@@ -17,36 +19,34 @@ class PlannerState extends ChangeNotifier {
     bool? autoSyncCanvasOnStartup,
     this.includeDebugDemoData = false,
   }) : _repository = repository ?? PlannerRepository(),
-       _canvasBackend = canvasBackend ?? CanvasBackendClient(),
-       _calendarBackend =
-           calendarBackend ??
-           (canvasBackend is ProviderCalendarBackend
-               ? canvasBackend as ProviderCalendarBackend
-               : CanvasBackendClient()),
-       _autoSyncCanvasOnStartup = autoSyncCanvasOnStartup ?? kIsWeb;
+       _autoSyncCanvasOnStartup = autoSyncCanvasOnStartup ?? kIsWeb {
+    final legacyBackend = canvasBackend ?? CanvasBackendClient();
+    final providerBackend =
+        calendarBackend ??
+        (legacyBackend is ProviderCalendarBackend
+            ? legacyBackend
+            : CanvasBackendClient());
+    _calendarSync = CalendarSyncCoordinator(
+      repository: _repository,
+      canvasBackend: legacyBackend,
+      calendarBackend: providerBackend,
+      reloadSnapshot: _reloadSnapshot,
+      accountForProvider: accountForProvider,
+      isParentDisposed: () => _isDisposed,
+    )..addListener(_onCalendarSyncChanged);
+  }
 
   final PlannerRepository _repository;
-  final CanvasBackend _canvasBackend;
-  final ProviderCalendarBackend _calendarBackend;
+  late final CalendarSyncCoordinator _calendarSync;
   final bool _autoSyncCanvasOnStartup;
   final bool includeDebugDemoData;
   List<TaskCategory> _categories = [];
   List<PlannerItem> _items = [];
   Set<String> _taskOccurrenceCompletionKeys = {};
-  Timer? _calendarRefreshTimer;
   Timer? _automaticEventFocusTimer;
   DateTime? _automaticEventFocusCursor;
   bool _isRecordingAutomaticEventFocus = false;
-  LinkedAccount? _canvasAccount;
   List<LinkedAccount> _linkedAccounts = [];
-  CanvasConnectionStatus? _canvasConnectionStatus;
-  final Map<CalendarProvider, CanvasConnectionStatus> _providerStatuses = {};
-  final Set<CalendarProvider> _syncingProviders = {};
-  final Map<CalendarProvider, Object> _providerErrors = {};
-  bool _isCanvasSyncing = false;
-  double _canvasSyncProgress = 0;
-  Object? _canvasError;
-  Future<CanvasConnectionStatus>? _canvasStatusFuture;
   bool _isLoading = true;
   Object? _error;
   bool _isDisposed = false;
@@ -56,8 +56,9 @@ class PlannerState extends ChangeNotifier {
   List<PlannerItem> get items => List.unmodifiable(_items);
   bool get isLoading => _isLoading;
   Object? get error => _error;
+  @override
   int get focusHistoryRevision => _focusHistoryRevision;
-  LinkedAccount? get canvasAccount => _canvasAccount;
+  LinkedAccount? get canvasAccount => accountForProvider(CalendarProvider.canvas);
   LinkedAccount? accountForProvider(CalendarProvider provider) =>
       _linkedAccounts
           .where(
@@ -114,25 +115,23 @@ class PlannerState extends ChangeNotifier {
   }
 
   CanvasConnectionStatus? statusForProvider(CalendarProvider provider) =>
-      _providerStatuses[provider] ??
-      (provider == CalendarProvider.canvas ? _canvasConnectionStatus : null);
+      _calendarSync.statusForProvider(provider);
   bool isProviderSyncing(CalendarProvider provider) =>
-      _syncingProviders.contains(provider) ||
-      (provider == CalendarProvider.canvas && _isCanvasSyncing);
+      _calendarSync.isProviderSyncing(provider);
   Object? errorForProvider(CalendarProvider provider) =>
-      _providerErrors[provider] ??
-      (provider == CalendarProvider.canvas ? _canvasError : null);
-  CanvasConnectionStatus? get canvasConnectionStatus => _canvasConnectionStatus;
-  bool get isCanvasConnected => _canvasConnectionStatus?.connected ?? false;
-  bool get isCanvasSyncing => _isCanvasSyncing;
-  double get canvasSyncProgress => _canvasSyncProgress;
-  Object? get canvasError => _canvasError;
+      _calendarSync.errorForProvider(provider);
+  CanvasConnectionStatus? get canvasConnectionStatus =>
+      _calendarSync.canvasConnectionStatus;
+  bool get isCanvasConnected => _calendarSync.isCanvasConnected;
+  bool get isCanvasSyncing => _calendarSync.isCanvasSyncing;
+  double get canvasSyncProgress => _calendarSync.canvasSyncProgress;
+  Object? get canvasError => _calendarSync.canvasError;
 
   Uri canvasOAuthStartUri(String siteUrl) =>
-      _canvasBackend.oauthStartUri(siteUrl);
+      _calendarSync.canvasOAuthStartUri(siteUrl);
 
   Uri providerOAuthStartUri(CalendarProvider provider, {String? siteUrl}) =>
-      _calendarBackend.providerOAuthStartUri(provider, siteUrl: siteUrl);
+      _calendarSync.providerOAuthStartUri(provider, siteUrl: siteUrl);
 
   PlannerItem? get nextUpcomingItem {
     final now = DateTime.now();
@@ -167,21 +166,8 @@ class PlannerState extends ChangeNotifier {
         result.add(series);
         continue;
       }
-      for (final occurrenceDate in recurrenceDatesInRange(
-        series,
-        from: today,
-        through: DateTime(9999, 12, 31),
-      )) {
-        final completed =
-            series is Task &&
-            series.id != null &&
-            _taskOccurrenceCompletionKeys.contains(
-              taskOccurrenceKey(series.id!, occurrenceDate),
-            );
-        if (completed) continue;
-        result.add(
-          occurrenceForDate(series, occurrenceDate, isCompleted: completed),
-        );
+      for (final occurrence in _incompleteOccurrences(series, from: today)) {
+        result.add(occurrence);
         break;
       }
     }
@@ -206,23 +192,10 @@ class PlannerState extends ChangeNotifier {
         continue;
       }
 
-      for (final occurrenceDate in recurrenceDatesInRange(
+      for (final occurrence in _incompleteOccurrences(
         series,
         from: dateOnly(currentTime),
-        through: DateTime(9999, 12, 31),
       )) {
-        final completed =
-            series is Task &&
-            series.id != null &&
-            _taskOccurrenceCompletionKeys.contains(
-              taskOccurrenceKey(series.id!, occurrenceDate),
-            );
-        if (completed) continue;
-        final occurrence = occurrenceForDate(
-          series,
-          occurrenceDate,
-          isCompleted: completed,
-        );
         if (_hasEnded(occurrence, currentTime)) continue;
         result.add(occurrence);
         break;
@@ -230,6 +203,26 @@ class PlannerState extends ChangeNotifier {
     }
     result.sort(_compareItems);
     return List.unmodifiable(result);
+  }
+
+  Iterable<PlannerItem> _incompleteOccurrences(
+    PlannerItem series, {
+    required DateTime from,
+  }) sync* {
+    for (final occurrenceDate in recurrenceDatesInRange(
+      series,
+      from: from,
+      through: DateTime(9999, 12, 31),
+    )) {
+      final completed =
+          series is Task &&
+          series.id != null &&
+          _taskOccurrenceCompletionKeys.contains(
+            taskOccurrenceKey(series.id!, occurrenceDate),
+          );
+      if (completed) continue;
+      yield occurrenceForDate(series, occurrenceDate, isCompleted: completed);
+    }
   }
 
   /// Incomplete tasks and not-yet-ended events available to the Pomodoro
@@ -331,8 +324,7 @@ class PlannerState extends ChangeNotifier {
       (_) => unawaited(_recordAutomaticEventFocus()),
     );
     if (_autoSyncCanvasOnStartup) {
-      _startCalendarRefreshTimer();
-      unawaited(_autoSyncCalendarsIfDue());
+      _calendarSync.startBackgroundRefresh();
     }
   }
 
@@ -353,9 +345,6 @@ class PlannerState extends ChangeNotifier {
     _items = items;
     _taskOccurrenceCompletionKeys = occurrenceCompletions;
     _linkedAccounts = accounts;
-    _canvasAccount = accounts
-        .where((account) => account.platformName.toLowerCase() == 'canvas')
-        .firstOrNull;
     _error = null;
   }
 
@@ -369,6 +358,10 @@ class PlannerState extends ChangeNotifier {
       notifyListeners();
       rethrow;
     }
+  }
+
+  void _onCalendarSyncChanged() {
+    if (!_isDisposed) notifyListeners();
   }
 
   Future<TaskCategory> addCategory(TaskCategory category) async {
@@ -461,6 +454,7 @@ class PlannerState extends ChangeNotifier {
   Future<List<Task>> getTasksForDate(DateTime date) =>
       _repository.getTasksForDate(date);
 
+  @override
   Future<int> getFocusSecondsForDate(DateTime date) async {
     final stored = await _repository.getFocusSecondsForDate(date);
     if (!includeDebugDemoData) return stored;
@@ -528,6 +522,7 @@ class PlannerState extends ChangeNotifier {
     return result;
   }
 
+  @override
   Future<void> addFocusSeconds(
     DateTime date,
     int seconds,
@@ -543,6 +538,7 @@ class PlannerState extends ChangeNotifier {
   /// Returns the calendar event that owns this instant for automatic focus
   /// accounting. Pomodoro skips these seconds so simultaneous tracking does
   /// not double count the same elapsed time.
+  @override
   FocusTaskSelection? eventFocusSelectionAt(DateTime instant) {
     final intervals = _eventFocusIntervals(
       instant.subtract(const Duration(seconds: 1)),
@@ -557,6 +553,7 @@ class PlannerState extends ChangeNotifier {
   }
 
   /// Returns the next event start or end inside an elapsed Pomodoro chunk.
+  @override
   DateTime? nextEventFocusBoundaryAfter(DateTime instant, DateTime through) {
     DateTime? next;
     for (final interval in _eventFocusIntervals(instant, through)) {
@@ -571,187 +568,38 @@ class PlannerState extends ChangeNotifier {
     return next;
   }
 
-  Future<CanvasConnectionStatus> refreshCanvasStatus() {
-    final inFlight = _canvasStatusFuture;
-    if (inFlight != null) return inFlight;
-    late final Future<CanvasConnectionStatus> tracked;
-    tracked = _refreshCanvasStatus().whenComplete(() {
-      if (identical(_canvasStatusFuture, tracked)) {
-        _canvasStatusFuture = null;
-      }
-    });
-    _canvasStatusFuture = tracked;
-    return tracked;
-  }
-
-  Future<CanvasConnectionStatus> _refreshCanvasStatus() async {
-    final status = await _canvasBackend.status();
-    _canvasConnectionStatus = status;
-    if (!_isDisposed) notifyListeners();
-    return status;
-  }
+  Future<CanvasConnectionStatus> refreshCanvasStatus() =>
+      _calendarSync.refreshCanvasStatus();
 
   Future<CanvasConnectionStatus> refreshProviderStatus(
     CalendarProvider provider,
-  ) async {
-    final status = await _calendarBackend.providerStatus(provider);
-    _providerStatuses[provider] = status;
-    if (provider == CalendarProvider.canvas) _canvasConnectionStatus = status;
-    if (!_isDisposed) notifyListeners();
-    return status;
-  }
+  ) =>
+      _calendarSync.refreshProviderStatus(provider);
 
-  Future<void> syncCanvas({bool replaceExistingImports = false}) async {
-    if (_isCanvasSyncing) return;
-    _isCanvasSyncing = true;
-    _canvasSyncProgress = 0.05;
-    _canvasError = null;
-    if (!_isDisposed) notifyListeners();
-    try {
-      final payload = await _canvasBackend.sync();
-      _canvasSyncProgress = 0.8;
-      if (!_isDisposed) notifyListeners();
-      await _repository.applyCanvasSync(
-        payload,
+  Future<void> syncCanvas({bool replaceExistingImports = false}) =>
+      _calendarSync.syncCanvas(
         replaceExistingImports: replaceExistingImports,
       );
-      await _reloadSnapshot();
-      _canvasConnectionStatus = CanvasConnectionStatus(
-        connected: true,
-        providerUrl: payload.providerUrl,
-        accountName: payload.accountName,
-        accountEmail: payload.accountEmail,
-        remoteUserId: payload.remoteUserId,
-        lastSyncTime: payload.syncedAt,
-      );
-      _canvasSyncProgress = 1;
-    } catch (error) {
-      _canvasError = error;
-      rethrow;
-    } finally {
-      _isCanvasSyncing = false;
-      if (!_isDisposed) notifyListeners();
-    }
-  }
 
   Future<void> syncProvider(
     CalendarProvider provider, {
     bool replaceExistingImports = false,
-  }) async {
-    if (_syncingProviders.contains(provider)) return;
-    _syncingProviders.add(provider);
-    _providerErrors.remove(provider);
-    if (!_isDisposed) notifyListeners();
-    try {
-      final payload = await _calendarBackend.syncProvider(provider);
-      await _repository.applyCalendarSync(
-        payload,
+  }) =>
+      _calendarSync.syncProvider(
+        provider,
         replaceExistingImports: replaceExistingImports,
-        removeMissingTasks: true,
-        removeMissingEvents: true,
       );
-      await _reloadSnapshot();
-      _providerStatuses[provider] = CanvasConnectionStatus(
-        connected: true,
-        providerUrl: payload.providerUrl,
-        accountName: payload.accountName,
-        accountEmail: payload.accountEmail,
-        remoteUserId: payload.remoteUserId,
-        lastSyncTime: payload.syncedAt,
-      );
-      if (provider == CalendarProvider.canvas) {
-        _canvasConnectionStatus = _providerStatuses[provider];
-      }
-    } catch (error) {
-      _providerErrors[provider] = error;
-      rethrow;
-    } finally {
-      _syncingProviders.remove(provider);
-      if (!_isDisposed) notifyListeners();
-    }
-  }
 
   Future<void> connectCalendarIcsFeed(
     CalendarProvider provider,
     String url,
-  ) async {
-    await _calendarBackend.connectCalendarIcsFeed(provider, url);
-    final status = await _calendarBackend.providerStatus(provider);
-    _providerStatuses[provider] = status;
-    if (provider == CalendarProvider.canvas) _canvasConnectionStatus = status;
-    _providerErrors.remove(provider);
-    if (!_isDisposed) notifyListeners();
-  }
+  ) =>
+      _calendarSync.connectCalendarIcsFeed(provider, url);
 
-  Future<void> disconnectCanvas() async {
-    await _canvasBackend.disconnect();
-    try {
-      final account = _canvasAccount;
-      if (account != null && account.id != null) {
-        // Keep the last account identity so a later connection to a different
-        // account can replace only the old Canvas imports after sync succeeds.
-        account.lastSyncTime = null;
-        await _repository.updateLinkedAccount(account);
-      }
-      await _reloadSnapshot();
-    } finally {
-      // Publish the disconnected state only after persistence and the shared
-      // snapshot have finished refreshing. This keeps listeners from seeing a
-      // completed disconnect while the screen still has stale account data.
-      _canvasConnectionStatus = const CanvasConnectionStatus(connected: false);
-      _canvasError = null;
-      if (!_isDisposed) notifyListeners();
-    }
-  }
+  Future<void> disconnectCanvas() => _calendarSync.disconnectCanvas();
 
-  Future<void> disconnectProvider(CalendarProvider provider) async {
-    await _calendarBackend.disconnectProvider(provider);
-    try {
-      final account = accountForProvider(provider);
-      if (account != null && account.id != null) {
-        // Retain the account identity as a local sync marker. Imported records
-        // stay visible while disconnected, and account changes can be detected
-        // after the next successful sync.
-        account.lastSyncTime = null;
-        await _repository.updateLinkedAccount(account);
-      }
-      await _reloadSnapshot();
-    } finally {
-      _providerStatuses[provider] = const CanvasConnectionStatus(
-        connected: false,
-      );
-      if (provider == CalendarProvider.canvas) {
-        _canvasConnectionStatus = const CanvasConnectionStatus(
-          connected: false,
-        );
-        _canvasError = null;
-      }
-      _providerErrors.remove(provider);
-      if (!_isDisposed) notifyListeners();
-    }
-  }
-
-  Future<void> _autoSyncCalendarsIfDue() async {
-    for (final provider in CalendarProvider.values) {
-      try {
-        final status = await refreshProviderStatus(provider);
-        if (!status.connected) continue;
-        await syncProvider(provider);
-      } catch (error) {
-        _providerErrors[provider] = error;
-        if (provider == CalendarProvider.canvas) _canvasError = error;
-        if (!_isDisposed) notifyListeners();
-      }
-    }
-  }
-
-  void _startCalendarRefreshTimer() {
-    if (_calendarRefreshTimer != null) return;
-    _calendarRefreshTimer = Timer.periodic(
-      const Duration(minutes: 5),
-      (_) => unawaited(_refreshCalendarsIfConnected()),
-    );
-  }
+  Future<void> disconnectProvider(CalendarProvider provider) =>
+      _calendarSync.disconnectProvider(provider);
 
   Future<void> _recordAutomaticEventFocus() async {
     if (_isDisposed || _isRecordingAutomaticEventFocus) return;
@@ -883,20 +731,6 @@ class PlannerState extends ChangeNotifier {
       return first.selection.taskId.compareTo(second.selection.taskId);
     });
     return result;
-  }
-
-  Future<void> _refreshCalendarsIfConnected() async {
-    if (_isDisposed) return;
-    for (final provider in CalendarProvider.values) {
-      try {
-        final status = await refreshProviderStatus(provider);
-        if (status.connected) await syncProvider(provider);
-      } catch (error) {
-        _providerErrors[provider] = error;
-        if (provider == CalendarProvider.canvas) _canvasError = error;
-        if (!_isDisposed) notifyListeners();
-      }
-    }
   }
 
   List<PlannerItem> _itemsForRange(DateTime firstDay, DateTime lastDay) {
@@ -1031,7 +865,8 @@ class PlannerState extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
-    _calendarRefreshTimer?.cancel();
+    _calendarSync.removeListener(_onCalendarSyncChanged);
+    _calendarSync.dispose();
     _automaticEventFocusTimer?.cancel();
     super.dispose();
   }

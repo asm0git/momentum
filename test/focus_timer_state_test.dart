@@ -51,7 +51,7 @@ void main() {
       breakMinutes: 1,
       clock: () => now,
       startTicker: false,
-    )..attachPlannerState(planner);
+    )..attachFocusHistorySource(planner);
     timer.selectTask(selection);
     await planner.getFocusSecondsForDate(now);
   });
@@ -256,7 +256,7 @@ void main() {
         breakMinutes: 1,
         clock: () => now,
         startTicker: false,
-      )..attachPlannerState(planner);
+      )..attachFocusHistorySource(planner);
       timer.selectTask(selection);
       await planner.getFocusSecondsForDate(now);
 

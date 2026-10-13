@@ -6,7 +6,7 @@ import '../data/pomodoro_preset.dart';
 import '../data/recurrence.dart';
 import '../data_models.dart';
 import '../services/focus_preset_preferences.dart';
-import 'planner_state.dart';
+import 'focus_history_source.dart';
 
 enum FocusPhase { work, rest }
 
@@ -42,11 +42,11 @@ class FocusTimerState extends ChangeNotifier {
   int _flushCounter = 0;
   DateTime _focusDate;
   DateTime? _lastTick;
-  PlannerState? _planner;
+  FocusHistorySource? _focusHistorySource;
   Timer? _ticker;
   bool _isTicking = false;
   Future<void>? _flushInProgress;
-  int _lastPlannerFocusHistoryRevision = 0;
+  int _lastFocusHistoryRevision = 0;
   final Map<DateTime, int> _pendingSeconds = {};
   final Map<DateTime, Map<int, _PendingCategoryFocus>> _pendingCategorySeconds =
       {};
@@ -68,22 +68,22 @@ class FocusTimerState extends ChangeNotifier {
       ? 1
       : (_remainingSeconds / phaseDurationSeconds).clamp(0.0, 1.0);
 
-  void attachPlannerState(PlannerState planner) {
-    if (identical(_planner, planner)) return;
-    _planner?.removeListener(_onPlannerChanged);
-    _planner = planner;
-    _lastPlannerFocusHistoryRevision = planner.focusHistoryRevision;
-    planner.addListener(_onPlannerChanged);
+  void attachFocusHistorySource(FocusHistorySource source) {
+    if (identical(_focusHistorySource, source)) return;
+    _focusHistorySource?.removeListener(_onFocusHistoryChanged);
+    _focusHistorySource = source;
+    _lastFocusHistoryRevision = source.focusHistoryRevision;
+    source.addListener(_onFocusHistoryChanged);
     unawaited(_reloadToday(dateOnly(_clock())));
   }
 
-  void _onPlannerChanged() {
-    final planner = _planner;
-    if (planner == null ||
-        planner.focusHistoryRevision == _lastPlannerFocusHistoryRevision) {
+  void _onFocusHistoryChanged() {
+    final source = _focusHistorySource;
+    if (source == null ||
+        source.focusHistoryRevision == _lastFocusHistoryRevision) {
       return;
     }
-    _lastPlannerFocusHistoryRevision = planner.focusHistoryRevision;
+    _lastFocusHistoryRevision = source.focusHistoryRevision;
     unawaited(_reloadToday(dateOnly(_clock())));
   }
 
@@ -204,7 +204,7 @@ class FocusTimerState extends ChangeNotifier {
           chunk = secondsUntilMidnight;
         }
         final chunkEnd = cursor.add(Duration(seconds: chunk));
-        final eventBoundary = _planner?.nextEventFocusBoundaryAfter(
+        final eventBoundary = _focusHistorySource?.nextEventFocusBoundaryAfter(
           cursor,
           chunkEnd,
         );
@@ -218,7 +218,7 @@ class FocusTimerState extends ChangeNotifier {
           }
         }
         final eventAlreadyCountsThisTime =
-            _planner?.eventFocusSelectionAt(cursor) != null;
+            _focusHistorySource?.eventFocusSelectionAt(cursor) != null;
         if (chunk > 0 && !eventAlreadyCountsThisTime) {
           final day = dateOnly(cursor);
           _pendingSeconds.update(
@@ -270,10 +270,10 @@ class FocusTimerState extends ChangeNotifier {
   Future<void> _reloadToday(DateTime day) async {
     _focusDate = day;
     final loadGeneration = ++_dailyTotalLoadGeneration;
-    final planner = _planner;
-    if (planner == null) return;
+    final source = _focusHistorySource;
+    if (source == null) return;
     try {
-      final total = await planner.getFocusSecondsForDate(day);
+      final total = await source.getFocusSecondsForDate(day);
       if (loadGeneration == _dailyTotalLoadGeneration &&
           _sameDay(day, _focusDate)) {
         _persistedToday = total;
@@ -287,8 +287,8 @@ class FocusTimerState extends ChangeNotifier {
   Future<void> _flushPending() async {
     final activeFlush = _flushInProgress;
     if (activeFlush != null) return activeFlush;
-    final planner = _planner;
-    if (planner == null || _pendingCategorySeconds.isEmpty) return;
+    final source = _focusHistorySource;
+    if (source == null || _pendingCategorySeconds.isEmpty) return;
 
     final snapshot = <DateTime, Map<int, _PendingCategoryFocus>>{
       for (final dayEntry in _pendingCategorySeconds.entries)
@@ -306,7 +306,7 @@ class FocusTimerState extends ChangeNotifier {
         for (final dayEntry in snapshot.entries) {
           for (final categoryEntry in dayEntry.value.entries) {
             final amount = categoryEntry.value.seconds;
-            await planner.addFocusSeconds(
+            await source.addFocusSeconds(
               dayEntry.key,
               amount,
               categoryEntry.value.selection,
@@ -353,7 +353,7 @@ class FocusTimerState extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
-    _planner?.removeListener(_onPlannerChanged);
+    _focusHistorySource?.removeListener(_onFocusHistoryChanged);
     unawaited(_flushPending());
     super.dispose();
   }
