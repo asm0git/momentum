@@ -126,6 +126,66 @@ void main() {
     expect(find.text('Connect Canvas calendar'), findsNothing);
   });
 
+  testWidgets('connected feed editor can cancel or update its link', (
+    tester,
+  ) async {
+    _setIPhone13Viewport(tester);
+    await tester.runAsync(() async {
+      await planner.connectCalendarIcsFeed(
+        CalendarProvider.googleCalendar,
+        'https://calendar.google.test/initial.ics',
+      );
+      await planner.syncProvider(CalendarProvider.googleCalendar);
+    });
+    await tester.pumpWidget(_app(planner, home: const AddCalendarsScreen()));
+    await tester.tap(find.text('Google Calendar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Change published link'), findsOneWidget);
+    await tester.tap(find.text('Change published link'));
+    await tester.pumpAndSettle();
+    expect(find.text('Update link'), findsOneWidget);
+    expect(find.text('Cancel'), findsOneWidget);
+
+    await tester.enterText(
+      find.byType(TextField),
+      'https://calendar.google.test/unused.ics',
+    );
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Change published link'), findsOneWidget);
+
+    await tester.tap(find.text('Change published link'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(TextField),
+      'https://calendar.google.test/updated.ics',
+    );
+    await tester.ensureVisible(find.text('Update link'));
+    await tester.tap(find.text('Update link'));
+    await tester.pump();
+    await tester.runAsync(() async {
+      final timeout = DateTime.now().add(const Duration(seconds: 5));
+      while ((backend.connectedFeedUrls[CalendarProvider.googleCalendar] !=
+                  'https://calendar.google.test/updated.ics' ||
+              planner.isProviderSyncing(CalendarProvider.googleCalendar)) &&
+          DateTime.now().isBefore(timeout)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.connectedFeedUrls[CalendarProvider.googleCalendar],
+      'https://calendar.google.test/updated.ics',
+    );
+    expect(find.text('Change published link'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Google Calendar connected and synced.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('opening a connected stale provider syncs automatically', (
     tester,
   ) async {
@@ -314,6 +374,7 @@ Widget _app(PlannerState planner, {required Widget home}) =>
     );
 
 class _FakeCalendarBackend implements ProviderCalendarBackend {
+  final Map<CalendarProvider, String> connectedFeedUrls = {};
   final Map<CalendarProvider, CalendarConnectionStatus> providerStatuses = {
     CalendarProvider.canvas: const CalendarConnectionStatus(connected: false),
     CalendarProvider.googleCalendar: const CalendarConnectionStatus(
@@ -335,6 +396,7 @@ class _FakeCalendarBackend implements ProviderCalendarBackend {
     CalendarProvider provider,
     String url,
   ) async {
+    connectedFeedUrls[provider] = url;
     providerStatuses[provider] = CalendarConnectionStatus(
       connected: true,
       providerUrl: '${provider.key}-published-ics',

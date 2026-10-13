@@ -11,6 +11,7 @@ import '../widgets/blurred_dialog.dart';
 import '../widgets/circular_icon_button.dart';
 import '../widgets/confirmation_dialog_actions.dart';
 import '../widgets/pill_action_button.dart';
+import '../widgets/calendar/calendar_feed_editor.dart';
 
 class AddCalendarsScreen extends StatefulWidget {
   const AddCalendarsScreen({super.key, this.onboarding = false});
@@ -22,24 +23,11 @@ class AddCalendarsScreen extends StatefulWidget {
 }
 
 class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
-  final Map<CalendarProvider, TextEditingController> _icsControllers = {
-    for (final provider in CalendarProvider.values)
-      provider: TextEditingController(),
-  };
   CalendarProvider? _expandedProvider;
   CalendarProvider? _loadingProvider;
   CalendarProvider? _connectingProvider;
   String? _message;
   String? _error;
-  CalendarProvider? _editingIcsProvider;
-
-  @override
-  void dispose() {
-    for (final controller in _icsControllers.values) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
 
   Future<void> _continue() async {
     if (widget.onboarding) {
@@ -84,8 +72,6 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
       _loadingProvider = provider;
       _message = null;
       _error = null;
-      _icsControllers[provider]!.clear();
-      if (_editingIcsProvider == provider) _editingIcsProvider = null;
     });
     await _loadProvider(provider);
   }
@@ -127,15 +113,15 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
     }
   }
 
-  Future<void> _connect(CalendarProvider provider) async {
-    final icsUrl = _normalizeIcsUrl(_icsControllers[provider]!.text);
+  Future<bool> _connect(CalendarProvider provider, String enteredUrl) async {
+    final icsUrl = _normalizeIcsUrl(enteredUrl);
     if (icsUrl == null) {
       setState(() {
         _message = null;
         _error =
             'Paste a valid HTTPS .ics link published by ${provider.title}.';
       });
-      return;
+      return false;
     }
 
     setState(() {
@@ -148,13 +134,12 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
       await planner.connectCalendarIcsFeed(provider, icsUrl);
       await planner.syncProvider(provider);
       if (mounted) {
-        _icsControllers[provider]!.clear();
         setState(() {
           _connectingProvider = null;
-          if (_editingIcsProvider == provider) _editingIcsProvider = null;
           _message = _connectedMessage(provider);
         });
       }
+      return true;
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -162,16 +147,8 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
           _error = _readableError(error);
         });
       }
+      return false;
     }
-  }
-
-  void _editCalendarIcs(CalendarProvider provider) {
-    setState(() {
-      _editingIcsProvider = provider;
-      _icsControllers[provider]!.clear();
-      _message = null;
-      _error = null;
-    });
   }
 
   Future<void> _syncProvider(
@@ -248,8 +225,6 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
     try {
       await context.read<PlannerState>().disconnectProvider(provider);
       if (mounted && _expandedProvider == provider) {
-        _icsControllers[provider]!.clear();
-        if (_editingIcsProvider == provider) _editingIcsProvider = null;
         setState(
           () => _message =
               '${provider.title} disconnected. Imported items remain.',
@@ -503,23 +478,7 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
               style: textTheme.bodySmall?.copyWith(color: AppColors.primary),
             ),
             const SizedBox(height: AppSpacing.md),
-            if (_editingIcsProvider == provider)
-              _icsEditor(context, provider: provider, connected: true)
-            else
-              SizedBox(
-                height: AppSpacing.popupFieldHeight,
-                child: OutlinedButton.icon(
-                  onPressed: () => _editCalendarIcs(provider),
-                  icon: const Icon(Icons.link),
-                  label: const Text('Change published link'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, AppSpacing.popupFieldHeight),
-                    foregroundColor: AppColors.primary,
-                    side: const BorderSide(color: AppColors.primary),
-                    textStyle: _actionTextStyle(context, AppColors.primary),
-                  ),
-                ),
-              ),
+            _calendarFeedEditor(provider, connected: true),
             if (syncing) ...[
               const SizedBox(height: AppSpacing.sm),
               const LinearProgressIndicator(),
@@ -555,36 +514,7 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
               ),
             ),
           ] else ...[
-            Text(
-              _icsInstructions(provider),
-              style: textTheme.bodyMedium?.copyWith(color: AppColors.onSurface),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            _icsEditor(context, provider: provider, connected: false),
-            const SizedBox(height: AppSpacing.xs),
-            SizedBox(
-              height: AppSpacing.popupFieldHeight,
-              child: FilledButton.icon(
-                onPressed: _connectingProvider == provider
-                    ? null
-                    : () => _connect(provider),
-                icon: Image.asset(
-                  _iconAssetFor(provider),
-                  width: 20,
-                  height: 20,
-                  fit: BoxFit.contain,
-                ),
-                label: Text(
-                  _connectingProvider == provider
-                      ? 'Checking calendar…'
-                      : _connectButtonLabel(provider),
-                ),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, AppSpacing.popupFieldHeight),
-                  textStyle: _actionTextStyle(context, AppColors.onPrimary),
-                ),
-              ),
-            ),
+            _calendarFeedEditor(provider, connected: false),
           ],
           if (_message != null || _error != null) ...[
             const SizedBox(height: AppSpacing.md),
@@ -604,109 +534,29 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
     context,
   ).textTheme.bodyMedium!.copyWith(color: color, fontWeight: FontWeight.normal);
 
-  TextStyle _fieldTextStyle(BuildContext context) => Theme.of(context)
-      .textTheme
-      .bodyMedium!
-      .copyWith(color: AppColors.onSurface, fontWeight: FontWeight.normal);
-
-  TextStyle _fieldHintStyle(BuildContext context) => _fieldTextStyle(
-    context,
-  ).copyWith(color: AppColors.onSurface.withValues(alpha: 0.55));
-
-  Widget _icsEditor(
-    BuildContext context, {
-    required CalendarProvider provider,
+  Widget _calendarFeedEditor(
+    CalendarProvider provider, {
     required bool connected,
-  }) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      if (connected) ...[
-        Text(
-          'Enter a new published link. The saved link is kept private and is not shown here.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.onSurface),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-      ],
-      DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(AppRadii.popup),
-        ),
-        child: SizedBox(
-          height: AppSpacing.popupFieldHeight,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: Center(
-              child: SizedBox(
-                width: double.infinity,
-                height: 24,
-                child: TextField(
-                  controller: _icsControllers[provider]!,
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  textAlignVertical: TextAlignVertical.center,
-                  style: _fieldTextStyle(context),
-                  decoration: InputDecoration.collapsed(
-                    hintText: '${provider.title} published .ics link',
-                    hintStyle: _fieldHintStyle(context),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      if (connected) ...[
-        const SizedBox(height: AppSpacing.xs),
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton(
-                onPressed: _connectingProvider == provider
-                    ? null
-                    : () => _connect(provider),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, AppSpacing.popupFieldHeight),
-                  textStyle: _actionTextStyle(context, AppColors.onPrimary),
-                ),
-                child: Text(
-                  _connectingProvider == provider
-                      ? 'Checking calendar…'
-                      : 'Update link',
-                ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.xs),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _connectingProvider == provider
-                    ? null
-                    : () {
-                        setState(() {
-                          _editingIcsProvider = null;
-                          _icsControllers[provider]!.clear();
-                          _error = null;
-                          _message = null;
-                        });
-                      },
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, AppSpacing.popupFieldHeight),
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
-                  textStyle: _actionTextStyle(context, AppColors.primary),
-                ),
-                child: const Text('Cancel'),
-              ),
-            ),
-          ],
-        ),
-      ],
-    ],
+  }) => CalendarFeedEditor(
+    key: ValueKey('calendar-feed-editor-${provider.key}'),
+    provider: provider,
+    iconAsset: _iconAssetFor(provider),
+    connected: connected,
+    connecting: _connectingProvider == provider,
+    onConnect: (url) => _connect(provider, url),
+    onEditingStarted: connected
+        ? () => setState(() {
+            _message = null;
+            _error = null;
+          })
+        : null,
+    onCancelled: connected
+        ? () => setState(() {
+            _message = null;
+            _error = null;
+          })
+        : null,
   );
-
   String? _normalizeIcsUrl(String value) {
     var input = value.trim();
     if (input.isEmpty) return null;
@@ -722,20 +572,6 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
     }
     return uri.toString();
   }
-
-  String _icsInstructions(CalendarProvider provider) => switch (provider) {
-    CalendarProvider.canvas =>
-      'Paste the calendar feed link from Canvas. The link grants read access; keep it private.',
-    CalendarProvider.googleCalendar =>
-      'Paste the secret address in iCal format from Google Calendar. Anyone with the link can view the calendar, so keep it private.',
-    CalendarProvider.outlook =>
-      'Paste the published ICS link from Outlook. Anyone with the link can view the calendar, so keep it private.',
-  };
-
-  String _connectButtonLabel(CalendarProvider provider) =>
-      provider == CalendarProvider.googleCalendar
-      ? 'Connect Google Calendar'
-      : 'Connect ${provider.title} calendar';
 
   String _connectedMessage(CalendarProvider provider) =>
       provider == CalendarProvider.googleCalendar
