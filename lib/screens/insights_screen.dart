@@ -29,6 +29,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
   int _lastFocusRevision = -1;
   int _loadGeneration = 0;
   bool _isLoading = true;
+  bool _hasLoadedData = false;
+  bool _loadError = false;
+  bool _heatmapError = false;
   Map<DateTime, int> _weekTotals = {};
   Map<DateTime, int> _heatmapTotals = {};
   List<FocusCategoryTotal> _categoryTotals = [];
@@ -77,10 +80,15 @@ class _InsightsScreenState extends State<InsightsScreen> {
     final heatStart = _mondayOf(today).subtract(const Duration(days: 51 * 7));
     try {
       final totals = await planner.getFocusTotalsForRange(heatStart, today);
-      if (mounted) setState(() => _heatmapTotals = totals);
+      if (!mounted) return;
+      setState(() {
+        _heatmapTotals = totals;
+        _heatmapError = false;
+      });
     } catch (error) {
       // Keep showing the last loaded heatmap if storage cannot be read.
       debugPrint('Could not refresh the focus heatmap: $error');
+      if (mounted) setState(() => _heatmapError = true);
     }
   }
 
@@ -116,12 +124,18 @@ class _InsightsScreenState extends State<InsightsScreen> {
         _weekTotals = weekTotals;
         _categoryTotals = categoryTotals;
         _heatmapTotals = heatmapTotals;
+        _hasLoadedData = true;
+        _loadError = false;
+        _heatmapError = false;
         _isLoading = false;
       });
     } catch (error) {
       if (!mounted || generation != _loadGeneration) return;
       debugPrint('Could not load insights data: $error');
-      setState(() => _isLoading = false);
+      setState(() {
+        _loadError = true;
+        _isLoading = false;
+      });
     }
   }
 
@@ -159,6 +173,29 @@ class _InsightsScreenState extends State<InsightsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (_loadError) ...[
+                    MaterialBanner(
+                      key: const ValueKey('insights-load-error'),
+                      leading: Icon(
+                        Icons.warning_amber_rounded,
+                        color: AppColors.error,
+                      ),
+                      content: Text(
+                        _hasLoadedData
+                            ? 'Could not refresh insights. Showing the last loaded totals.'
+                            : 'Could not load insights. Try again to reload your totals.',
+                      ),
+                      backgroundColor: AppColors.surface,
+                      actions: [
+                        TextButton(
+                          key: const ValueKey('insights-retry'),
+                          onPressed: _reload,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
                   _insightsSection(
                     title: 'Focus time per week',
                     textTheme: textTheme,
@@ -299,6 +336,27 @@ class _InsightsScreenState extends State<InsightsScreen> {
                           ),
                         ),
                         const SizedBox(height: AppSpacing.md),
+                        if (_heatmapError)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'The heatmap may be out of date.',
+                                  ),
+                                ),
+                                TextButton(
+                                  key: const ValueKey('insights-heatmap-retry'),
+                                  onPressed: () =>
+                                      unawaited(_reloadHeatmapTotals()),
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          ),
                         if (_isLoading)
                           const SizedBox(
                             height: 120,

@@ -15,6 +15,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   late Directory tempDirectory;
   late DatabaseHelper databaseHelper;
+  late _TestInsightsRepository repository;
   late PlannerState planner;
 
   setUpAll(() => sqfliteFfiInit());
@@ -28,9 +29,8 @@ void main() {
       databasePath: '${tempDirectory.path}/insights.db',
       seedOnCreate: false,
     );
-    planner = PlannerState(
-      repository: PlannerRepository(databaseHelper: databaseHelper),
-    );
+    repository = _TestInsightsRepository(databaseHelper: databaseHelper);
+    planner = PlannerState(repository: repository);
     await planner.initialize();
   });
 
@@ -90,6 +90,60 @@ void main() {
         .length;
     expect(visibleCells, greaterThan(90));
     expect(visibleCells, lessThan(364));
+  });
+
+  testWidgets('failed insights refresh marks old totals stale and retries', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    await tester.runAsync(
+      () => planner.addFocusSeconds(today, 1800, FocusTaskSelection.unassigned),
+    );
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<PlannerState>.value(
+        value: planner,
+        child: MaterialApp(theme: appTheme, home: const InsightsScreen()),
+      ),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('30 mins'), findsWidgets);
+
+    repository.nextFocusTotalsError = StateError('private storage details');
+    await tester.runAsync(
+      () => planner.addFocusSeconds(today, 60, FocusTaskSelection.unassigned),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('insights-load-error')), findsOneWidget);
+    expect(
+      find.text('Could not refresh insights. Showing the last loaded totals.'),
+      findsOneWidget,
+    );
+    expect(find.text('30 mins'), findsWidgets);
+    expect(find.textContaining('private storage details'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('insights-retry')));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('insights-load-error')), findsNothing);
+    expect(find.text('31 mins'), findsWidgets);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -337,4 +391,21 @@ void main() {
     expect(find.text('1 hr'), findsOneWidget);
     expect(find.text('0 mins'), findsOneWidget);
   });
+}
+
+class _TestInsightsRepository extends PlannerRepository {
+  _TestInsightsRepository({required super.databaseHelper});
+
+  Object? nextFocusTotalsError;
+
+  @override
+  Future<Map<DateTime, int>> getFocusTotalsForRange(
+    DateTime firstDay,
+    DateTime lastDay,
+  ) async {
+    final error = nextFocusTotalsError;
+    nextFocusTotalsError = null;
+    if (error != null) throw error;
+    return super.getFocusTotalsForRange(firstDay, lastDay);
+  }
 }
