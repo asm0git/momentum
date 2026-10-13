@@ -7,7 +7,7 @@ import 'package:momentum/services/focus_preset_preferences.dart';
 import 'package:momentum/state/focus_timer_state.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:momentum/widgets/pill_action_button.dart';
-import 'package:momentum/widgets/focus_preset.dart';
+import 'package:momentum/widgets/timer/focus_preset.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

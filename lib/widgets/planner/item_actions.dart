@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart' hide Selector;
 
-import '../app_theme.dart';
-import '../data_models.dart';
-import '../state/planner_state.dart';
-import 'add_item_popup.dart';
-import 'blurred_dialog.dart';
-import 'confirmation_dialog_actions.dart';
+import '../../app_theme.dart';
+import '../../data_models.dart';
+import '../../state/planner_state.dart';
+import '../item_editor/add_item_popup.dart';
+import '../blurred_dialog.dart';
+import '../confirmation_dialog_actions.dart';
 import 'planner_write_feedback.dart';
-import 'selector.dart';
+import '../selector.dart';
 
 Future<void> showItemEditor(BuildContext context, PlannerItem item) async {
   await showBlurredDialog<void>(

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
-import '../data_models.dart';
-import 'category_icon_picker.dart';
+import '../../app_theme.dart';
+import '../../data_models.dart';
+import '../category_icon_picker.dart';
 
 // Compact category preview used in the dashboard's horizontal category strip.
 class DashboardCategoryCard extends StatelessWidget {

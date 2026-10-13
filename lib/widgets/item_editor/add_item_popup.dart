@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart' hide Selector;
 
-import '../app_theme.dart';
-import '../data_models.dart';
-import '../state/planner_state.dart';
-import 'blurred_dialog.dart';
+import '../../app_theme.dart';
+import '../../data_models.dart';
+import '../../state/planner_state.dart';
+import '../blurred_dialog.dart';
 import 'date_picker_dialog.dart';
 import 'estimated_duration_picker.dart';
-import 'category_icon_picker.dart';
-import 'planner_write_feedback.dart';
-import 'selector.dart';
+import '../category_icon_picker.dart';
+import '../planner/planner_write_feedback.dart';
+import '../selector.dart';
 import 'time_picker_dialog.dart';
 
 enum _PopupItemType { event, task }

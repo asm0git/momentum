@@ -7,12 +7,12 @@ import '../app_theme.dart';
 import '../data_models.dart';
 import '../navigation_destinations.dart';
 import '../state/planner_state.dart';
-import '../widgets/add_item_popup.dart';
-import '../widgets/bottom_navigation_bar.dart';
-import '../widgets/collapsible_category.dart';
-import '../widgets/item_actions.dart';
+import '../widgets/item_editor/add_item_popup.dart';
+import '../widgets/navigation/bottom_navigation_bar.dart';
+import '../widgets/planner/collapsible_category.dart';
+import '../widgets/planner/item_actions.dart';
 import '../widgets/pill_action_button.dart';
-import '../widgets/primary_app_bar.dart';
+import '../widgets/navigation/primary_app_bar.dart';
 
 // To-do screen containing the expandable task categories.
 class TodoScreen extends StatefulWidget {

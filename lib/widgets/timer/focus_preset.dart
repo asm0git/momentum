@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
+import '../../app_theme.dart';
 
 /// Compact card that displays a work period and its matching break.
 class FocusPreset extends StatelessWidget {

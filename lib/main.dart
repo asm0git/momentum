@@ -16,7 +16,7 @@ import 'services/onboarding_preferences.dart';
 import 'state/planner_state.dart';
 import 'state/focus_timer_state.dart';
 import 'widgets/planner_load_gate.dart';
-import 'widgets/responsive_app_viewport.dart';
+import 'widgets/navigation/responsive_app_viewport.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

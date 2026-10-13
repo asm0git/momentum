@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../app_theme.dart';
-import '../data_models.dart';
-import '../state/planner_state.dart';
-import 'category_icon_picker.dart';
+import '../../app_theme.dart';
+import '../../data_models.dart';
+import '../../state/planner_state.dart';
+import '../category_icon_picker.dart';
 import 'item_actions.dart';
 import 'swipe_to_reveal_delete.dart';
 import 'task_list_container.dart';

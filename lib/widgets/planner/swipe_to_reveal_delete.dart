@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
+import '../../app_theme.dart';
 
 /// Reveals the app's circular delete action after a left swipe.
 class SwipeToRevealDelete extends StatefulWidget {

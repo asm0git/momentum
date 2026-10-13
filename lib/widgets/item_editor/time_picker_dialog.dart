@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
-import 'blurred_dialog.dart';
+import '../../app_theme.dart';
+import '../blurred_dialog.dart';
 
 Future<TimeOfDay?> showAppTimePickerDialog(
   BuildContext context, {

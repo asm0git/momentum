@@ -2,11 +2,11 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
-import '../navigation_destinations.dart';
-import 'add_item_popup.dart';
-import 'add_task_button.dart';
-import 'blurred_dialog.dart';
+import '../../app_theme.dart';
+import '../../navigation_destinations.dart';
+import '../item_editor/add_item_popup.dart';
+import '../planner/add_task_button.dart';
+import '../blurred_dialog.dart';
 
 // Bottom navigation dock, add-task button, and expandable popup overlay.
 class FloatingNavigationGroup extends StatefulWidget {

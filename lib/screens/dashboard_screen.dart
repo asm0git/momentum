@@ -6,14 +6,14 @@ import '../data_models.dart';
 import '../navigation_destinations.dart';
 import '../state/focus_timer_state.dart';
 import '../state/planner_state.dart';
-import '../widgets/bottom_navigation_bar.dart';
+import '../widgets/navigation/bottom_navigation_bar.dart';
 import '../widgets/category_icon_picker.dart';
-import '../widgets/dashboard_category_card.dart';
-import '../widgets/focus_preset.dart';
-import '../widgets/item_actions.dart';
-import '../widgets/primary_app_bar.dart';
-import '../widgets/task_list_container.dart';
-import '../widgets/task_widget.dart';
+import '../widgets/planner/dashboard_category_card.dart';
+import '../widgets/timer/focus_preset.dart';
+import '../widgets/planner/item_actions.dart';
+import '../widgets/navigation/primary_app_bar.dart';
+import '../widgets/planner/task_list_container.dart';
+import '../widgets/planner/task_widget.dart';
 
 // Dashboard screen scaffold and its primary content area.
 class DashboardScreen extends StatelessWidget {

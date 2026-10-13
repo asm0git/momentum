@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
-import 'circular_icon_button.dart';
+import '../../app_theme.dart';
+import '../circular_icon_button.dart';
 
 /// Add button displayed beside the bottom navigation bar.
 class AddTaskButton extends StatelessWidget {

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui' as ui;
 
-import '../app_theme.dart';
-import '../navigation_destinations.dart';
+import '../../app_theme.dart';
+import '../../navigation_destinations.dart';
 
 /// Shared colored app bar shown at the top of each main screen.
 class PrimaryAppBar extends StatelessWidget implements PreferredSizeWidget {

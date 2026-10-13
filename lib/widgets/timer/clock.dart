@@ -4,8 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../app_theme.dart';
-import '../state/focus_timer_state.dart';
+import '../../app_theme.dart';
+import '../../state/focus_timer_state.dart';
 
 /// The timer face remains sharp while the surrounding timer page is blurred.
 class Clock extends StatelessWidget {

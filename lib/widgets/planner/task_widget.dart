@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
-import '../data_models.dart';
-import 'category_icon_picker.dart';
+import '../../app_theme.dart';
+import '../../data_models.dart';
+import '../category_icon_picker.dart';
 
 enum TaskAppearanceType {
   checkable,

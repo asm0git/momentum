@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:momentum/widgets/planner_write_feedback.dart';
+import 'package:momentum/widgets/planner/planner_write_feedback.dart';
 
 void main() {
   test('maps invalid category destinations to actionable guidance', () {

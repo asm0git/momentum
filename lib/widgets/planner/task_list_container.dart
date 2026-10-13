@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
-import '../data_models.dart';
+import '../../app_theme.dart';
+import '../../data_models.dart';
 import 'swipe_to_reveal_delete.dart';
 import 'task_widget.dart';
 

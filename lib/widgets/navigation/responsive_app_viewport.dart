@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../app_theme.dart';
+import '../../app_theme.dart';
 
 /// Keeps the web app in a phone-sized viewport on wide browser windows.
 /// On phones and device emulators, the app uses the full available screen.

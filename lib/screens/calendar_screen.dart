@@ -8,14 +8,14 @@ import '../calendar_view_mode.dart';
 import '../navigation_destinations.dart';
 import '../services/calendar_view_preferences.dart';
 import '../state/planner_state.dart';
-import '../widgets/bottom_navigation_bar.dart';
+import '../widgets/navigation/bottom_navigation_bar.dart';
 import '../widgets/calendar/calendar.dart';
 import '../widgets/calendar/calendar_resize_handle.dart';
-import '../widgets/item_actions.dart';
+import '../widgets/planner/item_actions.dart';
 import '../widgets/pill_action_button.dart';
-import '../widgets/primary_app_bar.dart';
-import '../widgets/task_list_container.dart';
-import '../widgets/task_widget.dart';
+import '../widgets/navigation/primary_app_bar.dart';
+import '../widgets/planner/task_list_container.dart';
+import '../widgets/planner/task_widget.dart';
 
 // Calendar screen content shown below the primary app bar.
 class CalendarScreen extends StatefulWidget {

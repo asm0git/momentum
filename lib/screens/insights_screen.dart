@@ -11,9 +11,9 @@ import '../data/recurrence.dart';
 import '../data_models.dart';
 import '../navigation_destinations.dart';
 import '../state/planner_state.dart';
-import '../widgets/bottom_navigation_bar.dart';
+import '../widgets/navigation/bottom_navigation_bar.dart';
 import '../widgets/category_icon_picker.dart';
-import '../widgets/primary_app_bar.dart';
+import '../widgets/navigation/primary_app_bar.dart';
 
 class InsightsScreen extends StatefulWidget {
   const InsightsScreen({super.key});

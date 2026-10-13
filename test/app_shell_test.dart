@@ -4,7 +4,7 @@ import 'package:momentum/main.dart';
 import 'package:momentum/state/focus_timer_state.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:momentum/widgets/planner_load_gate.dart';
-import 'package:momentum/widgets/responsive_app_viewport.dart';
+import 'package:momentum/widgets/navigation/responsive_app_viewport.dart';
 import 'package:provider/provider.dart';
 
 void main() {
