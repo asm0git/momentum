@@ -122,7 +122,8 @@ class FocusTimerState extends ChangeNotifier {
     try {
       await FocusPresetPreferences.save(_customPresets);
       return CustomPresetSaveResult.saved;
-    } catch (_) {
+    } catch (error) {
+      debugPrint('Could not persist custom focus preset: $error');
       return CustomPresetSaveResult.notPersisted;
     }
   }
@@ -279,8 +280,9 @@ class FocusTimerState extends ChangeNotifier {
         _persistedToday = total;
         notifyListeners();
       }
-    } catch (_) {
+    } catch (error) {
       // Keep the in-memory session usable if a storage read fails.
+      debugPrint('Could not reload persisted focus totals: $error');
     }
   }
 
@@ -330,8 +332,11 @@ class FocusTimerState extends ChangeNotifier {
             }
           }
         }
-      } catch (_) {
+      } catch (error) {
         // Keep uncommitted seconds in memory so the next flush can retry.
+        debugPrint(
+          'Could not save pending focus time; it will be retried: $error',
+        );
       }
       if (wroteSeconds) {
         await _reloadToday(_focusDate);
