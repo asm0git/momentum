@@ -133,9 +133,11 @@ generate an AI schedule.
 ### Add calendars
 
 Add calendars is available during first-run setup and from the app. It presents
-the supported provider connections and their connection status. A user can
-connect, sync, or disconnect a provider when its OAuth setup is available;
-imports are read-only and are added to the local planner.
+the supported provider connections and their connection status. To connect
+Canvas, Google Calendar, or Outlook, a user pastes that provider's published
+`.ics` feed link. The Worker stores the link encrypted and imports are
+read-only; they are added to the local planner. Provider OAuth is not part of
+the current flow, and the retired OAuth endpoints return a `410` response.
 
 ### New Task and New Event
 
