@@ -78,8 +78,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
     try {
       final totals = await planner.getFocusTotalsForRange(heatStart, today);
       if (mounted) setState(() => _heatmapTotals = totals);
-    } catch (_) {
+    } catch (error) {
       // Keep showing the last loaded heatmap if storage cannot be read.
+      debugPrint('Could not refresh the focus heatmap: $error');
     }
   }
 
@@ -117,8 +118,9 @@ class _InsightsScreenState extends State<InsightsScreen> {
         _heatmapTotals = heatmapTotals;
         _isLoading = false;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || generation != _loadGeneration) return;
+      debugPrint('Could not load insights data: $error');
       setState(() => _isLoading = false);
     }
   }
