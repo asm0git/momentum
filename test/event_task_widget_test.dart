@@ -17,6 +17,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   late Directory tempDirectory;
   late DatabaseHelper databaseHelper;
+  late _TestPlannerRepository repository;
   late PlannerState planner;
 
   setUpAll(() => sqfliteFfiInit());
@@ -28,9 +29,8 @@ void main() {
       databasePath: '${tempDirectory.path}/planner.db',
       seedOnCreate: false,
     );
-    planner = PlannerState(
-      repository: PlannerRepository(databaseHelper: databaseHelper),
-    );
+    repository = _TestPlannerRepository(databaseHelper: databaseHelper);
+    planner = PlannerState(repository: repository);
     await planner.initialize();
   });
 
@@ -448,6 +448,73 @@ void main() {
     expect(event.externalId, 'event-42');
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('failed item save keeps the draft and offers a retry', (
+    tester,
+  ) async {
+    _setItemEditorViewport(tester);
+    final category = (await tester.runAsync(
+      () => planner.addCategory(
+        TaskCategory(title: 'Work', iconName: 'mi_work', items: []),
+      ),
+    ))!;
+    final original = (await tester.runAsync(
+      () => planner.saveTask(
+        Task(
+          categoryId: category.id,
+          title: 'Original task',
+          date: DateTime(2026, 10, 20),
+          time: const TimeOfDay(hour: 15, minute: 30),
+          estimatedDuration: const Duration(minutes: 25),
+          isChecked: false,
+        ),
+      ),
+    ))!;
+    repository.nextTaskUpdateError = StateError(
+      'The task was not updated in local storage.',
+    );
+
+    await tester.pumpWidget(
+      _itemEditorApp(planner, AddItemPopup(initialItem: original)),
+    );
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.first, 'Updated task title');
+    await tester.enterText(fields.last, 'Keep these notes');
+    await tester.ensureVisible(find.text('Save changes'));
+    await tester.tap(find.text('Save changes'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('This item may have changed. Refresh and try again.'),
+      findsOneWidget,
+    );
+    expect(
+      tester.widget<TextField>(fields.first).controller!.text,
+      'Updated task title',
+    );
+    expect(
+      tester.widget<TextField>(fields.last).controller!.text,
+      'Keep these notes',
+    );
+    expect(tester.takeException(), isNull);
+  });
+}
+
+class _TestPlannerRepository extends PlannerRepository {
+  _TestPlannerRepository({required super.databaseHelper});
+
+  Object? nextTaskUpdateError;
+
+  @override
+  Future<bool> updateTask(Task task) async {
+    final error = nextTaskUpdateError;
+    nextTaskUpdateError = null;
+    if (error != null) throw error;
+    return super.updateTask(task);
+  }
 }
 
 void _setItemEditorViewport(WidgetTester tester) {

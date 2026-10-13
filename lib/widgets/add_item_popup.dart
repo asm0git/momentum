@@ -8,6 +8,7 @@ import 'blurred_dialog.dart';
 import 'date_picker_dialog.dart';
 import 'estimated_duration_picker.dart';
 import 'category_icon_picker.dart';
+import 'planner_write_feedback.dart';
 import 'selector.dart';
 import 'time_picker_dialog.dart';
 
@@ -397,7 +398,9 @@ class _AddItemPopupState extends State<AddItemPopup> {
       widget.onSaved?.call(saved);
     } catch (error) {
       debugPrint('Could not save planner item: $error');
-      _showValidationError('Could not save this item.');
+      _showValidationError(
+        plannerWriteFailureMessage(error, action: PlannerWriteAction.saveItem),
+      );
     }
   }
 
@@ -1047,7 +1050,14 @@ class _TitleCategoryFields extends StatelessWidget {
       debugPrint('Could not create category from item editor: $error');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not create this category.')),
+          SnackBar(
+            content: Text(
+              plannerWriteFailureMessage(
+                error,
+                action: PlannerWriteAction.createCategory,
+              ),
+            ),
+          ),
         );
       }
     }

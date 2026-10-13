@@ -7,6 +7,7 @@ import '../state/planner_state.dart';
 import 'add_item_popup.dart';
 import 'blurred_dialog.dart';
 import 'confirmation_dialog_actions.dart';
+import 'planner_write_feedback.dart';
 import 'selector.dart';
 
 Future<void> showItemEditor(BuildContext context, PlannerItem item) async {
@@ -85,7 +86,14 @@ Future<void> confirmDeleteItem(BuildContext context, PlannerItem item) async {
     debugPrint('Could not delete item: $error');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not delete this item.')),
+        SnackBar(
+          content: Text(
+            plannerWriteFailureMessage(
+              error,
+              action: PlannerWriteAction.deleteItem,
+            ),
+          ),
+        ),
       );
     }
   }
@@ -120,7 +128,14 @@ Future<void> confirmDeleteCategory(
     debugPrint('Could not delete category: $error');
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not delete this category.')),
+        SnackBar(
+          content: Text(
+            plannerWriteFailureMessage(
+              error,
+              action: PlannerWriteAction.deleteCategory,
+            ),
+          ),
+        ),
       );
     }
   }
