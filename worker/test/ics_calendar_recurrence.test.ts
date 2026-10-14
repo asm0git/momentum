@@ -62,4 +62,17 @@ describe('iCalendar recurrence expansion', () => {
       '20261021T090000',
     ]);
   });
+
+  it('keeps unsupported recurrence frequencies at the original start', () => {
+    const start = dateTime('20261019T090000Z');
+    const occurrences = masterOccurrences(
+      start,
+      'FREQ=HOURLY;COUNT=3',
+      [],
+      new Date('2027-12-31T23:59:59Z'),
+    );
+
+    expect(occurrences.isRecurring).toBe(true);
+    expect(occurrences.dates.map(dateKey)).toEqual(['20261019T090000']);
+  });
 });

@@ -60,26 +60,50 @@ function expandRule(
   rule: Map<string, string>,
   rangeEnd: Date,
 ): IcsDateTime[] {
-  const frequency = parseRuleFrequency(rule.get('FREQ'));
-  if (!frequency) return [start];
+  const expansion = parseRuleExpansion(start, rule, rangeEnd);
+  return expansion ? expandRuleOccurrences(expansion) : [start];
+}
 
-  const interval = Math.max(1, Number(rule.get('INTERVAL') ?? 1) || 1);
-  const countLimit = Math.max(0, Number(rule.get('COUNT') ?? 0) || 0);
-  const untilValue = rule.get('UNTIL');
-  const until = untilValue
-    ? parseDateTime({ name: 'UNTIL', params: new Map(), value: untilValue })?.instant ?? null
-    : null;
-  return expandRuleOccurrences({
+function parseRuleExpansion(
+  start: IcsDateTime,
+  rule: Map<string, string>,
+  rangeEnd: Date,
+): RuleExpansion | null {
+  const frequency = parseRuleFrequency(rule.get('FREQ'));
+  if (!frequency) return null;
+  return {
     start,
     frequency,
-    interval,
-    countLimit,
-    until,
-    weekdays: (rule.get('BYDAY') ?? '').split(',').filter(Boolean),
-    monthDays: (rule.get('BYMONTHDAY') ?? '').split(',').map(Number).filter(Boolean),
-    months: (rule.get('BYMONTH') ?? '').split(',').map(Number).filter(Boolean),
+    interval: Math.max(1, numericRuleValue(rule, 'INTERVAL', 1)),
+    countLimit: Math.max(0, numericRuleValue(rule, 'COUNT', 0)),
+    until: parseRuleUntil(rule),
+    weekdays: stringRuleList(rule, 'BYDAY'),
+    monthDays: numericRuleList(rule, 'BYMONTHDAY'),
+    months: numericRuleList(rule, 'BYMONTH'),
     rangeEnd,
-  });
+  };
+}
+
+function numericRuleValue(
+  rule: Map<string, string>,
+  name: string,
+  fallback: number,
+): number {
+  return Number(rule.get(name) ?? fallback) || fallback;
+}
+
+function parseRuleUntil(rule: Map<string, string>): Date | null {
+  const value = rule.get('UNTIL');
+  if (!value) return null;
+  return parseDateTime({ name: 'UNTIL', params: new Map(), value })?.instant ?? null;
+}
+
+function stringRuleList(rule: Map<string, string>, name: string): string[] {
+  return (rule.get(name) ?? '').split(',').filter(Boolean);
+}
+
+function numericRuleList(rule: Map<string, string>, name: string): number[] {
+  return (rule.get(name) ?? '').split(',').map(Number).filter(Boolean);
 }
 
 function parseRuleFrequency(value: string | undefined): RuleFrequency | null {
