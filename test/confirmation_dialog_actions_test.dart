@@ -57,14 +57,8 @@ void main() {
       Border.all(color: AppColors.background),
     );
     expect((group.decoration as BoxDecoration).color, AppColors.surface);
-    expect(
-      cancelButton.style?.backgroundColor?.resolve({}),
-      AppColors.surface,
-    );
-    expect(
-      cancelButton.style?.foregroundColor?.resolve({}),
-      AppColors.primary,
-    );
+    expect(cancelButton.style?.backgroundColor?.resolve({}), AppColors.surface);
+    expect(cancelButton.style?.foregroundColor?.resolve({}), AppColors.primary);
     expect(actionButton.style?.backgroundColor?.resolve({}), AppColors.error);
     await tester.tap(cancelFinder);
     await tester.tap(actionFinder);

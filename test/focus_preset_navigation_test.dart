@@ -6,7 +6,7 @@ import 'package:momentum/screens/dashboard_screen.dart';
 import 'package:momentum/screens/timer_screen.dart';
 import 'package:momentum/state/focus_timer_state.dart';
 import 'package:momentum/state/planner_state.dart';
-import 'package:momentum/widgets/clock.dart';
+import 'package:momentum/widgets/timer/clock.dart';
 import 'package:provider/provider.dart';
 
 void main() {

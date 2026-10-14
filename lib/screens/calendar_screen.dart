@@ -8,14 +8,14 @@ import '../calendar_view_mode.dart';
 import '../navigation_destinations.dart';
 import '../services/calendar_view_preferences.dart';
 import '../state/planner_state.dart';
-import '../widgets/bottom_navigation_bar.dart';
-import '../widgets/calendar.dart';
-import '../widgets/calendar_resize_handle.dart';
-import '../widgets/item_actions.dart';
+import '../widgets/navigation/bottom_navigation_bar.dart';
+import '../widgets/calendar/calendar.dart';
+import '../widgets/calendar/calendar_resize_handle.dart';
+import '../widgets/planner/item_actions.dart';
 import '../widgets/pill_action_button.dart';
-import '../widgets/primary_app_bar.dart';
-import '../widgets/task_list_container.dart';
-import '../widgets/task_widget.dart';
+import '../widgets/navigation/primary_app_bar.dart';
+import '../widgets/planner/task_list_container.dart';
+import '../widgets/planner/task_widget.dart';
 
 // Calendar screen content shown below the primary app bar.
 class CalendarScreen extends StatefulWidget {
@@ -41,8 +41,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       final savedMode = await CalendarViewPreferences.load();
       if (!mounted || _calendarViewModeChanged) return;
       setState(() => _calendarViewMode = savedMode);
-    } catch (_) {
+    } catch (error) {
       // Keep the full-month view if the saved preference cannot be read.
+      debugPrint('Could not restore the saved calendar view: $error');
     }
   }
 
@@ -56,8 +57,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Future<void> _saveCalendarViewMode(CalendarViewMode mode) async {
     try {
       await CalendarViewPreferences.save(mode);
-    } catch (_) {
+    } catch (error) {
       // Keep the changed view for this visit if storage is unavailable.
+      debugPrint('Could not save the calendar view preference: $error');
     }
   }
 
@@ -65,12 +67,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     final planner = context.watch<PlannerState>();
     final categories = planner.categories;
+    final categoryIconsById = <int, String>{
+      for (final category in categories)
+        if (category.id != null) category.id!: category.iconName,
+    };
     final agendaIcons = {
       for (final item in planner.itemsForDate(_selectedDate))
-        item: categories
-            .where((category) => category.id == item.categoryId)
-            .firstOrNull
-            ?.iconName,
+        item: categoryIconsById[item.categoryId],
     };
     return Scaffold(
       backgroundColor: AppColors.background,

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/data/database_helper.dart';
+import 'package:momentum/data/calendar_sync_repository.dart';
 import 'package:momentum/data/model_serialization.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data/recurrence.dart';
@@ -14,6 +15,7 @@ void main() {
   late Directory tempDirectory;
   late DatabaseHelper databaseHelper;
   late PlannerRepository repository;
+  late CalendarSyncRepository calendarSyncRepository;
 
   setUpAll(() => sqfliteFfiInit());
 
@@ -25,6 +27,9 @@ void main() {
       seedOnCreate: false,
     );
     repository = PlannerRepository(databaseHelper: databaseHelper);
+    calendarSyncRepository = CalendarSyncRepository(
+      databaseHelper: databaseHelper,
+    );
     await databaseHelper.database;
   });
 
@@ -48,11 +53,11 @@ void main() {
       time: const TimeOfDay(hour: 9, minute: 25),
       estimatedDuration: const Duration(minutes: 65),
       isChecked: true,
-      repeat: 'Every week',
+      repeat: RecurrenceRule.weekly,
       repeatUntil: DateTime(2026, 11, 7),
       description: 'Chapter 3',
       priority: 2,
-      srcPlatform: 'local',
+      sourcePlatform: 'local',
       externalId: 'external-1',
     );
     final event = Event(
@@ -67,9 +72,9 @@ void main() {
       allDay: false,
       location: 'Room 2',
       notes: 'Bring notes',
-      repeat: 'Every week',
+      repeat: RecurrenceRule.weekly,
       repeatUntil: DateTime(2026, 11, 7),
-      srcPlatform: 'local',
+      sourcePlatform: 'local',
       externalId: 'event-1',
     );
     final plan = DailyPlan(
@@ -95,17 +100,202 @@ void main() {
     expect(taskCopy.estimatedDuration, const Duration(minutes: 65));
     expect(taskCopy.isChecked, isTrue);
     expect(taskCopy.description, 'Chapter 3');
-    expect(taskCopy.repeat, 'Every week');
+    expect(taskToMap(task)['repeat'], 'Every week');
+    expect(taskCopy.repeat, RecurrenceRule.weekly);
     expect(taskCopy.repeatUntil, DateTime(2026, 11, 7));
     final eventCopy = eventFromMap(eventToMap(event));
     expect(eventStartDateTime(eventCopy), DateTime(2026, 10, 7, 23, 30));
     expect(eventEndDateTime(eventCopy), DateTime(2026, 10, 8, 0, 15));
-    expect(eventCopy.repeat, 'Every week');
+    expect(eventToMap(event)['repeat'], 'Every week');
+    expect(eventCopy.repeat, RecurrenceRule.weekly);
+    expect(
+      taskFromMap({...taskToMap(task), 'repeat': 'Every fortnight'}).repeat,
+      RecurrenceRule.never,
+    );
+    expect(
+      eventFromMap({...eventToMap(event), 'repeat': 'Every fortnight'}).repeat,
+      RecurrenceRule.never,
+    );
     expect(eventCopy.repeatUntil, DateTime(2026, 11, 7));
     expect(dailyPlanFromMap(dailyPlanToMap(plan)).orderedTaskIds, [7, 10]);
     final accountCopy = linkedAccountFromMap(linkedAccountToMap(account));
     expect(accountCopy.accountName, 'Planner');
     expect(accountCopy.providerUrl, 'https://calendar.example.test');
+  });
+
+  test('row decoders report malformed required column values', () {
+    final task = Task(
+      title: 'Read',
+      date: DateTime(2026, 10, 7),
+      time: const TimeOfDay(hour: 9, minute: 25),
+      estimatedDuration: const Duration(minutes: 65),
+      isChecked: false,
+    );
+    final event = Event(
+      title: 'Meeting',
+      date: DateTime(2026, 10, 7),
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    final plan = DailyPlan(
+      planDate: DateTime(2026, 10, 7),
+      orderedTaskIds: [7, 10],
+      generatedTimestamp: DateTime(2026, 10, 7, 8),
+    );
+    final account = LinkedAccount(
+      platformName: 'Calendar',
+      accountName: 'Planner',
+    );
+
+    void expectColumnError(void Function() decode, String column) {
+      expect(
+        decode,
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains(column),
+          ),
+        ),
+      );
+    }
+
+    final missingDue = Map<String, Object?>.from(taskToMap(task))
+      ..remove('due');
+    expectColumnError(() {
+      taskFromMap(missingDue);
+    }, 'due');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'estimated_duration_minutes': '65'});
+    }, 'estimated_duration_minutes');
+    expectColumnError(() {
+      eventFromMap({...eventToMap(event), 'start_time': 'not-a-date'});
+    }, 'start_time');
+    expectColumnError(() {
+      dailyPlanFromMap({
+        ...dailyPlanToMap(plan),
+        'ordered_task_ids': '{broken',
+      });
+    }, 'ordered_task_ids');
+    expectColumnError(() {
+      linkedAccountFromMap({
+        ...linkedAccountToMap(account),
+        'platform_name': null,
+      });
+    }, 'platform_name');
+  });
+
+  test('row decoders report malformed optional column values', () {
+    final task = Task(
+      title: 'Read',
+      date: DateTime(2026, 10, 7),
+      time: const TimeOfDay(hour: 9, minute: 25),
+      estimatedDuration: const Duration(minutes: 65),
+      isChecked: false,
+    );
+    final event = Event(
+      title: 'Meeting',
+      date: DateTime(2026, 10, 7),
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    final account = LinkedAccount(
+      platformName: 'Calendar',
+      accountName: 'Planner',
+    );
+
+    void expectColumnError(void Function() decode, String column) {
+      expect(
+        decode,
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains(column),
+          ),
+        ),
+      );
+    }
+
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'id': '7'});
+    }, 'id');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'category_id': '4'});
+    }, 'category_id');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'description': 12});
+    }, 'description');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'priority': 'high'});
+    }, 'priority');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'src_platform': 1});
+    }, 'src_platform');
+    expectColumnError(() {
+      eventFromMap({...eventToMap(event), 'location': false});
+    }, 'location');
+    expectColumnError(() {
+      eventFromMap({...eventToMap(event), 'notes': 12});
+    }, 'notes');
+    expectColumnError(() {
+      linkedAccountFromMap({...linkedAccountToMap(account), 'provider_url': 4});
+    }, 'provider_url');
+    expectColumnError(() {
+      linkedAccountFromMap({
+        ...linkedAccountToMap(account),
+        'category_id': '2',
+      });
+    }, 'category_id');
+    expectColumnError(() {
+      optionalStringFromMap({'external_id': 3}, 'external_id');
+    }, 'external_id');
+
+    final taskWithNulls = taskFromMap({
+      ...taskToMap(task),
+      'id': null,
+      'category_id': null,
+      'description': null,
+      'priority': null,
+      'src_platform': null,
+      'external_id': null,
+    });
+    expect(taskWithNulls.id, isNull);
+    expect(taskWithNulls.categoryId, isNull);
+    expect(taskWithNulls.description, isEmpty);
+    expect(taskWithNulls.priority, isNull);
+    expect(taskWithNulls.sourcePlatform, isNull);
+    expect(taskWithNulls.externalId, isNull);
+
+    final eventWithNulls = eventFromMap({
+      ...eventToMap(event),
+      'location': null,
+      'notes': null,
+      'src_platform': null,
+      'external_id': null,
+    });
+    expect(eventWithNulls.location, isNull);
+    expect(eventWithNulls.notes, isEmpty);
+    expect(eventWithNulls.sourcePlatform, isNull);
+    expect(eventWithNulls.externalId, isNull);
+
+    final accountWithNulls = linkedAccountFromMap({
+      ...linkedAccountToMap(account),
+      'account_name': null,
+      'account_email': null,
+      'provider_url': null,
+      'remote_user_id': null,
+      'category_id': null,
+    });
+    expect(accountWithNulls.accountName, 'Linked account');
+    expect(accountWithNulls.accountEmail, isNull);
+    expect(accountWithNulls.providerUrl, isNull);
+    expect(accountWithNulls.remoteUserId, isNull);
+    expect(accountWithNulls.categoryId, isNull);
   });
 
   test(
@@ -187,7 +377,7 @@ void main() {
         isEmpty,
       );
 
-      final account = await repository.insertLinkedAccount(
+      final account = await calendarSyncRepository.insertLinkedAccount(
         LinkedAccount(
           platformName: 'Calendar',
           accountName: 'Planner',
@@ -195,16 +385,21 @@ void main() {
         ),
       );
       account.lastSyncTime = DateTime(2026, 10, 7, 9);
-      expect(await repository.updateLinkedAccount(account), isTrue);
+      expect(await calendarSyncRepository.updateLinkedAccount(account), isTrue);
       expect(
-        (await repository.getLinkedAccount(account.id!))?.lastSyncTime,
+        (await calendarSyncRepository.getLinkedAccount(
+          account.id!,
+        ))?.lastSyncTime,
         DateTime(2026, 10, 7, 9),
       );
 
       expect(await repository.deleteTask(task.id!), isTrue);
       expect(await repository.deleteEvent(event.id!), isTrue);
       expect(await repository.deleteDailyPlan(plan.id!), isTrue);
-      expect(await repository.deleteLinkedAccount(account.id!), isTrue);
+      expect(
+        await calendarSyncRepository.deleteLinkedAccount(account.id!),
+        isTrue,
+      );
       expect(
         await repository.deleteCategory(
           category.id!,
@@ -227,7 +422,7 @@ void main() {
   test(
     'provider calendar sync upserts imported events without duplicates',
     () async {
-      final firstSync = CanvasSyncPayload(
+      final firstSync = CalendarSyncPayload(
         accountName: 'Student Calendar',
         accountEmail: 'student@example.test',
         remoteUserId: 'google-user-4',
@@ -235,7 +430,7 @@ void main() {
         syncedAt: DateTime(2026, 10, 9, 10),
         tasks: const [],
         events: [
-          CanvasEventImport(
+          CalendarEventImport(
             externalId: 'primary:event-19',
             title: 'Study group',
             start: DateTime(2026, 10, 12, 9),
@@ -246,7 +441,7 @@ void main() {
         ],
         providerName: 'google',
       );
-      final account = await repository.applyCalendarSync(firstSync);
+      final account = await calendarSyncRepository.applyCalendarSync(firstSync);
       final initialEvents = (await repository.getAllItems())
           .whereType<Event>()
           .toList();
@@ -255,8 +450,8 @@ void main() {
       expect(initialEvents, hasLength(1));
       expect(initialEvents.single.categoryId, account.categoryId);
 
-      await repository.applyCalendarSync(
-        CanvasSyncPayload(
+      await calendarSyncRepository.applyCalendarSync(
+        CalendarSyncPayload(
           accountName: 'Student Calendar',
           accountEmail: 'student@example.test',
           remoteUserId: 'google-user-4',
@@ -264,7 +459,7 @@ void main() {
           syncedAt: DateTime(2026, 10, 9, 11),
           tasks: const [],
           events: [
-            CanvasEventImport(
+            CalendarEventImport(
               externalId: 'primary:event-19',
               title: 'Study group moved',
               start: DateTime(2026, 10, 12, 11),
@@ -377,7 +572,7 @@ void main() {
           time: const TimeOfDay(hour: 17, minute: 0),
           estimatedDuration: const Duration(hours: 1),
           isChecked: false,
-          repeat: 'Every week',
+          repeat: RecurrenceRule.weekly,
         ),
       );
       final occurrenceDate = DateTime(2026, 10, 14);
@@ -429,7 +624,7 @@ void main() {
           time: const TimeOfDay(hour: 17, minute: 0),
           estimatedDuration: const Duration(hours: 1),
           isChecked: false,
-          repeat: 'Every week',
+          repeat: RecurrenceRule.weekly,
           repeatUntil: DateTime(2026, 12, 1),
         ),
       );
@@ -447,7 +642,7 @@ void main() {
           end: const TimeOfDay(hour: 19, minute: 0),
           isCurrent: false,
           allDay: false,
-          repeat: 'Every month',
+          repeat: RecurrenceRule.monthly,
           repeatUntil: DateTime(2027, 1, 1),
         ),
       );
@@ -464,10 +659,10 @@ void main() {
       final movedTask = await repository.getTask(task.id!);
       final movedEvent = await repository.getEvent(event.id!);
       expect(movedTask?.categoryId, destination.id);
-      expect(movedTask?.repeat, 'Every week');
+      expect(movedTask?.repeat, RecurrenceRule.weekly);
       expect(movedTask?.repeatUntil, DateTime(2026, 12, 1));
       expect(movedEvent?.categoryId, destination.id);
-      expect(movedEvent?.repeat, 'Every month');
+      expect(movedEvent?.repeat, RecurrenceRule.monthly);
       expect(movedEvent?.repeatUntil, DateTime(2027, 1, 1));
       expect(await repository.getTaskOccurrenceCompletionKeys(), {
         taskOccurrenceKey(task.id!, DateTime(2026, 10, 14)),
@@ -479,14 +674,14 @@ void main() {
   test(
     'Canvas sync upserts stable IDs and keeps local task completion',
     () async {
-      final first = CanvasSyncPayload(
+      final first = CalendarSyncPayload(
         accountName: 'Canvas Student',
         accountEmail: 'student@example.test',
         remoteUserId: '42',
         providerUrl: 'https://canvas.example.test',
         syncedAt: DateTime(2026, 10, 7, 9),
         tasks: [
-          CanvasTaskImport(
+          CalendarTaskImport(
             externalId: 'assignment:course_8:3',
             title: 'Essay',
             due: DateTime(2026, 10, 8, 17),
@@ -494,7 +689,7 @@ void main() {
           ),
         ],
         events: [
-          CanvasEventImport(
+          CalendarEventImport(
             externalId: 'event:99',
             title: 'Lecture',
             start: DateTime(2026, 10, 9, 10),
@@ -503,7 +698,7 @@ void main() {
           ),
         ],
       );
-      final account = await repository.applyCanvasSync(first);
+      final account = await calendarSyncRepository.applyCalendarSync(first);
       final task = (await repository.getTasks()).single;
       final event = (await repository.getEvents()).single;
       expect(account.categoryId, isNotNull);
@@ -511,28 +706,28 @@ void main() {
         (await repository.getCategory(account.categoryId!))?.iconName,
         CalendarProvider.canvas.categoryIcon,
       );
-      expect(task.srcPlatform, 'canvas');
+      expect(task.sourcePlatform, 'canvas');
       expect(task.externalId, 'assignment:course_8:3');
       expect(event.externalId, 'event:99');
       task.isChecked = true;
       await repository.updateTask(task);
 
-      await repository.applyCanvasSync(
-        CanvasSyncPayload(
+      await calendarSyncRepository.applyCalendarSync(
+        CalendarSyncPayload(
           accountName: 'Canvas Student',
           accountEmail: 'student@example.test',
           remoteUserId: '42',
           providerUrl: 'https://canvas.example.test',
           syncedAt: DateTime(2026, 10, 7, 10),
           tasks: [
-            CanvasTaskImport(
+            CalendarTaskImport(
               externalId: 'assignment:course_8:3',
               title: 'Essay updated',
               due: DateTime(2026, 10, 10, 17),
               description: 'Updated description',
             ),
           ],
-          events: first.events,
+          events: const [],
         ),
       );
       final tasksAfterSync = await repository.getTasks();
@@ -544,20 +739,36 @@ void main() {
       expect(tasksAfterSync.single.date, DateTime(2026, 10, 10));
       expect(eventsAfterSync, hasLength(1));
       expect(eventsAfterSync.single.id, event.id);
+
+      await calendarSyncRepository.applyCalendarSync(
+        CalendarSyncPayload(
+          accountName: 'Canvas Student',
+          accountEmail: 'student@example.test',
+          remoteUserId: '42',
+          providerUrl: 'https://canvas.example.test',
+          syncedAt: DateTime(2026, 10, 7, 11),
+          tasks: const [],
+          events: const [],
+        ),
+        removeMissingTasks: true,
+        removeMissingEvents: true,
+      );
+      expect(await repository.getTasks(), isEmpty);
+      expect(await repository.getEvents(), isEmpty);
     },
   );
 
   test(
     'a failed Canvas batch leaves stored records and sync metadata intact',
     () async {
-      final baseline = CanvasSyncPayload(
+      final baseline = CalendarSyncPayload(
         accountName: 'Canvas Student',
         accountEmail: null,
         remoteUserId: '42',
         providerUrl: 'https://canvas.example.test',
         syncedAt: DateTime(2026, 10, 7, 9),
         tasks: [
-          CanvasTaskImport(
+          CalendarTaskImport(
             externalId: 'assignment:course_8:3',
             title: 'Original title',
             due: DateTime(2026, 10, 8, 17),
@@ -565,7 +776,7 @@ void main() {
         ],
         events: const [],
       );
-      final account = await repository.applyCanvasSync(baseline);
+      final account = await calendarSyncRepository.applyCalendarSync(baseline);
       final db = await databaseHelper.database;
       await db.execute('''
       CREATE TRIGGER reject_canvas_record BEFORE INSERT ON tasks
@@ -574,20 +785,20 @@ void main() {
     ''');
 
       await expectLater(
-        repository.applyCanvasSync(
-          CanvasSyncPayload(
+        calendarSyncRepository.applyCalendarSync(
+          CalendarSyncPayload(
             accountName: 'Canvas Student',
             accountEmail: null,
             remoteUserId: '42',
             providerUrl: 'https://canvas.example.test',
             syncedAt: DateTime(2026, 10, 7, 10),
             tasks: [
-              CanvasTaskImport(
+              CalendarTaskImport(
                 externalId: 'assignment:course_8:3',
                 title: 'Changed title',
                 due: DateTime(2026, 10, 10, 17),
               ),
-              CanvasTaskImport(
+              CalendarTaskImport(
                 externalId: 'assignment:course_8:4',
                 title: 'Reject this row',
                 due: DateTime(2026, 10, 11, 17),
@@ -601,11 +812,54 @@ void main() {
 
       expect((await repository.getTasks()).single.title, 'Original title');
       expect(
-        (await repository.getLinkedAccount(account.id!))?.lastSyncTime,
+        (await calendarSyncRepository.getLinkedAccount(
+          account.id!,
+        ))?.lastSyncTime,
         DateTime(2026, 10, 7, 9),
       );
     },
   );
+
+  test('a sync fails when its linked account update affects no rows', () async {
+    final originalPayload = CalendarSyncPayload(
+      accountName: 'Original account',
+      accountEmail: 'student@example.test',
+      remoteUserId: '42',
+      providerUrl: 'https://canvas.example.test',
+      syncedAt: DateTime(2026, 10, 7, 9),
+      tasks: const [],
+      events: const [],
+    );
+    final account = await calendarSyncRepository.applyCalendarSync(
+      originalPayload,
+    );
+    final db = await databaseHelper.database;
+    await db.execute('''
+      CREATE TRIGGER ignore_linked_account_update
+      BEFORE UPDATE ON linked_accounts
+      BEGIN SELECT RAISE(IGNORE); END
+    ''');
+
+    await expectLater(
+      calendarSyncRepository.applyCalendarSync(
+        CalendarSyncPayload(
+          accountName: 'Changed account',
+          accountEmail: 'student@example.test',
+          remoteUserId: '42',
+          providerUrl: 'https://canvas.example.test',
+          syncedAt: DateTime(2026, 10, 7, 10),
+          tasks: const [],
+          events: const [],
+        ),
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(
+      (await calendarSyncRepository.getLinkedAccount(account.id!))?.accountName,
+      'Original account',
+    );
+  });
 
   test(
     'v3 to v4 migration preserves planner rows and removes local token',
@@ -798,7 +1052,7 @@ void main() {
         time: const TimeOfDay(hour: 9, minute: 0),
         estimatedDuration: const Duration(minutes: 30),
         isChecked: false,
-        repeat: 'Every week',
+        repeat: RecurrenceRule.weekly,
         repeatUntil: DateTime(2026, 10, 15),
       ),
     );
@@ -834,7 +1088,7 @@ void main() {
       time: const TimeOfDay(hour: 8, minute: 0),
       estimatedDuration: Duration.zero,
       isChecked: false,
-      repeat: 'Every day',
+      repeat: RecurrenceRule.daily,
       repeatUntil: DateTime(2026, 10, 3),
     );
     expect(
@@ -852,7 +1106,7 @@ void main() {
       time: const TimeOfDay(hour: 9, minute: 0),
       estimatedDuration: Duration.zero,
       isChecked: false,
-      repeat: 'Every week',
+      repeat: RecurrenceRule.weekly,
       repeatUntil: DateTime(2026, 10, 15),
     );
     expect(
@@ -871,7 +1125,7 @@ void main() {
       end: const TimeOfDay(hour: 10, minute: 0),
       isCurrent: false,
       allDay: false,
-      repeat: 'Every month',
+      repeat: RecurrenceRule.monthly,
       repeatUntil: DateTime(2026, 4, 30),
     );
     expect(
@@ -895,7 +1149,7 @@ void main() {
       end: const TimeOfDay(hour: 0, minute: 0),
       isCurrent: false,
       allDay: true,
-      repeat: 'Every year',
+      repeat: RecurrenceRule.yearly,
       repeatUntil: DateTime(2028, 2, 29),
     );
     expect(
@@ -911,6 +1165,24 @@ void main() {
         DateTime(2027, 2, 28),
         DateTime(2028, 2, 29),
       ],
+    );
+
+    final maximumDate = DateTime(9999, 12, 31);
+    final finalDayDaily = Task(
+      title: 'Final day',
+      date: maximumDate,
+      time: const TimeOfDay(hour: 9, minute: 0),
+      estimatedDuration: Duration.zero,
+      isChecked: false,
+      repeat: RecurrenceRule.daily,
+    );
+    expect(
+      recurrenceDatesInRange(
+        finalDayDaily,
+        from: maximumDate,
+        through: maximumDate,
+      ),
+      [maximumDate],
     );
   });
 
@@ -977,7 +1249,7 @@ void main() {
       );
       repository = PlannerRepository(databaseHelper: databaseHelper);
       expect((await repository.getTasks()).single.title, 'Keep me');
-      expect((await repository.getTasks()).single.repeat, 'Never');
+      expect((await repository.getTasks()).single.repeat, RecurrenceRule.never);
       expect((await repository.getEvents()).single.title, 'Existing event');
     },
   );

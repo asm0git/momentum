@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/data/database_helper.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
+import 'package:momentum/state/automatic_event_focus_coordinator.dart';
 import 'package:momentum/state/focus_timer_state.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:path/path.dart' as p;
@@ -21,6 +22,7 @@ void main() {
   setUpAll(() => sqfliteFfiInit());
 
   setUp(() async {
+    now = DateTime(2026, 10, 9, 10);
     tempDirectory = await Directory.systemTemp.createTemp('momentum_focus_');
     databaseHelper = DatabaseHelper.forTesting(
       factory: databaseFactoryFfi,
@@ -29,6 +31,9 @@ void main() {
     );
     planner = PlannerState(
       repository: PlannerRepository(databaseHelper: databaseHelper),
+      autoSyncCalendarsOnStartup: false,
+      clock: () => now,
+      startAutomaticEventFocusTimer: false,
     );
     await planner.initialize();
     final category = await planner.addCategory(
@@ -45,13 +50,12 @@ void main() {
       ),
     );
     selection = planner.selectableFocusTasks.single;
-    now = DateTime(2026, 10, 9, 10);
     timer = FocusTimerState(
       workMinutes: 1,
       breakMinutes: 1,
       clock: () => now,
       startTicker: false,
-    )..attachPlannerState(planner);
+    )..attachFocusHistorySource(planner);
     timer.selectTask(selection);
     await planner.getFocusSecondsForDate(now);
   });
@@ -153,7 +157,7 @@ void main() {
           isChecked: false,
           time: const TimeOfDay(hour: 9, minute: 0),
           estimatedDuration: Duration.zero,
-          repeat: 'Daily',
+          repeat: RecurrenceRule.daily,
           repeatUntil: DateTime(today.year, today.month, today.day + 5),
         ),
       );
@@ -256,7 +260,7 @@ void main() {
         breakMinutes: 1,
         clock: () => now,
         startTicker: false,
-      )..attachPlannerState(planner);
+      )..attachFocusHistorySource(planner);
       timer.selectTask(selection);
       await planner.getFocusSecondsForDate(now);
 
@@ -273,6 +277,321 @@ void main() {
         DateTime(2026, 10, 10),
       );
       expect(categoryTotals.single.totalSeconds, 5);
+    },
+  );
+
+  test('automatic event focus aggregation groups by day and category', () {
+    final from = DateTime(2026, 10, 9, 23, 59, 58);
+    final midnight = DateTime(2026, 10, 10);
+    final through = DateTime(2026, 10, 10, 0, 0, 5);
+    const firstCategory = FocusTaskSelection(
+      taskId: 1,
+      taskTitle: 'First event',
+      categoryId: 4,
+      categoryTitle: 'School',
+      categoryIcon: 'mi_school',
+      isEvent: true,
+    );
+    const overlappingCategory = FocusTaskSelection(
+      taskId: 2,
+      taskTitle: 'Overlapping event',
+      categoryId: 5,
+      categoryTitle: 'Personal',
+      categoryIcon: 'mi_person',
+      isEvent: true,
+    );
+    const laterSameCategory = FocusTaskSelection(
+      taskId: 3,
+      taskTitle: 'Later event',
+      categoryId: 4,
+      categoryTitle: 'School',
+      categoryIcon: 'mi_school',
+      isEvent: true,
+    );
+
+    final buckets = aggregateAutomaticFocusBuckets(
+      intervals: [
+        ScheduledEventFocusInterval(
+          midnight.add(const Duration(seconds: 2)),
+          through,
+          laterSameCategory,
+        ),
+        ScheduledEventFocusInterval(
+          from.add(const Duration(seconds: 1)),
+          midnight.add(const Duration(seconds: 3)),
+          overlappingCategory,
+        ),
+        ScheduledEventFocusInterval(
+          from,
+          midnight.add(const Duration(seconds: 2)),
+          firstCategory,
+        ),
+      ],
+      from: from,
+      through: through,
+    );
+
+    expect(
+      [
+        for (final bucket in buckets)
+          (
+            date: bucket.date,
+            categoryId: bucket.selection.categoryId,
+            seconds: bucket.seconds,
+          ),
+      ],
+      [
+        (date: DateTime(2026, 10, 9), categoryId: 4, seconds: 2),
+        (date: DateTime(2026, 10, 10), categoryId: 4, seconds: 4),
+        (date: DateTime(2026, 10, 10), categoryId: 5, seconds: 1),
+      ],
+    );
+    expect(buckets[1].selection, firstCategory);
+  });
+
+  testWidgets(
+    'automatic event focus starts at the clock and records every 10 seconds',
+    (tester) async {
+      var clockNow = DateTime(2026, 10, 9, 10);
+      final event = Event(
+        title: 'Scheduled study session',
+        date: clockNow,
+        start: const TimeOfDay(hour: 10, minute: 0),
+        end: const TimeOfDay(hour: 11, minute: 0),
+        isCurrent: false,
+        allDay: false,
+      );
+      const eventSelection = FocusTaskSelection(
+        taskId: 7,
+        taskTitle: 'Scheduled study session',
+        categoryId: 4,
+        categoryTitle: 'School',
+        categoryIcon: 'mi_school',
+        isEvent: true,
+      );
+      final recorded = <AutomaticFocusBatchEntry>[];
+      var onRecordedCount = 0;
+      final coordinator = AutomaticEventFocusCoordinator(
+        events: () => [event],
+        selectionForItem: (_) => eventSelection,
+        recordBatch: (entries) async => recorded.addAll(entries),
+        onRecorded: () => onRecordedCount++,
+        clock: () => clockNow,
+        enabled: true,
+      );
+
+      coordinator.start();
+      clockNow = clockNow.add(const Duration(seconds: 10));
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+
+      expect(recorded, [
+        (date: DateTime(2026, 10, 9), seconds: 10, selection: eventSelection),
+      ]);
+      expect(onRecordedCount, 1);
+      coordinator.dispose();
+    },
+  );
+
+  test('event focus selection uses half-open event boundaries', () {
+    final eventStart = DateTime(2026, 10, 9, 10);
+    final eventEnd = DateTime(2026, 10, 9, 11);
+    final event = Event(
+      title: 'Scheduled study session',
+      date: eventStart,
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    const eventSelection = FocusTaskSelection(
+      taskId: 7,
+      taskTitle: 'Scheduled study session',
+      categoryId: 4,
+      categoryTitle: 'School',
+      categoryIcon: 'mi_school',
+      isEvent: true,
+    );
+    final coordinator = AutomaticEventFocusCoordinator(
+      events: () => [event],
+      selectionForItem: (_) => eventSelection,
+      recordBatch: (_) async {},
+      onRecorded: () {},
+      clock: () => eventStart,
+      enabled: false,
+    );
+
+    expect(coordinator.eventFocusSelectionAt(eventStart), eventSelection);
+    expect(
+      coordinator.eventFocusSelectionAt(
+        eventEnd.subtract(const Duration(seconds: 1)),
+      ),
+      eventSelection,
+    );
+    expect(
+      coordinator.eventFocusSelectionAt(
+        eventStart.subtract(const Duration(seconds: 1)),
+      ),
+      isNull,
+    );
+    expect(coordinator.eventFocusSelectionAt(eventEnd), isNull);
+    coordinator.dispose();
+  });
+
+  test('next event focus boundary is the nearest future half-open edge', () {
+    final eventStart = DateTime(2026, 10, 9, 10);
+    final eventEnd = DateTime(2026, 10, 9, 11);
+    final event = Event(
+      title: 'Scheduled study session',
+      date: eventStart,
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    final coordinator = AutomaticEventFocusCoordinator(
+      events: () => [event],
+      selectionForItem: (_) => selection,
+      recordBatch: (_) async {},
+      onRecorded: () {},
+      clock: () => eventStart,
+      enabled: false,
+    );
+
+    expect(
+      coordinator.nextEventFocusBoundaryAfter(
+        eventStart.subtract(const Duration(hours: 1)),
+        eventEnd,
+      ),
+      eventStart,
+    );
+    expect(
+      coordinator.nextEventFocusBoundaryAfter(eventStart, eventEnd),
+      eventEnd,
+    );
+    expect(
+      coordinator.nextEventFocusBoundaryAfter(
+        eventEnd,
+        eventEnd.add(const Duration(hours: 1)),
+      ),
+      isNull,
+    );
+    coordinator.dispose();
+  });
+
+  testWidgets('disposed automatic event focus cannot record again', (
+    tester,
+  ) async {
+    var clockNow = DateTime(2026, 10, 9, 10);
+    final event = Event(
+      title: 'Scheduled study session',
+      date: clockNow,
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    final recorded = <AutomaticFocusBatchEntry>[];
+    final coordinator = AutomaticEventFocusCoordinator(
+      events: () => [event],
+      selectionForItem: (_) => selection,
+      recordBatch: (entries) async => recorded.addAll(entries),
+      onRecorded: () {},
+      clock: () => clockNow,
+      enabled: true,
+    );
+
+    coordinator.start();
+    coordinator.dispose();
+    clockNow = clockNow.add(const Duration(seconds: 10));
+    await tester.pump(const Duration(seconds: 10));
+    await coordinator.recordCurrentInterval();
+
+    expect(recorded, isEmpty);
+  });
+
+  test(
+    'automatic event focus retries a failed batch without duplication',
+    () async {
+      await planner.saveEvent(
+        Event(
+          categoryId: selection.categoryId,
+          title: 'Scheduled study session',
+          date: DateTime(now.year, now.month, now.day),
+          start: TimeOfDay.fromDateTime(now),
+          end: TimeOfDay.fromDateTime(now.add(const Duration(minutes: 1))),
+          isCurrent: false,
+          allDay: false,
+        ),
+      );
+      final database = await databaseHelper.database;
+      await database.execute('''
+      CREATE TRIGGER fail_focus_category_total
+      BEFORE INSERT ON focus_daily_category_totals
+      BEGIN SELECT RAISE(ABORT, 'simulated focus write failure'); END
+    ''');
+      final initialRevision = planner.focusHistoryRevision;
+      now = now.add(const Duration(seconds: 5));
+
+      await planner.recordAutomaticEventFocusForTesting();
+
+      expect(await planner.getFocusSecondsForDate(now), 0);
+      expect(await planner.getFocusCategoryTotalsForRange(now, now), isEmpty);
+      expect(planner.focusHistoryRevision, initialRevision);
+
+      await database.execute('DROP TRIGGER fail_focus_category_total');
+      await planner.recordAutomaticEventFocusForTesting();
+
+      expect(await planner.getFocusSecondsForDate(now), 5);
+      expect(
+        (await planner.getFocusCategoryTotalsForRange(
+          now,
+          now,
+        )).single.totalSeconds,
+        5,
+      );
+      expect(planner.focusHistoryRevision, initialRevision + 1);
+
+      await planner.recordAutomaticEventFocusForTesting();
+      expect(await planner.getFocusSecondsForDate(now), 5);
+      expect(planner.focusHistoryRevision, initialRevision + 1);
+    },
+  );
+
+  test(
+    'timer retries failed focus writes without dropping pending seconds',
+    () async {
+      final database = await databaseHelper.database;
+      await database.execute('''
+        CREATE TRIGGER fail_focus_category_total
+        BEFORE INSERT ON focus_daily_category_totals
+        BEGIN SELECT RAISE(ABORT, 'simulated focus write failure'); END
+      ''');
+
+      timer.toggleRunning();
+      now = now.add(const Duration(seconds: 5));
+      await timer.tickForTesting();
+      timer.toggleRunning();
+      await timer.flushPendingForTesting();
+
+      expect(timer.hasPendingFocusHistoryWriteFailure, isTrue);
+      expect(timer.totalFocusSecondsToday, 5);
+      expect(await planner.getFocusSecondsForDate(now), 0);
+
+      await database.execute('DROP TRIGGER fail_focus_category_total');
+      await timer.retryPendingFocusHistoryWrite();
+
+      expect(timer.hasPendingFocusHistoryWriteFailure, isFalse);
+      expect(await planner.getFocusSecondsForDate(now), 5);
+      expect(
+        (await planner.getFocusCategoryTotalsForRange(
+          now,
+          now,
+        )).single.totalSeconds,
+        5,
+      );
+      await timer.flushPendingForTesting();
+      expect(await planner.getFocusSecondsForDate(now), 5);
     },
   );
 }

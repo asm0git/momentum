@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/app_theme.dart';
-import 'package:momentum/widgets/estimated_duration_picker.dart';
+import 'package:momentum/widgets/item_editor/estimated_duration_picker.dart';
 
 void main() {
   testWidgets('duration picker keeps its default label and picker behavior', (

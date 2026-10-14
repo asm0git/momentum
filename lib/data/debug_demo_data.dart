@@ -26,7 +26,7 @@ class DebugDemoData {
       allDay: false,
       location: 'Google Meet',
       notes: 'Demo event imported from Google Calendar.',
-      srcPlatform: 'google',
+      sourcePlatform: 'google',
       externalId: 'momentum-debug-google-event',
     );
 

@@ -68,7 +68,7 @@ class AppSpacing {
   static const double dashboardCategoryHeaderHeight = base * 5;
   static const double dashboardCategoryPreviewHeight = base * 4;
   static const double focusPresetWidth = base * 23;
-  static const double popupFieldHeight = base*5;
+  static const double popupFieldHeight = base * 5;
 }
 
 /// Corner radii for the main reusable surfaces.
@@ -130,14 +130,14 @@ final appTheme = ThemeData(
       fontSize: 16,
       fontWeight: FontWeight.w600,
       letterSpacing: -0.6,
-      height: 1.2
+      height: 1.2,
     ),
     bodySmall: TextStyle(
       fontFamily: 'SFProText',
       fontSize: 12,
       fontWeight: FontWeight.w500,
       letterSpacing: -0.7,
-      height: 1.1
+      height: 1.1,
     ),
     labelMedium: TextStyle(
       fontFamily: 'SFProText',

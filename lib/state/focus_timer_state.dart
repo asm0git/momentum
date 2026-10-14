@@ -1,12 +1,15 @@
+// Public constructor labels keep the implementation fields private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
 import '../data/pomodoro_preset.dart';
 import '../data/recurrence.dart';
-import '../data_models.dart';
+import '../models/focus_models.dart';
 import '../services/focus_preset_preferences.dart';
-import 'planner_state.dart';
+import 'focus_history_source.dart';
 
 enum FocusPhase { work, rest }
 
@@ -42,11 +45,12 @@ class FocusTimerState extends ChangeNotifier {
   int _flushCounter = 0;
   DateTime _focusDate;
   DateTime? _lastTick;
-  PlannerState? _planner;
+  FocusHistorySource? _focusHistorySource;
   Timer? _ticker;
   bool _isTicking = false;
+  bool _hasPendingFocusHistoryWriteFailure = false;
   Future<void>? _flushInProgress;
-  int _lastPlannerFocusHistoryRevision = 0;
+  int _lastFocusHistoryRevision = 0;
   final Map<DateTime, int> _pendingSeconds = {};
   final Map<DateTime, Map<int, _PendingCategoryFocus>> _pendingCategorySeconds =
       {};
@@ -59,6 +63,8 @@ class FocusTimerState extends ChangeNotifier {
   FocusPhase get phase => _phase;
   bool get isRunning => _isRunning;
   FocusTaskSelection? get selectedTask => _selectedTask;
+  bool get hasPendingFocusHistoryWriteFailure =>
+      _hasPendingFocusHistoryWriteFailure;
   int get totalFocusSecondsToday =>
       _persistedToday + (_pendingSeconds[_focusDate] ?? 0);
   int get phaseDurationSeconds =>
@@ -68,22 +74,22 @@ class FocusTimerState extends ChangeNotifier {
       ? 1
       : (_remainingSeconds / phaseDurationSeconds).clamp(0.0, 1.0);
 
-  void attachPlannerState(PlannerState planner) {
-    if (identical(_planner, planner)) return;
-    _planner?.removeListener(_onPlannerChanged);
-    _planner = planner;
-    _lastPlannerFocusHistoryRevision = planner.focusHistoryRevision;
-    planner.addListener(_onPlannerChanged);
+  void attachFocusHistorySource(FocusHistorySource source) {
+    if (identical(_focusHistorySource, source)) return;
+    _focusHistorySource?.removeListener(_onFocusHistoryChanged);
+    _focusHistorySource = source;
+    _lastFocusHistoryRevision = source.focusHistoryRevision;
+    source.addListener(_onFocusHistoryChanged);
     unawaited(_reloadToday(dateOnly(_clock())));
   }
 
-  void _onPlannerChanged() {
-    final planner = _planner;
-    if (planner == null ||
-        planner.focusHistoryRevision == _lastPlannerFocusHistoryRevision) {
+  void _onFocusHistoryChanged() {
+    final source = _focusHistorySource;
+    if (source == null ||
+        source.focusHistoryRevision == _lastFocusHistoryRevision) {
       return;
     }
-    _lastPlannerFocusHistoryRevision = planner.focusHistoryRevision;
+    _lastFocusHistoryRevision = source.focusHistoryRevision;
     unawaited(_reloadToday(dateOnly(_clock())));
   }
 
@@ -114,15 +120,17 @@ class FocusTimerState extends ChangeNotifier {
         preset.breakMinutes > 1435) {
       return CustomPresetSaveResult.invalid;
     }
-    if (_customPresets.contains(preset))
+    if (_customPresets.contains(preset)) {
       return CustomPresetSaveResult.duplicate;
+    }
 
     _customPresets.insert(0, preset);
     notifyListeners();
     try {
       await FocusPresetPreferences.save(_customPresets);
       return CustomPresetSaveResult.saved;
-    } catch (_) {
+    } catch (error) {
+      debugPrint('Could not persist custom focus preset: $error');
       return CustomPresetSaveResult.notPersisted;
     }
   }
@@ -181,6 +189,8 @@ class FocusTimerState extends ChangeNotifier {
   @visibleForTesting
   Future<void> flushPendingForTesting() => _flushPending();
 
+  Future<void> retryPendingFocusHistoryWrite() => _flushPending();
+
   void _advanceTime(DateTime now) {
     final lastTick = _lastTick;
     if (lastTick == null || !now.isAfter(lastTick)) return;
@@ -204,7 +214,7 @@ class FocusTimerState extends ChangeNotifier {
           chunk = secondsUntilMidnight;
         }
         final chunkEnd = cursor.add(Duration(seconds: chunk));
-        final eventBoundary = _planner?.nextEventFocusBoundaryAfter(
+        final eventBoundary = _focusHistorySource?.nextEventFocusBoundaryAfter(
           cursor,
           chunkEnd,
         );
@@ -217,31 +227,7 @@ class FocusTimerState extends ChangeNotifier {
             chunk = secondsUntilEventBoundary;
           }
         }
-        final eventAlreadyCountsThisTime =
-            _planner?.eventFocusSelectionAt(cursor) != null;
-        if (chunk > 0 && !eventAlreadyCountsThisTime) {
-          final day = dateOnly(cursor);
-          _pendingSeconds.update(
-            day,
-            (seconds) => seconds + chunk,
-            ifAbsent: () => chunk,
-          );
-          final activeTask = _activeTask ?? FocusTaskSelection.unassigned;
-          final categoryForDay = _pendingCategorySeconds.putIfAbsent(
-            day,
-            () => <int, _PendingCategoryFocus>{},
-          );
-          final pending = categoryForDay[activeTask.categoryId];
-          if (pending == null) {
-            categoryForDay[activeTask.categoryId] = _PendingCategoryFocus(
-              selection: activeTask,
-              seconds: chunk,
-            );
-          } else {
-            pending.selection = activeTask;
-            pending.seconds += chunk;
-          }
-        }
+        _recordWorkChunk(cursor, chunk);
       }
 
       cursor = cursor.add(Duration(seconds: chunk));
@@ -254,6 +240,36 @@ class FocusTimerState extends ChangeNotifier {
       }
     }
     _lastTick = cursor;
+  }
+
+  void _recordWorkChunk(DateTime cursor, int seconds) {
+    if (seconds <= 0 ||
+        _focusHistorySource?.eventFocusSelectionAt(cursor) != null) {
+      return;
+    }
+
+    final day = dateOnly(cursor);
+    _pendingSeconds.update(
+      day,
+      (total) => total + seconds,
+      ifAbsent: () => seconds,
+    );
+    final activeTask = _activeTask ?? FocusTaskSelection.unassigned;
+    final categoryForDay = _pendingCategorySeconds.putIfAbsent(
+      day,
+      () => <int, _PendingCategoryFocus>{},
+    );
+    final pending = categoryForDay[activeTask.categoryId];
+    if (pending == null) {
+      categoryForDay[activeTask.categoryId] = _PendingCategoryFocus(
+        selection: activeTask,
+        seconds: seconds,
+      );
+    } else {
+      pending
+        ..selection = activeTask
+        ..seconds += seconds;
+    }
   }
 
   void _advancePhase() {
@@ -270,25 +286,26 @@ class FocusTimerState extends ChangeNotifier {
   Future<void> _reloadToday(DateTime day) async {
     _focusDate = day;
     final loadGeneration = ++_dailyTotalLoadGeneration;
-    final planner = _planner;
-    if (planner == null) return;
+    final source = _focusHistorySource;
+    if (source == null) return;
     try {
-      final total = await planner.getFocusSecondsForDate(day);
+      final total = await source.getFocusSecondsForDate(day);
       if (loadGeneration == _dailyTotalLoadGeneration &&
           _sameDay(day, _focusDate)) {
         _persistedToday = total;
         notifyListeners();
       }
-    } catch (_) {
+    } catch (error) {
       // Keep the in-memory session usable if a storage read fails.
+      debugPrint('Could not reload persisted focus totals: $error');
     }
   }
 
   Future<void> _flushPending() async {
     final activeFlush = _flushInProgress;
     if (activeFlush != null) return activeFlush;
-    final planner = _planner;
-    if (planner == null || _pendingCategorySeconds.isEmpty) return;
+    final source = _focusHistorySource;
+    if (source == null || _pendingCategorySeconds.isEmpty) return;
 
     final snapshot = <DateTime, Map<int, _PendingCategoryFocus>>{
       for (final dayEntry in _pendingCategorySeconds.entries)
@@ -301,40 +318,42 @@ class FocusTimerState extends ChangeNotifier {
         },
     };
     var wroteSeconds = false;
+    var writeFailed = false;
     final flush = () async {
       try {
         for (final dayEntry in snapshot.entries) {
           for (final categoryEntry in dayEntry.value.entries) {
             final amount = categoryEntry.value.seconds;
-            await planner.addFocusSeconds(
+            await source.addFocusSeconds(
               dayEntry.key,
               amount,
               categoryEntry.value.selection,
             );
             wroteSeconds = true;
-            final stillPending = _pendingSeconds[dayEntry.key] ?? 0;
-            final dailyRemaining = stillPending - amount;
-            if (dailyRemaining <= 0) {
-              _pendingSeconds.remove(dayEntry.key);
-            } else {
-              _pendingSeconds[dayEntry.key] = dailyRemaining;
-            }
-            final categories = _pendingCategorySeconds[dayEntry.key];
-            final current = categories?[categoryEntry.key];
-            if (categories != null && current != null) {
-              current.seconds -= amount;
-              if (current.seconds <= 0) categories.remove(categoryEntry.key);
-              if (categories.isEmpty) {
-                _pendingCategorySeconds.remove(dayEntry.key);
-              }
-            }
+            _reconcilePendingCategoryEntry(
+              dayEntry.key,
+              categoryEntry.key,
+              amount,
+            );
           }
         }
-      } catch (_) {
+      } catch (error) {
         // Keep uncommitted seconds in memory so the next flush can retry.
+        writeFailed = true;
+        if (!_hasPendingFocusHistoryWriteFailure) {
+          _hasPendingFocusHistoryWriteFailure = true;
+          if (hasListeners) notifyListeners();
+        }
+        debugPrint(
+          'Could not save pending focus time; it will be retried: $error',
+        );
       }
       if (wroteSeconds) {
         await _reloadToday(_focusDate);
+      }
+      if (!writeFailed && _hasPendingFocusHistoryWriteFailure) {
+        _hasPendingFocusHistoryWriteFailure = false;
+        if (hasListeners) notifyListeners();
       }
     }();
     _flushInProgress = flush;
@@ -345,6 +364,28 @@ class FocusTimerState extends ChangeNotifier {
     }
   }
 
+  void _reconcilePendingCategoryEntry(
+    DateTime day,
+    int categoryId,
+    int amount,
+  ) {
+    final stillPending = _pendingSeconds[day] ?? 0;
+    final dailyRemaining = stillPending - amount;
+    if (dailyRemaining <= 0) {
+      _pendingSeconds.remove(day);
+    } else {
+      _pendingSeconds[day] = dailyRemaining;
+    }
+
+    final categories = _pendingCategorySeconds[day];
+    final current = categories?[categoryId];
+    if (categories == null || current == null) return;
+
+    current.seconds -= amount;
+    if (current.seconds <= 0) categories.remove(categoryId);
+    if (categories.isEmpty) _pendingCategorySeconds.remove(day);
+  }
+
   bool _sameDay(DateTime first, DateTime second) =>
       first.year == second.year &&
       first.month == second.month &&
@@ -353,7 +394,7 @@ class FocusTimerState extends ChangeNotifier {
   @override
   void dispose() {
     _ticker?.cancel();
-    _planner?.removeListener(_onPlannerChanged);
+    _focusHistorySource?.removeListener(_onFocusHistoryChanged);
     unawaited(_flushPending());
     super.dispose();
   }

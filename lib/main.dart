@@ -1,12 +1,3 @@
-// This is your app. It runs as it is: press run and you get the screen below.
-//
-// Nothing here is precious. Change the title, change the colors, delete the
-// counter, add your own screens. It exists so that the repository is a working
-// Flutter app from minute one instead of an empty folder.
-//
-// Everything in this file is Module 4 and 5 material: StatelessWidget,
-// StatefulWidget, setState, Scaffold, AppBar, Column, Card, FilledButton.
-
 import 'package:device_preview/device_preview.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb, kReleaseMode;
 import 'package:flutter/material.dart';
@@ -25,7 +16,7 @@ import 'services/onboarding_preferences.dart';
 import 'state/planner_state.dart';
 import 'state/focus_timer_state.dart';
 import 'widgets/planner_load_gate.dart';
-import 'widgets/responsive_app_viewport.dart';
+import 'widgets/navigation/responsive_app_viewport.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,7 +42,8 @@ Future<void> main() async {
           ),
           ChangeNotifierProxyProvider<PlannerState, FocusTimerState>(
             create: (_) => FocusTimerState(customPresets: customFocusPresets),
-            update: (_, planner, timer) => timer!..attachPlannerState(planner),
+            update: (_, planner, timer) =>
+                timer!..attachFocusHistorySource(planner),
           ),
         ],
         child: MyApp(initialRoute: initialRoute, firstRun: !completed),

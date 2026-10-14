@@ -31,7 +31,7 @@ void main() {
     );
     planner = PlannerState(
       repository: PlannerRepository(databaseHelper: databaseHelper),
-      autoSyncCanvasOnStartup: false,
+      autoSyncCalendarsOnStartup: false,
     );
     await planner.initialize();
   });

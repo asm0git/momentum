@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/app_theme.dart';
-import 'package:momentum/widgets/add_item_popup.dart';
+import 'package:momentum/widgets/item_editor/add_item_popup.dart';
 
 void main() {
   testWidgets('new category actions use the shared popup button typography', (

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/data/database_helper.dart';
+import 'package:momentum/data/focus_history_repository.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
 import 'package:path/path.dart' as p;
@@ -11,6 +12,7 @@ void main() {
   late Directory tempDirectory;
   late DatabaseHelper helper;
   late PlannerRepository repository;
+  late FocusHistoryRepository focusRepository;
 
   setUpAll(() => sqfliteFfiInit());
 
@@ -22,6 +24,7 @@ void main() {
       seedOnCreate: false,
     );
     repository = PlannerRepository(databaseHelper: helper);
+    focusRepository = FocusHistoryRepository(databaseHelper: helper);
   });
 
   tearDown(() async {
@@ -70,7 +73,7 @@ void main() {
         databasePath: legacyPath,
         seedOnCreate: false,
       );
-      final migrated = PlannerRepository(databaseHelper: migratedHelper);
+      final migrated = FocusHistoryRepository(databaseHelper: migratedHelper);
       expect(
         await migrated.getFocusSecondsForDate(DateTime(2026, 10, 12)),
         2700,
@@ -97,20 +100,28 @@ void main() {
       categoryTitle: category.title,
       categoryIcon: category.iconName,
     );
-    await repository.addFocusSeconds(
+    await focusRepository.addFocusSeconds(
       DateTime(2026, 10, 12, 23, 30),
       600,
       selection,
     );
-    await repository.addFocusSeconds(DateTime(2026, 10, 18, 8), 900, selection);
-    await repository.addFocusSeconds(DateTime(2026, 10, 19), 120, selection);
+    await focusRepository.addFocusSeconds(
+      DateTime(2026, 10, 18, 8),
+      900,
+      selection,
+    );
+    await focusRepository.addFocusSeconds(
+      DateTime(2026, 10, 19),
+      120,
+      selection,
+    );
 
-    final daily = await repository.getFocusTotalsForRange(
+    final daily = await focusRepository.getFocusTotalsForRange(
       DateTime(2026, 10, 12),
       DateTime(2026, 10, 18),
     );
     expect(daily.values.fold<int>(0, (sum, value) => sum + value), 1500);
-    final categories = await repository.getFocusCategoryTotalsForRange(
+    final categories = await focusRepository.getFocusCategoryTotalsForRange(
       DateTime(2026, 10, 12),
       DateTime(2026, 10, 18),
     );
@@ -121,7 +132,7 @@ void main() {
       category.id!,
       disposition: CategoryDeleteDisposition.deleteItems,
     );
-    final historical = await repository.getFocusCategoryTotalsForRange(
+    final historical = await focusRepository.getFocusCategoryTotalsForRange(
       DateTime(2026, 10, 12),
       DateTime(2026, 10, 18),
     );

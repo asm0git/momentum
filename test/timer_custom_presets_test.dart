@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/app_theme.dart';
 import 'package:momentum/data/pomodoro_preset.dart';
+import 'package:momentum/data_models.dart';
 import 'package:momentum/screens/timer_screen.dart';
 import 'package:momentum/services/focus_preset_preferences.dart';
 import 'package:momentum/state/focus_timer_state.dart';
+import 'package:momentum/state/focus_history_source.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:momentum/widgets/pill_action_button.dart';
-import 'package:momentum/widgets/focus_preset.dart';
+import 'package:momentum/widgets/timer/focus_preset.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -87,4 +89,86 @@ void main() {
     expect(find.text('That preset already exists.'), findsOneWidget);
     expect(focusTimer.customPresets, [preset, existingPreset]);
   });
+
+  test('invalid saved presets fall back to an empty list', () async {
+    SharedPreferences.setMockInitialValues({
+      'focus_timer_custom_presets': '{invalid json',
+    });
+
+    expect(await FocusPresetPreferences.load(), isEmpty);
+  });
+
+  testWidgets('focus history failures stay visible until retry succeeds', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 10, 14, 10);
+    final source = _FocusHistorySource()..failWrites = true;
+    final timer = FocusTimerState(
+      workMinutes: 1,
+      clock: () => now,
+      startTicker: false,
+    )..attachFocusHistorySource(source);
+    addTearDown(source.dispose);
+    addTearDown(timer.dispose);
+
+    timer.toggleRunning();
+    now = now.add(const Duration(seconds: 5));
+    await timer.tickForTesting();
+    timer.toggleRunning();
+    await timer.retryPendingFocusHistoryWrite();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => PlannerState()),
+          ChangeNotifierProvider.value(value: timer),
+        ],
+        child: MaterialApp(theme: appTheme, home: const TimerScreen()),
+      ),
+    );
+
+    const failureMessage =
+        'Focus time is not saved yet. It is still available to retry.';
+    expect(find.text(failureMessage), findsOneWidget);
+    expect(timer.totalFocusSecondsToday, 5);
+
+    source.failWrites = false;
+    await tester.tap(find.byKey(const ValueKey('timer-retry-focus-history')));
+    await tester.pumpAndSettle();
+
+    expect(find.text(failureMessage), findsNothing);
+    expect(timer.hasPendingFocusHistoryWriteFailure, isFalse);
+    expect(source.persistedSeconds, 5);
+  });
+}
+
+class _FocusHistorySource extends ChangeNotifier implements FocusHistorySource {
+  bool failWrites = false;
+  int persistedSeconds = 0;
+  int _revision = 0;
+
+  @override
+  int get focusHistoryRevision => _revision;
+
+  @override
+  Future<void> addFocusSeconds(
+    DateTime date,
+    int seconds,
+    FocusTaskSelection selection,
+  ) async {
+    if (failWrites) throw StateError('Simulated focus history failure');
+    persistedSeconds += seconds;
+    _revision++;
+    notifyListeners();
+  }
+
+  @override
+  Future<int> getFocusSecondsForDate(DateTime date) async => persistedSeconds;
+
+  @override
+  FocusTaskSelection? eventFocusSelectionAt(DateTime instant) => null;
+
+  @override
+  DateTime? nextEventFocusBoundaryAfter(DateTime instant, DateTime through) =>
+      null;
 }

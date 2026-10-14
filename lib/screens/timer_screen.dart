@@ -9,15 +9,15 @@ import '../data_models.dart';
 import '../navigation_destinations.dart';
 import '../state/focus_timer_state.dart';
 import '../state/planner_state.dart';
-import '../widgets/bottom_navigation_bar.dart';
-import '../widgets/clock.dart';
-import '../widgets/estimated_duration_picker.dart';
-import '../widgets/focus_preset.dart';
-import '../widgets/item_actions.dart';
-import '../widgets/primary_app_bar.dart';
+import '../widgets/navigation/bottom_navigation_bar.dart';
+import '../widgets/timer/clock.dart';
+import '../widgets/item_editor/estimated_duration_picker.dart';
+import '../widgets/timer/focus_preset.dart';
+import '../widgets/planner/item_actions.dart';
+import '../widgets/navigation/primary_app_bar.dart';
 import '../widgets/pill_action_button.dart';
-import '../widgets/task_list_container.dart';
-import '../widgets/task_widget.dart';
+import '../widgets/planner/task_list_container.dart';
+import '../widgets/planner/task_widget.dart';
 import '../widgets/selector.dart' as app_selector;
 import '../widgets/blurred_dialog.dart';
 
@@ -109,6 +109,27 @@ class _TimerScreenState extends State<TimerScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (focusTimer.hasPendingFocusHistoryWriteFailure)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.screenEdgePadding,
+                          vertical: AppSpacing.xs,
+                        ),
+                        child: MaterialBanner(
+                          content: const Text(
+                            'Focus time is not saved yet. It is still available to retry.',
+                          ),
+                          leading: const Icon(Icons.sync_problem_outlined),
+                          actions: [
+                            TextButton(
+                              key: const ValueKey('timer-retry-focus-history'),
+                              onPressed:
+                                  focusTimer.retryPendingFocusHistoryWrite,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
                     _blurWhenRunning(
                       focusTimer.isRunning,
                       SizedBox(

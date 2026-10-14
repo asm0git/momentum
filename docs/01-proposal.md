@@ -41,10 +41,10 @@ planner login to use its local task, event, timer, or insights features.
   mapping, and background-notification work beyond the current web-first scope.
 - **Automatic cross-device planner sync and shared accounts:** Tasks, events,
   categories, and focus records remain in the user's local database. The
-  calendar Worker supports provider sign-in, but it is not a cloud account or
-  sync service for planner data. This keeps the current app simpler, with the
-  tradeoff that planner data is not automatically shared or synchronized across
-  devices.
+  calendar Worker stores the encrypted feed links used for calendar imports,
+  but it is not a user account or a sync service for planner data. This keeps
+  the current app simpler, with the tradeoff that planner data is not
+  automatically shared or synchronized across devices.
 - **Writing back to external calendars:** Provider access is intended for
   read-only import. This avoids granting calendar-edit permissions and keeps
   changes in Momentum separate from the original provider calendar.
@@ -64,23 +64,22 @@ synchronized to another device.
 | Events | Title, start and end dates/times, all-day state, location, notes, recurrence, and import source identifiers when applicable | Local SQLite database; browser IndexedDB on Web |
 | Focus totals | Daily focus seconds and totals by category | Local SQLite database; browser IndexedDB on Web |
 | Linked-calendar details | Provider, display name, account email when supplied, provider address, associated category, and last sync time | Local SQLite database; browser IndexedDB on Web |
-| OAuth tokens | Provider access and refresh tokens used to sync a connected calendar | The Cloudflare Worker stores encrypted tokens in D1. The encryption key is kept in Worker secrets, not in the Flutter app or planner database. |
+| Published calendar feed links | Read-only `.ics` URLs used to import calendar items | The Cloudflare Worker encrypts each link with `TOKEN_ENCRYPTION_KEY` before storing it in D1. The key is kept in Worker secrets, not in the Flutter app or planner database. |
 
 
 ## Risks
 
-The external-calendar risk identified in the earlier proposal proved greater
-than expected: the OAuth flows could be implemented, but provider registration
-depends on university administrators. A separate risk became clearer during
-the Web implementation: locally stored data are tied to a browser and site
-origin. The status and next steps below are assessed as of **2026-10-11**.
+The earlier proposal considered OAuth flows, but those required provider app
+registration. The implemented connection flow instead uses published calendar
+feeds. A separate risk became clearer during the Web implementation: locally
+stored data are tied to a browser and site origin. The status and next steps
+below are assessed as of **2026-10-14**.
 
 | Risk | Status and first step |
 | --- | --- |
-| Provider sign-in depends on external approval and credentials. | Google Calendar requires valid OAuth configuration. Canvas and Outlook remain unavailable in the current university setup. **First step:** keep those providers clearly marked unavailable and request registration approval only if the university permits it. **Review point:** 2026-10-11; no approval has been obtained. |
-| Local planner data can be lost or appear missing when browser data are cleared or the site origin changes. | IndexedDB is scoped to the browser profile and origin, including the port, and planner data do not have app-level encryption or automatic cloud backup. **First step:** explain the storage limit and advise use of the same browser and address. **Review point:** 2026-10-11; consider backup/export as future work. |
+| Anyone with a published calendar feed link may be able to read that calendar. | Treat the link like a password. The Worker validates feed URLs and encrypts stored links in D1. Disconnecting removes Momentum's stored copy but does not revoke the provider-issued link. **First step:** remind users to keep links private and revoke or regenerate a link through the provider if it is exposed. |
+| Local planner data can be lost or appear missing when browser data are cleared or the site origin changes. | IndexedDB is scoped to the browser profile and origin, including the port, and planner data do not have app-level encryption or automatic cloud backup. **First step:** explain the storage limit and advise use of the same browser and address. **Review point:** 2026-10-14; consider backup/export as future work. |
 | The Web database adapter adds a browser compatibility dependency. | The project uses `sqflite_common_ffi_web`. **First step:** check persistence in supported browsers when the app or adapter is updated. |
-| Calendar tokens require careful server-side handling. | OAuth tokens are encrypted before storage in Worker-side D1. **First step:** keep provider secrets and the encryption key in Worker secret settings or ignored local configuration, never in public source files or Flutter build arguments. |
 
 
 ## Changes since the last version
@@ -88,7 +87,7 @@ origin. The status and next steps below are assessed as of **2026-10-11**.
 | Date | Section | Earlier plan | Final version and reason |
 | --- | --- | --- | --- |
 | 2026-10-09 | Core features | The AI Daily Planner was listed as an MVP feature. | The AI Planner was removed from this version and replaced with Insights, which summarizes focus activity recorded by the app. This gives the finished release a feature grounded in data Momentum already collects, while leaving AI planning as a possible future addition when time allows. |
-| 2026-10-07 | Data storage | The plan selected `sqflite` for a local database, with web support still undecided. | Planner records use SQLite, with the web database stored in IndexedDB. The Worker and D1 are used for calendar connections and encrypted OAuth tokens, not for syncing planner records. IndexedDB makes the SQLite approach usable in the browser while keeping planner data separate from the calendar sign-in service. |
+| 2026-10-07 | Data storage | The plan selected `sqflite` for a local database, with web support still undecided. | Planner records use SQLite, with the web database stored in IndexedDB. The earlier OAuth proposal was superseded by published `.ics` feed links; the Worker encrypts those links in D1 and does not sync planner records. IndexedDB makes the SQLite approach usable in the browser while keeping planner data separate from calendar connections. |
 | 2026-10-01 | MVP features | A Pomodoro timer was considered as a simpler alternative to more complex planned features. | The Pomodoro timer was added to the MVP because it was more practical to implement and directly supports focused work through structured work and break sessions. It remains in the final app as the Timer screen, with focus time also informing Insights. |
 | 2026-09-20 | Stretch goals | Location-based reminders were proposed as a stretch goal. | Location-based reminders remain out of scope because they require location and background-notification support beyond the current web-first version. Keeping them out of the final feature list avoids promising behavior that has not been built or validated. |
 

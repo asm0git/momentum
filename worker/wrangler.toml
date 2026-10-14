@@ -43,7 +43,7 @@ namespace_id = "2026101003"
   period = 60
 
 [triggers]
-# Delete expired sessions and legacy OAuth state every day (UTC).
+# Delete expired sessions and their calendar feeds every day (UTC).
 crons = ["0 3 * * *"]
 
 [observability]

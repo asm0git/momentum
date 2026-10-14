@@ -54,6 +54,48 @@ Momentum is a study-planning app that helps students organize tasks, events, foc
 
 If you just want to use Momentum, open the [hosted app](https://momentum-canvas.aerith-catap.workers.dev). You do not need to download the project or install Flutter, Node.js, or Cloudflare tools. To connect a calendar, choose **Add calendars** and paste its published `.ics` link. Your planner data stays in the browser you use for this site.
 
+#### Find your calendar link
+
+An **ICS link**, also called an **iCal link** or **calendar feed**, is a web address that lets Momentum read your calendar. You only need to copy and paste it. Use a computer browser for the steps below; the mobile apps may not show these settings.
+
+Keep the link private: anyone who has it may be able to read your calendar. Paste the full link into Momentum, including anything after `.ics`, such as a `?` and the text that follows it. Momentum needs the link, rather than a downloaded calendar file or the address of your normal calendar page.
+
+#### Canvas
+
+1. Open your school's Canvas website, such as [HAU Canvas](https://hau.instructure.com), and sign in with your school account.
+2. Click **Calendar** in the main menu on the left. Use the main Canvas calendar, rather than an individual course page.
+3. Look in the calendar's right sidebar, below the list of courses, and click **Calendar Feed**. If it is not visible, scroll down or make the browser window wider.
+4. Copy the complete calendar feed link from the window that appears.
+5. Return to Momentum, open **Add calendars**, and select **Canvas**.
+6. Paste the link into the calendar-link field and select **Connect Canvas calendar**.
+
+**Cannot find Calendar Feed?** Ask your school's Canvas support team whether calendar feeds are available for your account. Canvas feeds contain assignments and events; Canvas To Do items are excluded. For pictures of the steps, see the [official Canvas feed guide](https://community.instructure.com/en/kb/articles/662804-how-do-i-view-the-calendar-ical-feed-to-subscribe-to-an-external-calendar).
+
+#### Outlook
+
+1. Open Outlook in a browser and sign in. Use [Outlook on the web](https://outlook.office.com) for a school or work account, or [Outlook.com](https://outlook.live.com) for a personal account.
+2. Click the **Calendar** icon in the left navigation.
+3. Click the **Settings** gear near the top right. In the settings window, choose **Calendar**, then **Shared calendars**. Some versions show **Shared calendars** directly.
+4. Scroll to **Publish a calendar**. Choose the calendar you want to import, usually **Calendar**.
+5. Choose the amount of information to share. To include event names, locations, and descriptions in Momentum, select **Can view all details**. Publishing makes those details available to anyone with the generated link.
+6. Click **Publish**. Outlook will show an **HTML** link and an **ICS** link. Copy the **ICS** link.
+7. In Momentum, open **Add calendars**, select **Outlook**, paste the link, and select **Connect Outlook calendar**.
+
+**No publishing option?** Your school or workplace may restrict calendar sharing. Ask its IT team whether calendar publishing is allowed. See the publishing section in [Microsoft's official guide](https://support.microsoft.com/en-us/outlook/share-your-calendar-in-outlook-on-the-web).
+
+#### Google Calendar
+
+1. Open [Google Calendar](https://calendar.google.com) in a computer browser and sign in to the account containing your calendar.
+2. Click the **Settings** gear near the top right, then choose **Settings**.
+3. In the left panel, find **Settings for my calendars** and click the name of the calendar you want to import.
+4. Select **Integrate calendar** and scroll to **Secret address in iCal format**.
+5. Copy the **Secret address in iCal format**. You do not need to make your calendar public.
+6. In Momentum, open **Add calendars**, select **Google Calendar**, paste the address, and select **Connect Google Calendar**.
+
+**No Secret address?** A school or work account's administrator may have disabled it. Ask the administrator for help. If you accidentally share the address, use **Reset** in Google Calendar to invalidate it, then reconnect Momentum with the new address. See [Google's official iCal instructions](https://support.google.com/calendar/answer/37648?hl=en).
+
+After connecting, check Momentum's **Calendar** or **To-Do** screen for imported items. The provider panel shows the last sync time and a **Sync now** button. If connecting fails, check that you copied the complete feed link, selected the matching provider, and kept the calendar published. You can still use Momentum's tasks, events, and timer without connecting a calendar.
+
 ### Set up your own copy
 
 Use this path if you want to run Momentum on your computer, change the code, use your own calendar feeds, or publish your own version. You need Git, Flutter with a Dart SDK version satisfying `pubspec.yaml` (`>=3.12.0 <4.0.0`), and Node.js with npm.
@@ -181,7 +223,6 @@ Provider logos identify the calendar services represented in the app; they do no
 - [`sqflite`, `sqflite_common_ffi`, and `sqflite_common_ffi_web`](https://github.com/tekartik/sqflite): Alexandre Roux / Tekartik and contributors. BSD 2-Clause
 - [`shared_preferences`](https://pub.dev/packages/shared_preferences): The Flutter Authors. BSD 3-Clause
 - [`device_preview`](https://github.com/aloisdeniel/flutter_device_preview): Aloïs Deniel and contributors. MIT
-- [`cupertino_icons`](https://pub.dev/packages/cupertino_icons): Vladimir Kharlampidi and contributors. MIT; covers the Cupertino icon font supplied by this package
 - [`sqlite3.dart`](https://github.com/simolus3/sqlite3.dart): Simon Binder and contributors. MIT
 - [SQLite](https://www.sqlite.org/copyright.html): SQLite authors. Public domain; used by the database, including the WebAssembly build in `web/sqlite3.wasm`
 - [Wrangler](https://github.com/cloudflare/workers-sdk) and [`@cloudflare/workers-types`](https://github.com/cloudflare/workerd): Cloudflare and contributors. MIT or Apache 2.0

@@ -88,6 +88,15 @@ and skip to step 3.
    you are logged in, return to the terminal. Keep using this terminal from
    inside the `worker` folder for the next steps.
 
+For development, run the Worker checks from this folder before deploying:
+
+```sh
+npm test
+npm run typecheck
+```
+
+The first command runs the Worker tests. The second checks the TypeScript code.
+
 ### How to open the settings files
 
 In Visual Studio Code, choose **File > Open Folder**, select the `momentum`
@@ -142,6 +151,11 @@ once for this Momentum copy.
 
    If Wrangler asks whether it should apply the migrations, type `y` and press
    Enter. Look for a success message before continuing.
+
+   Migrations run in order. Migration `0004` removes the unused Google and
+   Outlook OAuth token tables. The old Canvas OAuth tables remain in the
+   schema for migration compatibility, but the Worker no longer uses that
+   connection flow. Calendar connections use published feed links.
 
    The `--local` option creates a database for testing on your computer. The
    separate Cloudflare database is used only when you deploy the app online.

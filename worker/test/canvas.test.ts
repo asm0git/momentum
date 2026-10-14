@@ -1,114 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  fetchCanvasPages,
-  mapCanvasAssignment,
-  mapCanvasEvent,
-  normalizeCanvasSiteUrl,
-  splitContextBatches,
-} from '../src/canvas';
 import worker, {
-  fetchGooglePages,
-  fetchGraphPages,
-  mapGoogleEvent,
-  mapOutlookEvent,
   cleanupExpiredState,
   type Env,
 } from '../src/index';
 
-describe('Canvas import helpers', () => {
-  it('only accepts the configured HTTPS Canvas host', () => {
-    expect(
-      normalizeCanvasSiteUrl('https://canvas.school.edu', 'canvas.school.edu')
-        .origin,
-    ).toBe('https://canvas.school.edu');
-    expect(() =>
-      normalizeCanvasSiteUrl('https://other.school.edu', 'canvas.school.edu'),
-    ).toThrow(/not enabled/);
-    expect(() =>
-      normalizeCanvasSiteUrl('http://canvas.school.edu', 'canvas.school.edu'),
-    ).toThrow(/not enabled/);
-  });
+describe('Calendar provider routes', () => {
+  it('does not dispatch an unsupported provider segment', async () => {
+    const request = new Request('https://momentum.example.com/api/unknown/status');
+    const assets = { fetch: vi.fn(async () => new Response('asset')) };
 
-  it('maps timed assignment dates with the timezone offset intact as an instant', () => {
-    const assignment = mapCanvasAssignment({
-      id: 5,
-      context_code: 'course_21',
-      title: 'Due item',
-      start_at: '2026-10-12T23:00:00-04:00',
-      assignment: {
-        id: 5,
-        name: 'Essay',
-        due_at: '2026-10-12T23:00:00-04:00',
-        description: '<p>Read prompt</p>',
-      },
-    });
-    expect(assignment).toEqual({
-      externalId: 'assignment:course_21:5',
-      title: 'Essay',
-      due: '2026-10-13T03:00:00.000Z',
-      description: '<p>Read prompt</p>',
-    });
-    expect(mapCanvasAssignment({ title: 'Undated', id: 7 })).toBeNull();
-  });
+    const response = await worker.fetch(request, { ASSETS: assets } as unknown as Env);
 
-  it('maps all-day and timed events with stable source identifiers', () => {
-    expect(
-      mapCanvasEvent({
-        id: 17,
-        title: 'Holiday',
-        all_day: true,
-        all_day_date: '2026-12-25',
-      }),
-    ).toEqual({
-      externalId: 'event:17',
-      title: 'Holiday',
-      start: '2026-12-25T00:00:00',
-      end: '2026-12-25T00:00:00',
-      allDay: true,
-      description: '',
-      location: null,
-    });
-    expect(
-      mapCanvasEvent({
-        id: 18,
-        title: 'Seminar',
-        start_at: '2026-10-12T23:00:00-04:00',
-        end_at: '2026-10-13T00:00:00-04:00',
-        location_name: 'Hall B',
-      })?.start,
-    ).toBe('2026-10-13T03:00:00.000Z');
-  });
-
-  it('batches calendar contexts at Canvas limits', () => {
-    const contexts = Array.from({ length: 23 }, (_, index) => `course_${index}`);
-    const batches = splitContextBatches(contexts, 10);
-    expect(batches.map((batch) => batch.length)).toEqual([10, 10, 3]);
-    expect(batches.flat()).toEqual(contexts);
-  });
-
-  it('fetches every Canvas pagination page and sends the bearer token', async () => {
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify([{ id: 1 }]), {
-          headers: {
-            Link: '<https://canvas.school.edu/api/v1/courses?page=2>; rel="next", <https://canvas.school.edu/api/v1/courses?page=1>; rel="first"',
-          },
-        }),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify([{ id: 2 }])));
-    const rows = await fetchCanvasPages<{ id: number }>(
-      new URL('https://canvas.school.edu'),
-      'access-token',
-      '/api/v1/courses?page=1',
-      fetcher,
-    );
-    expect(rows.map((row) => row.id)).toEqual([1, 2]);
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher.mock.calls[0][1]?.headers).toEqual({
-      Authorization: 'Bearer access-token',
-    });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('asset');
+    expect(assets.fetch).toHaveBeenCalledWith(request);
   });
 
   it('rejects the retired Canvas OAuth callback', async () => {
@@ -122,25 +28,6 @@ describe('Canvas import helpers', () => {
     expect(await response.json()).toEqual({
       error: 'Calendar OAuth is no longer used.',
     });
-  });
-
-  it('rejects a pagination link outside the configured Canvas host', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
-      new Response(JSON.stringify([{ id: 1 }]), {
-        headers: {
-          Link: '<https://attacker.example/api/v1/steal>; rel="next"',
-        },
-      }),
-    );
-    await expect(
-      fetchCanvasPages(
-        new URL('https://canvas.school.edu'),
-        'access-token',
-        '/api/v1/courses',
-        fetcher,
-      ),
-    ).rejects.toThrow(/unsafe pagination/);
-    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it('directs Google users to use a published feed instead of OAuth', async () => {
@@ -171,7 +58,7 @@ describe('Canvas import helpers', () => {
     const apiLimiter = { limit: vi.fn().mockResolvedValue({ success: true }) };
     const oauthLimiter = { limit: vi.fn().mockResolvedValue({ success: false }) };
     const response = await worker.fetch(
-      new Request('https://momentum.example.com/api/google/oauth/start', {
+      new Request('https://momentum.example.com/api/canvas/oauth/start', {
         headers: { 'cf-connecting-ip': '198.51.100.10' },
       }),
       {
@@ -208,7 +95,66 @@ describe('Canvas import helpers', () => {
     expect(syncLimiter.limit).toHaveBeenCalledWith({ key: 'sync:session-123' });
   });
 
-  it('cleans expired OAuth state, connections, and sessions in one D1 batch', async () => {
+  it('rejects a state-changing browser-session request without an Origin', async () => {
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/google/sync', {
+        method: 'POST',
+        headers: { Cookie: '__Host-momentum_session=session-123' },
+      }),
+      { APP_ORIGIN: 'https://momentum.example.com' } as Env,
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: 'Origin header required for state-changing requests.',
+    });
+  });
+
+  it('checks mutation Origin against APP_ORIGIN, not the Worker request URL', async () => {
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/google/sync', {
+        method: 'POST',
+        headers: { Origin: 'https://momentum.example.com' },
+      }),
+      { APP_ORIGIN: 'https://app.momentum.example.com' } as Env,
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      error: 'Cross-origin request rejected.',
+    });
+  });
+
+  it('returns a generic server error for unexpected internal failures', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const apiLimiter = {
+      limit: vi.fn().mockRejectedValue(new Error('database credentials leaked')),
+    };
+
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/canvas/status'),
+      {
+        APP_ORIGIN: 'https://momentum.example.com',
+        API_RATE_LIMITER: apiLimiter,
+      } as unknown as Env,
+    );
+
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(payload).toEqual({ error: 'Calendar request failed.' });
+    expect(JSON.stringify(payload)).not.toContain('database credentials leaked');
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    const logEntry = JSON.parse(errorLog.mock.calls[0][0] as string);
+    expect(logEntry).toMatchObject({
+      event: 'request_failed',
+      method: 'GET',
+      path: '/api/canvas/status',
+      error_type: 'Error',
+    });
+    expect(logEntry).not.toHaveProperty('message');
+  });
+
+  it('cleans expired calendar feeds and sessions in one D1 batch', async () => {
     const prepared: Array<{ sql: string; values: unknown[] }> = [];
     const db = {
       prepare(sql: string) {
@@ -229,88 +175,13 @@ describe('Canvas import helpers', () => {
     await cleanupExpiredState(db);
 
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(prepared).toHaveLength(6);
+    expect(prepared).toHaveLength(2);
     expect(prepared.map(({ sql }) => sql).join('\n')).toContain(
-      'DELETE FROM provider_oauth_states WHERE expires_at <= ?',
+      'DELETE FROM calendar_ics_feeds',
     );
-    expect(prepared.map(({ sql }) => sql).join('\n')).toContain(
-      'DELETE FROM provider_connections',
-    );
+    expect(prepared.map(({ sql }) => sql).join('\n')).not.toContain('oauth_states');
+    expect(prepared.map(({ sql }) => sql).join('\n')).not.toContain('canvas_connections');
     expect(prepared.every(({ values }) => values.length === 1)).toBe(true);
   });
 
-  it('maps Google all-day occurrences with stable per-event IDs', () => {
-    expect(
-      mapGoogleEvent('primary@example.test', {
-        id: 'series_instance_20261012',
-        recurringEventId: 'series',
-        summary: 'Lecture',
-        start: { date: '2026-10-12' },
-        end: { date: '2026-10-13' },
-      }),
-    ).toEqual({
-      externalId: 'primary@example.test:series_instance_20261012',
-      title: 'Lecture',
-      start: '2026-10-12T00:00:00',
-      end: '2026-10-12T00:00:00',
-      allDay: true,
-      description: '',
-      location: null,
-    });
-  });
-
-  it('maps Outlook UTC dates, notes, locations, and all-day ranges', () => {
-    expect(
-      mapOutlookEvent('calendar-1', {
-        id: 'evt-8',
-        subject: 'Project day',
-        body: { content: 'Bring the draft' },
-        start: { dateTime: '2026-10-12T00:00:00.0000000', timeZone: 'UTC' },
-        end: { dateTime: '2026-10-13T00:00:00.0000000', timeZone: 'UTC' },
-        isAllDay: true,
-        location: { displayName: 'Library' },
-      }),
-    ).toEqual({
-      externalId: 'calendar-1:evt-8',
-      title: 'Project day',
-      start: '2026-10-12T00:00:00',
-      end: '2026-10-12T00:00:00',
-      allDay: true,
-      description: 'Bring the draft',
-      location: 'Library',
-    });
-  });
-
-  it('follows Google and Microsoft pagination links', async () => {
-    const fetcher = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ items: [{ id: 'a' }], nextPageToken: 'next' }),
-        ),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: 'b' }] })));
-    await expect(
-      fetchGooglePages(
-        'https://www.googleapis.com/calendar/v3/users/me/calendarList',
-        'token',
-      ),
-    ).resolves.toEqual([{ id: 'a' }, { id: 'b' }]);
-    fetcher
-      .mockReset()
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            value: [{ id: 'a' }],
-            '@odata.nextLink':
-              'https://graph.microsoft.com/v1.0/me/events?$skip=1',
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify({ value: [{ id: 'b' }] })));
-    await expect(
-      fetchGraphPages('https://graph.microsoft.com/v1.0/me/events', 'token'),
-    ).resolves.toEqual([{ id: 'a' }, { id: 'b' }]);
-    fetcher.mockRestore();
-  });
 });
