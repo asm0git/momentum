@@ -194,8 +194,16 @@ Canvas, Google Calendar, and Outlook use read-only published `.ics` links, which
 
 ## Status and what is next
 
-- Canvas, Google Calendar, and Outlook connect through published `.ics` calendar links, so provider app registration is not required.
-- The AI Planner from the original plan was removed from this version and replaced with the Insights screen. It may be added in a future version when time allows.
+**Current status**
+
+Momentum is fully functional within its current scope: users can manage tasks and events, view recurring and multi-day items in the calendar, run focus sessions, review Insights, and import supported calendars. Canvas, Google Calendar, and Outlook connect through published `.ics` links without provider app registration. Some logic fixes and user experience improvements can still be made, but they do not materially affect the app's current core functionality.
+
+**What is next**
+
+- **AI planning:** bring back the AI Planner from the original proposal to help organize tasks and suggest schedules. Insights serves as its replacement in the current version.
+- **Reminders:** add notifications or location-based reminders for upcoming tasks, events, and deadlines.
+- **Account system:** introduce sign-in, with planner backup and synchronization across devices.
+- **Logic improvements:** refine scheduling, recurrence, and calendar synchronization as more use cases are identified.
 
 ## Credits
 
