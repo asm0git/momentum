@@ -88,22 +88,30 @@ async function enforcePublicApiLimits(
     (url.pathname.endsWith('/sync') || url.pathname.endsWith('/connect'));
   const edgeIp = request.headers.get('cf-connecting-ip') ?? 'unknown-client';
 
-  if (env.API_RATE_LIMITER) {
-    const { success } = await env.API_RATE_LIMITER.limit({ key: `api:${edgeIp}` });
-    if (!success) return tooManyRequests(url.pathname);
+  if (await isRateLimited(env.API_RATE_LIMITER, `api:${edgeIp}`)) {
+    return tooManyRequests(url.pathname);
   }
 
-  if (isOAuthStart && env.OAUTH_RATE_LIMITER) {
-    const { success } = await env.OAUTH_RATE_LIMITER.limit({ key: `oauth:${edgeIp}` });
-    if (!success) return tooManyRequests(url.pathname);
+  if (isOAuthStart && await isRateLimited(env.OAUTH_RATE_LIMITER, `oauth:${edgeIp}`)) {
+    return tooManyRequests(url.pathname);
   }
 
   if (isSync && env.SYNC_RATE_LIMITER) {
     const sessionId = readCookie(request, SESSION_COOKIE) ?? edgeIp;
-    const { success } = await env.SYNC_RATE_LIMITER.limit({ key: `sync:${sessionId}` });
-    if (!success) return tooManyRequests(url.pathname);
+    if (await isRateLimited(env.SYNC_RATE_LIMITER, `sync:${sessionId}`)) {
+      return tooManyRequests(url.pathname);
+    }
   }
   return null;
+}
+
+async function isRateLimited(
+  limiter: RateLimit | undefined,
+  key: string,
+): Promise<boolean> {
+  if (!limiter) return false;
+  const { success } = await limiter.limit({ key });
+  return !success;
 }
 
 function tooManyRequests(path: string): Response {
