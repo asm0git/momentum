@@ -27,6 +27,19 @@ describe('iCalendar date and time helpers', () => {
     expect(parseDateTime(null)).toBeNull();
   });
 
+  it('rejects negative or overflowing time fields before date construction', () => {
+    for (const value of [
+      '20261014T-10000Z',
+      '20261014T12-100Z',
+      '20261014T1230-1Z',
+      '20261014T240000Z',
+      '20261014T126000Z',
+      '20261014T123061Z',
+    ]) {
+      expect(parseDateTime(property(value))).toBeNull();
+    }
+  });
+
   it('parses all-day dates and keeps their date-only representation', () => {
     const value = parseDateTime(property('20261014', { VALUE: 'DATE' }));
 

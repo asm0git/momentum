@@ -127,7 +127,9 @@ function isValidFields(fields: number[]): boolean {
   const date = new Date(Date.UTC(fields[0], fields[1] - 1, fields[2]));
   return date.getUTCFullYear() === fields[0] &&
     date.getUTCMonth() + 1 === fields[1] && date.getUTCDate() === fields[2] &&
-    fields[3] <= 23 && fields[4] <= 59 && fields[5] <= 60;
+    fields[3] >= 0 && fields[3] <= 23 &&
+    fields[4] >= 0 && fields[4] <= 59 &&
+    fields[5] >= 0 && fields[5] <= 60;
 }
 
 function zonedDate(

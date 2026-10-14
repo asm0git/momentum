@@ -75,4 +75,16 @@ describe('iCalendar recurrence expansion', () => {
     expect(occurrences.isRecurring).toBe(true);
     expect(occurrences.dates.map(dateKey)).toEqual(['20261019T090000']);
   });
+
+  it('does not default an explicit zero interval to daily recurrence', () => {
+    const occurrences = masterOccurrences(
+      dateTime('20261019T090000Z'),
+      'FREQ=DAILY;INTERVAL=0',
+      [],
+      new Date('2027-12-31T23:59:59Z'),
+    );
+
+    expect(occurrences.isRecurring).toBe(true);
+    expect(occurrences.dates.map(dateKey)).toEqual(['20261019T090000']);
+  });
 });

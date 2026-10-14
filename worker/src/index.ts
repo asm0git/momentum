@@ -42,8 +42,8 @@ export default {
         ...(calendarError?.diagnostics() ?? {}),
       }));
       return json(
-        { error: error instanceof Error ? error.message : 'Calendar request failed.' },
-        calendarError?.responseStatus ?? 400,
+        { error: calendarError?.message ?? 'Calendar request failed.' },
+        calendarError?.responseStatus ?? 500,
       );
     }
   },

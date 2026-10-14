@@ -125,6 +125,35 @@ describe('Calendar provider routes', () => {
     });
   });
 
+  it('returns a generic server error for unexpected internal failures', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const apiLimiter = {
+      limit: vi.fn().mockRejectedValue(new Error('database credentials leaked')),
+    };
+
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/canvas/status'),
+      {
+        APP_ORIGIN: 'https://momentum.example.com',
+        API_RATE_LIMITER: apiLimiter,
+      } as unknown as Env,
+    );
+
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(payload).toEqual({ error: 'Calendar request failed.' });
+    expect(JSON.stringify(payload)).not.toContain('database credentials leaked');
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    const logEntry = JSON.parse(errorLog.mock.calls[0][0] as string);
+    expect(logEntry).toMatchObject({
+      event: 'request_failed',
+      method: 'GET',
+      path: '/api/canvas/status',
+      error_type: 'Error',
+    });
+    expect(logEntry).not.toHaveProperty('message');
+  });
+
   it('cleans expired calendar feeds and sessions in one D1 batch', async () => {
     const prepared: Array<{ sql: string; values: unknown[] }> = [];
     const db = {

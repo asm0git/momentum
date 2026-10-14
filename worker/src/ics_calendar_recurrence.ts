@@ -71,10 +71,12 @@ function parseRuleExpansion(
 ): RuleExpansion | null {
   const frequency = parseRuleFrequency(rule.get('FREQ'));
   if (!frequency) return null;
+  const interval = positiveRuleValue(rule, 'INTERVAL', 1);
+  if (interval === null) return null;
   return {
     start,
     frequency,
-    interval: Math.max(1, numericRuleValue(rule, 'INTERVAL', 1)),
+    interval,
     countLimit: Math.max(0, numericRuleValue(rule, 'COUNT', 0)),
     until: parseRuleUntil(rule),
     weekdays: stringRuleList(rule, 'BYDAY'),
@@ -82,6 +84,17 @@ function parseRuleExpansion(
     months: numericRuleList(rule, 'BYMONTH'),
     rangeEnd,
   };
+}
+
+function positiveRuleValue(
+  rule: Map<string, string>,
+  name: string,
+  fallback: number,
+): number | null {
+  const value = rule.get(name);
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function numericRuleValue(
@@ -171,6 +184,61 @@ interface RuleDateFilters {
   months: number[];
 }
 
+interface RuleDateMetrics {
+  day: number;
+  month: number;
+  startMonth: number;
+  startDay: number;
+  weekday: number;
+  startWeekday: number;
+  daysSinceStart: number;
+  weeksSinceStart: number;
+  monthsSinceStart: number;
+  yearsSinceStart: number;
+}
+
+interface OptionalRuleFilter {
+  configured: boolean;
+  matches: boolean;
+}
+
+interface DailyRuleContext {
+  interval: number;
+  daysSinceStart: number;
+  weekdayFilter: OptionalRuleFilter;
+  monthDayFilter: OptionalRuleFilter;
+}
+
+interface WeeklyRuleContext {
+  interval: number;
+  weeksSinceStart: number;
+  weekday: number;
+  startWeekday: number;
+  weekdayFilter: OptionalRuleFilter;
+  monthDayFilter: OptionalRuleFilter;
+}
+
+interface MonthlyRuleContext {
+  interval: number;
+  monthsSinceStart: number;
+  day: number;
+  startDay: number;
+  weekdayFilter: OptionalRuleFilter;
+  monthDayFilter: OptionalRuleFilter;
+}
+
+interface YearlyRuleContext {
+  interval: number;
+  yearsSinceStart: number;
+  month: number;
+  startMonth: number;
+  day: number;
+  startDay: number;
+  hasMonthFilter: boolean;
+  weekdayFilter: OptionalRuleFilter;
+  monthDayFilter: OptionalRuleFilter;
+}
+
 function matchesRuleDate(
   fields: DateFields,
   initial: DateFields,
@@ -178,148 +246,143 @@ function matchesRuleDate(
 ): boolean {
   const [year, month, day] = fields;
   const [startYear, startMonth, startDay] = initial;
+  if (filters.months.length > 0 && !filters.months.includes(month)) return false;
+
   const current = new Date(Date.UTC(year, month - 1, day));
   const initialDate = new Date(Date.UTC(startYear, startMonth - 1, startDay));
-  const { frequency, interval, weekdays, monthDays, months } = filters;
-  const hasWeekdayFilter = weekdays.length > 0;
-  const hasMonthDayFilter = monthDays.length > 0;
-  const hasMonthFilter = months.length > 0;
-  const context: RuleDateContext = {
+  const metrics: RuleDateMetrics = {
     day,
     month,
     startMonth,
     startDay,
     weekday: current.getUTCDay(),
     startWeekday: initialDate.getUTCDay(),
-    interval,
-    daysSinceStart: Math.floor((current.getTime() - initialDate.getTime()) / 86_400_000),
+    daysSinceStart: Math.floor(
+      (current.getTime() - initialDate.getTime()) / 86_400_000,
+    ),
     weeksSinceStart: Math.floor(
       (weekStart(current) - weekStart(initialDate)) / MILLISECONDS_PER_WEEK,
     ),
     monthsSinceStart: (year - startYear) * 12 + month - startMonth,
     yearsSinceStart: year - startYear,
-    hasWeekdayFilter,
-    hasMonthDayFilter,
-    hasMonthFilter,
-    matchesWeekdayFilter: hasWeekdayFilter &&
-      weekdays.some((item) => matchesByDay(item, current)),
-    matchesMonthDayFilter: hasMonthDayFilter && monthDays.some((value) =>
-      day === (value > 0 ? value : new Date(Date.UTC(year, month, 0)).getUTCDate() + value + 1),
-    ),
-    isAllowedMonth: months.length === 0 || months.includes(month),
   };
+  const weekdayFilter = optionalRuleFilter(filters.weekdays, (item) =>
+    matchesByDay(item, current),
+  );
+  const monthDayFilter = optionalRuleFilter(filters.monthDays, (value) =>
+    day ===
+    (value > 0
+      ? value
+      : new Date(Date.UTC(year, month, 0)).getUTCDate() + value + 1),
+  );
 
-  return matchesFrequencyRule(frequency, context);
-}
-
-interface RuleDateContext {
-  day: number;
-  month: number;
-  startMonth: number;
-  startDay: number;
-  weekday: number;
-  startWeekday: number;
-  interval: number;
-  daysSinceStart: number;
-  weeksSinceStart: number;
-  monthsSinceStart: number;
-  yearsSinceStart: number;
-  hasWeekdayFilter: boolean;
-  hasMonthDayFilter: boolean;
-  hasMonthFilter: boolean;
-  matchesWeekdayFilter: boolean;
-  matchesMonthDayFilter: boolean;
-  isAllowedMonth: boolean;
-}
-
-function matchesFrequencyRule(
-  frequency: RuleFrequency,
-  context: RuleDateContext,
-): boolean {
-  if (!context.isAllowedMonth) return false;
-  switch (frequency) {
-    case 'DAILY': {
-      return matchesDailyRule(context);
-    }
-    case 'WEEKLY': {
-      return matchesWeeklyRule(context);
-    }
-    case 'MONTHLY': {
-      return matchesMonthlyRule(context);
-    }
-    case 'YEARLY': {
-      return matchesYearlyRule(context);
-    }
+  switch (filters.frequency) {
+    case 'DAILY':
+      return matchesDailyRule({
+        interval: filters.interval,
+        daysSinceStart: metrics.daysSinceStart,
+        weekdayFilter,
+        monthDayFilter,
+      });
+    case 'WEEKLY':
+      return matchesWeeklyRule({
+        interval: filters.interval,
+        weeksSinceStart: metrics.weeksSinceStart,
+        weekday: metrics.weekday,
+        startWeekday: metrics.startWeekday,
+        weekdayFilter,
+        monthDayFilter,
+      });
+    case 'MONTHLY':
+      return matchesMonthlyRule({
+        interval: filters.interval,
+        monthsSinceStart: metrics.monthsSinceStart,
+        day: metrics.day,
+        startDay: metrics.startDay,
+        weekdayFilter,
+        monthDayFilter,
+      });
+    case 'YEARLY':
+      return matchesYearlyRule({
+        interval: filters.interval,
+        yearsSinceStart: metrics.yearsSinceStart,
+        month: metrics.month,
+        startMonth: metrics.startMonth,
+        day: metrics.day,
+        startDay: metrics.startDay,
+        hasMonthFilter: filters.months.length > 0,
+        weekdayFilter,
+        monthDayFilter,
+      });
   }
 }
 
-function matchesDailyRule({
-  interval,
-  daysSinceStart,
-  hasWeekdayFilter,
-  hasMonthDayFilter,
-  matchesWeekdayFilter,
-  matchesMonthDayFilter,
-}: RuleDateContext): boolean {
-  return daysSinceStart % interval === 0 &&
-    (!hasWeekdayFilter || matchesWeekdayFilter) &&
-    (!hasMonthDayFilter || matchesMonthDayFilter);
+function optionalRuleFilter<T>(
+  values: T[],
+  matches: (value: T) => boolean,
+): OptionalRuleFilter {
+  return { configured: values.length > 0, matches: values.some(matches) };
 }
 
-function matchesWeeklyRule({
-  interval,
-  weeksSinceStart,
-  weekday,
-  startWeekday,
-  hasWeekdayFilter,
-  hasMonthDayFilter,
-  matchesWeekdayFilter,
-  matchesMonthDayFilter,
-}: RuleDateContext): boolean {
-  const matchesRequestedWeekday = hasWeekdayFilter
-    ? matchesWeekdayFilter
+function matchesDailyRule(context: DailyRuleContext): boolean {
+  const { interval, daysSinceStart, weekdayFilter, monthDayFilter } = context;
+  return daysSinceStart % interval === 0 &&
+    (!weekdayFilter.configured || weekdayFilter.matches) &&
+    (!monthDayFilter.configured || monthDayFilter.matches);
+}
+
+function matchesWeeklyRule(context: WeeklyRuleContext): boolean {
+  const {
+    interval,
+    weeksSinceStart,
+    weekday,
+    startWeekday,
+    weekdayFilter,
+    monthDayFilter,
+  } = context;
+  const matchesRequestedWeekday = weekdayFilter.configured
+    ? weekdayFilter.matches
     : weekday === startWeekday;
   return weeksSinceStart >= 0 && weeksSinceStart % interval === 0 &&
-    matchesRequestedWeekday && (!hasMonthDayFilter || matchesMonthDayFilter);
+    matchesRequestedWeekday &&
+    (!monthDayFilter.configured || monthDayFilter.matches);
 }
 
-function matchesMonthlyRule({
-  interval,
-  monthsSinceStart,
-  day,
-  startDay,
-  hasWeekdayFilter,
-  hasMonthDayFilter,
-  matchesWeekdayFilter,
-  matchesMonthDayFilter,
-}: RuleDateContext): boolean {
+function matchesMonthlyRule(context: MonthlyRuleContext): boolean {
+  const {
+    interval,
+    monthsSinceStart,
+    day,
+    startDay,
+    weekdayFilter,
+    monthDayFilter,
+  } = context;
   if (monthsSinceStart < 0 || monthsSinceStart % interval !== 0) return false;
-  return hasMonthDayFilter
-    ? matchesMonthDayFilter
-    : hasWeekdayFilter
-      ? matchesWeekdayFilter
+  return monthDayFilter.configured
+    ? monthDayFilter.matches
+    : weekdayFilter.configured
+      ? weekdayFilter.matches
       : day === startDay;
 }
 
-function matchesYearlyRule({
-  interval,
-  yearsSinceStart,
-  month,
-  startMonth,
-  day,
-  startDay,
-  hasWeekdayFilter,
-  hasMonthDayFilter,
-  hasMonthFilter,
-  matchesWeekdayFilter,
-  matchesMonthDayFilter,
-}: RuleDateContext): boolean {
+function matchesYearlyRule(context: YearlyRuleContext): boolean {
+  const {
+    interval,
+    yearsSinceStart,
+    month,
+    startMonth,
+    day,
+    startDay,
+    hasMonthFilter,
+    weekdayFilter,
+    monthDayFilter,
+  } = context;
   if (yearsSinceStart % interval !== 0) return false;
   if (!hasMonthFilter && month !== startMonth) return false;
-  return hasMonthDayFilter
-    ? matchesMonthDayFilter
-    : hasWeekdayFilter
-      ? matchesWeekdayFilter
+  return monthDayFilter.configured
+    ? monthDayFilter.matches
+    : weekdayFilter.configured
+      ? weekdayFilter.matches
       : day === startDay;
 }
 
