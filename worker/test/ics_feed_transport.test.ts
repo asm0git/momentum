@@ -88,6 +88,29 @@ describe('calendar ICS feed transport', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it('stops after three allowed redirects', async () => {
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(null, {
+        status: 302,
+        headers: { Location: '/feeds/next.ics' },
+      }),
+    );
+
+    await expect(
+      fetchCalendarIcsText(
+        'canvas',
+        'https://canvas.school.instructure.com/feeds/calendar.ics',
+        'canvas.school.edu',
+      ),
+    ).rejects.toMatchObject({
+      name: 'CalendarIcsError',
+      failureStage: 'redirect',
+      upstreamStatus: 302,
+      redirectCount: 3,
+    });
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
   it('classifies upstream authorization failures without exposing response content', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('provider-private-page', {

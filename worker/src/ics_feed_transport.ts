@@ -1,4 +1,6 @@
 const MAX_FEED_BYTES = 2_000_000;
+const MAX_REDIRECTS = 3;
+const MAX_ICS_URL_LENGTH = 4096;
 const OUTLOOK_ICS_HOSTS = new Set([
   'outlook.live.com',
   'outlook.office365.com',
@@ -75,7 +77,7 @@ export function normalizeCalendarIcsUrl(
   allowedCanvasHost: string,
 ): URL {
   const input = value.trim();
-  if (input.length === 0 || input.length > 4096) {
+  if (input.length === 0 || input.length > MAX_ICS_URL_LENGTH) {
     throw calendarIcsValidationError(provider, `Paste a valid ${providerTitle(provider)} .ics link.`);
   }
   let url: URL;
@@ -113,76 +115,111 @@ export async function fetchCalendarIcsText(
   inputUrl: string,
   allowedCanvasHost: string,
 ): Promise<FetchedCalendarIcsText> {
+  const { response, redirectCount } = await fetchFinalCalendarResponse(
+    provider,
+    inputUrl,
+    allowedCanvasHost,
+  );
+  return readCalendarResponse(provider, response, redirectCount);
+}
+
+async function fetchFinalCalendarResponse(
+  provider: CalendarIcsProvider,
+  inputUrl: string,
+  allowedCanvasHost: string,
+): Promise<{ response: Response; redirectCount: number }> {
   let url = normalizeCalendarIcsUrl(provider, inputUrl, allowedCanvasHost);
-  let response: Response | null = null;
-  let redirectsFollowed = 0;
-  for (;;) {
-    try {
-      response = await fetch(url, {
-        headers: {
-          Accept: 'text/calendar, text/plain;q=0.9, */*;q=0.1',
-          ...(provider === 'canvas'
-            ? { 'User-Agent': 'MomentumCalendarSync/1.0' }
-            : {}),
-        },
-        redirect: 'manual',
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch (error) {
-      const timedOut = isTimeoutError(error);
-      throw new CalendarIcsError({
-        provider,
-        failureStage: timedOut ? 'timeout' : 'fetch',
-        responseStatus: timedOut ? 504 : 502,
-        message: timedOut
-          ? `${providerTitle(provider)} took too long to return the calendar. Try again.`
-          : `Could not reach the published ${providerTitle(provider)} calendar. Try again.`,
-        redirectCount: redirectsFollowed,
-        cause: error,
-      });
-    }
-    if (response.status < 300 || response.status >= 400) break;
-    const location = response.headers.get('Location');
-    if (!location || redirectsFollowed >= 3) {
-      throw new CalendarIcsError({
-        provider,
-        failureStage: 'redirect',
-        responseStatus: 502,
-        upstreamStatus: response.status,
-        contentType: safeContentType(response.headers.get('Content-Type')),
-        redirectCount: redirectsFollowed,
-        message: `${providerTitle(provider)} returned an unsupported calendar redirect. Copy the published .ics link directly and try again.`,
-      });
-    }
-    redirectsFollowed++;
-    try {
-      url = normalizeCalendarIcsUrl(
-        provider,
-        new URL(location, url).toString(),
-        allowedCanvasHost,
-      );
-    } catch (error) {
-      throw new CalendarIcsError({
-        provider,
-        failureStage: 'redirect',
-        responseStatus: 502,
-        upstreamStatus: response.status,
-        contentType: safeContentType(response.headers.get('Content-Type')),
-        redirectCount: redirectsFollowed,
-        message: `${providerTitle(provider)} redirected to an unsupported calendar link. Copy the published .ics link directly and try again.`,
-        cause: error,
-      });
-    }
+  let redirectCount = 0;
+  while (true) {
+    const response = await requestCalendarResponse(provider, url, redirectCount);
+    if (!isRedirectResponse(response)) return { response, redirectCount };
+    url = resolveRedirectUrl(provider, response, url, allowedCanvasHost, redirectCount);
+    redirectCount++;
   }
-  if (!response) {
+}
+
+async function requestCalendarResponse(
+  provider: CalendarIcsProvider,
+  url: URL,
+  redirectCount: number,
+): Promise<Response> {
+  try {
+    return await fetch(url, {
+      headers: {
+        Accept: 'text/calendar, text/plain;q=0.9, */*;q=0.1',
+        ...(provider === 'canvas'
+          ? { 'User-Agent': 'MomentumCalendarSync/1.0' }
+          : {}),
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    const timedOut = isTimeoutError(error);
     throw new CalendarIcsError({
       provider,
-      failureStage: 'fetch',
-      responseStatus: 502,
-      redirectCount: redirectsFollowed,
-      message: `Could not reach the published ${providerTitle(provider)} calendar. Try again.`,
+      failureStage: timedOut ? 'timeout' : 'fetch',
+      responseStatus: timedOut ? 504 : 502,
+      message: timedOut
+        ? `${providerTitle(provider)} took too long to return the calendar. Try again.`
+        : `Could not reach the published ${providerTitle(provider)} calendar. Try again.`,
+      redirectCount,
+      cause: error,
     });
   }
+}
+
+function isRedirectResponse(response: Response): boolean {
+  return response.status >= 300 && response.status < 400;
+}
+
+function resolveRedirectUrl(
+  provider: CalendarIcsProvider,
+  response: Response,
+  currentUrl: URL,
+  allowedCanvasHost: string,
+  redirectCount: number,
+): URL {
+  const location = response.headers.get('Location');
+  const upstream = {
+    upstreamStatus: response.status,
+    contentType: safeContentType(response.headers.get('Content-Type')),
+  };
+  if (!location || redirectCount >= MAX_REDIRECTS) {
+    throw new CalendarIcsError({
+      provider,
+      failureStage: 'redirect',
+      responseStatus: 502,
+      ...upstream,
+      redirectCount,
+      message: `${providerTitle(provider)} returned an unsupported calendar redirect. Copy the published .ics link directly and try again.`,
+    });
+  }
+
+  try {
+    return normalizeCalendarIcsUrl(
+      provider,
+      new URL(location, currentUrl).toString(),
+      allowedCanvasHost,
+    );
+  } catch (error) {
+    throw new CalendarIcsError({
+      provider,
+      failureStage: 'redirect',
+      responseStatus: 502,
+      ...upstream,
+      redirectCount: redirectCount + 1,
+      message: `${providerTitle(provider)} redirected to an unsupported calendar link. Copy the published .ics link directly and try again.`,
+      cause: error,
+    });
+  }
+}
+
+function readCalendarResponse(
+  provider: CalendarIcsProvider,
+  response: Response,
+  redirectCount: number,
+): Promise<FetchedCalendarIcsText> {
   const contentType = safeContentType(response.headers.get('Content-Type'));
   if (!response.ok) {
     throw new CalendarIcsError({
@@ -191,25 +228,43 @@ export async function fetchCalendarIcsText(
       responseStatus: 502,
       upstreamStatus: response.status,
       contentType,
-      redirectCount: redirectsFollowed,
+      redirectCount,
       message: upstreamHttpMessage(provider, response.status),
     });
   }
   const size = Number(response.headers.get('Content-Length') ?? 0);
   if (size > MAX_FEED_BYTES) {
-    throw new CalendarIcsError({
-      provider,
-      failureStage: 'size',
-      responseStatus: 413,
-      upstreamStatus: response.status,
-      contentType,
-      redirectCount: redirectsFollowed,
-      message: 'The published calendar is too large to import.',
-    });
+    throw oversizedCalendarError(provider, response, contentType, redirectCount);
   }
-  let body: string;
+  return readCalendarBody(provider, response, contentType, redirectCount);
+}
+
+async function readCalendarBody(
+  provider: CalendarIcsProvider,
+  response: Response,
+  contentType: string | undefined,
+  redirectCount: number,
+): Promise<FetchedCalendarIcsText> {
+  const body = await responseBodyText(provider, response, contentType, redirectCount);
+  if (new TextEncoder().encode(body).byteLength > MAX_FEED_BYTES) {
+    throw oversizedCalendarError(provider, response, contentType, redirectCount);
+  }
+  return {
+    text: body,
+    upstreamStatus: response.status,
+    contentType,
+    redirectCount,
+  };
+}
+
+async function responseBodyText(
+  provider: CalendarIcsProvider,
+  response: Response,
+  contentType: string | undefined,
+  redirectCount: number,
+): Promise<string> {
   try {
-    body = await response.text();
+    return await response.text();
   } catch (error) {
     const timedOut = isTimeoutError(error);
     throw new CalendarIcsError({
@@ -218,30 +273,30 @@ export async function fetchCalendarIcsText(
       responseStatus: timedOut ? 504 : 502,
       upstreamStatus: response.status,
       contentType,
-      redirectCount: redirectsFollowed,
+      redirectCount,
       message: timedOut
         ? `${providerTitle(provider)} took too long to return the calendar. Try again.`
         : `Could not read the response from the published ${providerTitle(provider)} calendar. Try again.`,
       cause: error,
     });
   }
-  if (new TextEncoder().encode(body).byteLength > MAX_FEED_BYTES) {
-    throw new CalendarIcsError({
-      provider,
-      failureStage: 'size',
-      responseStatus: 413,
-      upstreamStatus: response.status,
-      contentType,
-      redirectCount: redirectsFollowed,
-      message: 'The published calendar is too large to import.',
-    });
-  }
-  return {
-    text: body,
+}
+
+function oversizedCalendarError(
+  provider: CalendarIcsProvider,
+  response: Response,
+  contentType: string | undefined,
+  redirectCount: number,
+): CalendarIcsError {
+  return new CalendarIcsError({
+    provider,
+    failureStage: 'size',
+    responseStatus: 413,
     upstreamStatus: response.status,
     contentType,
-    redirectCount: redirectsFollowed,
-  };
+    redirectCount,
+    message: 'The published calendar is too large to import.',
+  });
 }
 
 export function invalidCalendarIcsError(
