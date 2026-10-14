@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 enum RecurrenceRule { never, daily, weekly, monthly, yearly }
 
-abstract class PlannerItem {
+sealed class PlannerItem {
   PlannerItem({
     this.id,
     this.categoryId,
@@ -16,7 +16,7 @@ abstract class PlannerItem {
   DateTime date;
 }
 
-class Task extends PlannerItem {
+final class Task extends PlannerItem {
   Task({
     super.id,
     super.categoryId,
@@ -48,7 +48,7 @@ class Task extends PlannerItem {
   String? externalId;
 }
 
-class Event extends PlannerItem {
+final class Event extends PlannerItem {
   Event({
     super.id,
     super.categoryId,

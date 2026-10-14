@@ -65,13 +65,27 @@ export function parseDateTime(property: IcsProperty | null): IcsDateTime | null 
 
 function parseDateTimeFields(property: IcsProperty): ParsedDateTimeFields | null {
   const value = property.value.trim();
-  const allDay = property.params.get('VALUE')?.toUpperCase() === 'DATE' ||
-    /^\d{8}$/.test(value);
-  const match = value.match(
+  const match = matchDateTimeValue(value);
+  if (!match) return null;
+
+  const fields = dateTimeFieldsFromMatch(match);
+  if (!isValidFields(fields)) return null;
+
+  return {
+    fields,
+    allDay: isAllDayValue(property, value),
+    isUtc: match[7]?.toUpperCase() === 'Z',
+  };
+}
+
+function matchDateTimeValue(value: string): RegExpMatchArray | null {
+  return value.match(
     /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/i,
   );
-  if (!match) return null;
-  const fields: DateTimeFields = [
+}
+
+function dateTimeFieldsFromMatch(match: RegExpMatchArray): DateTimeFields {
+  return [
     Number(match[1]),
     Number(match[2]),
     Number(match[3]),
@@ -79,13 +93,11 @@ function parseDateTimeFields(property: IcsProperty): ParsedDateTimeFields | null
     Number(match[5] ?? 0),
     Number(match[6] ?? 0),
   ];
-  if (!isValidFields(fields)) return null;
+}
 
-  return {
-    fields,
-    allDay,
-    isUtc: match[7]?.toUpperCase() === 'Z',
-  };
+function isAllDayValue(property: IcsProperty, value: string): boolean {
+  return property.params.get('VALUE')?.toUpperCase() === 'DATE' ||
+    /^\d{8}$/.test(value);
 }
 
 function resolveTimeZone(property: IcsProperty): string | undefined {

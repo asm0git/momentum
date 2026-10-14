@@ -25,17 +25,19 @@ class CalendarConnectionStatus {
   final String? remoteUserId;
   final DateTime? lastSyncTime;
 
-  factory CalendarConnectionStatus.fromJson(Map<String, dynamic> json) =>
-      CalendarConnectionStatus(
-        connected: json['connected'] == true,
-        providerUrl: json['providerUrl'] as String?,
-        accountName: json['accountName'] as String?,
-        accountEmail: json['accountEmail'] as String?,
-        remoteUserId: json['remoteUserId']?.toString(),
-        lastSyncTime: json['lastSyncTime'] == null
-            ? null
-            : DateTime.parse(json['lastSyncTime'] as String).toLocal(),
-      );
+  factory CalendarConnectionStatus.fromJson(Map<String, dynamic> json) {
+    final lastSyncTime = _optionalString(json, 'lastSyncTime');
+    return CalendarConnectionStatus(
+      connected: _optionalBool(json, 'connected', defaultValue: false),
+      providerUrl: _optionalString(json, 'providerUrl'),
+      accountName: _optionalString(json, 'accountName'),
+      accountEmail: _optionalString(json, 'accountEmail'),
+      remoteUserId: _optionalIdentifier(json, 'remoteUserId'),
+      lastSyncTime: lastSyncTime == null
+          ? null
+          : DateTime.parse(lastSyncTime).toLocal(),
+    );
+  }
 }
 
 class CalendarBackendException implements Exception {
@@ -150,38 +152,36 @@ class CalendarBackendClient implements ProviderCalendarBackend {
       endpoint: 'sync',
     );
     return _parseResponse(provider, 'sync', () {
-      final tasks = (json['tasks'] as List<dynamic>? ?? const [])
-          .cast<Map<String, dynamic>>()
+      final tasks = _optionalObjectList(json, 'tasks')
           .map(
             (task) => CalendarTaskImport(
-              externalId: task['externalId'] as String,
-              title: task['title'] as String,
-              due: DateTime.parse(task['due'] as String).toLocal(),
-              description: task['description'] as String? ?? '',
+              externalId: _requiredString(task, 'externalId'),
+              title: _requiredString(task, 'title'),
+              due: DateTime.parse(_requiredString(task, 'due')).toLocal(),
+              description: _optionalString(task, 'description') ?? '',
             ),
           )
           .toList(growable: false);
-      final events = (json['events'] as List<dynamic>? ?? const [])
-          .cast<Map<String, dynamic>>()
+      final events = _optionalObjectList(json, 'events')
           .map(
             (event) => CalendarEventImport(
-              externalId: event['externalId'] as String,
-              title: event['title'] as String,
-              start: DateTime.parse(event['start'] as String).toLocal(),
-              end: DateTime.parse(event['end'] as String).toLocal(),
-              allDay: event['allDay'] == true,
-              description: event['description'] as String? ?? '',
-              location: event['location'] as String?,
+              externalId: _requiredString(event, 'externalId'),
+              title: _requiredString(event, 'title'),
+              start: DateTime.parse(_requiredString(event, 'start')).toLocal(),
+              end: DateTime.parse(_requiredString(event, 'end')).toLocal(),
+              allDay: _optionalBool(event, 'allDay', defaultValue: false),
+              description: _optionalString(event, 'description') ?? '',
+              location: _optionalString(event, 'location'),
             ),
           )
           .toList(growable: false);
 
       return CalendarSyncPayload(
-        accountName: json['accountName'] as String? ?? provider.title,
-        accountEmail: json['accountEmail'] as String?,
-        remoteUserId: json['remoteUserId']?.toString() ?? '',
-        providerUrl: json['providerUrl'] as String? ?? '',
-        syncedAt: DateTime.parse(json['syncedAt'] as String).toLocal(),
+        accountName: _optionalString(json, 'accountName') ?? provider.title,
+        accountEmail: _optionalString(json, 'accountEmail'),
+        remoteUserId: _optionalIdentifier(json, 'remoteUserId') ?? '',
+        providerUrl: _optionalString(json, 'providerUrl') ?? '',
+        syncedAt: DateTime.parse(_requiredString(json, 'syncedAt')).toLocal(),
         tasks: tasks,
         events: events,
         providerName: provider.key,
@@ -280,5 +280,54 @@ class CalendarBackendClient implements ProviderCalendarBackend {
       Error.throwWithStackTrace(exception, causeStackTrace);
     }
     throw exception;
+  }
+}
+
+String _requiredString(Map<String, dynamic> json, String field) {
+  final value = json[field];
+  if (value is String) return value;
+  throw FormatException('Expected "$field" to be a string.');
+}
+
+String? _optionalString(Map<String, dynamic> json, String field) {
+  final value = json[field];
+  if (value == null) return null;
+  if (value is String) return value;
+  throw FormatException('Expected "$field" to be a string.');
+}
+
+String? _optionalIdentifier(Map<String, dynamic> json, String field) {
+  final value = json[field];
+  if (value == null) return null;
+  if (value is String || value is num) return value.toString();
+  throw FormatException('Expected "$field" to be a string or number.');
+}
+
+bool _optionalBool(
+  Map<String, dynamic> json,
+  String field, {
+  required bool defaultValue,
+}) {
+  final value = json[field];
+  if (value == null) return defaultValue;
+  if (value is bool) return value;
+  throw FormatException('Expected "$field" to be a boolean.');
+}
+
+Iterable<Map<String, dynamic>> _optionalObjectList(
+  Map<String, dynamic> json,
+  String field,
+) sync* {
+  final value = json[field];
+  if (value == null) return;
+  if (value is! List) {
+    throw FormatException('Expected "$field" to be a list.');
+  }
+
+  for (final item in value) {
+    if (item is! Map<String, dynamic>) {
+      throw FormatException('Expected each "$field" entry to be an object.');
+    }
+    yield item;
   }
 }

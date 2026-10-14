@@ -24,6 +24,7 @@ Iterable<DateTime> recurrenceDatesInRange(
   var occurrence = _nextOnOrAfter(item, rangeStart);
   while (occurrence != null && !occurrence.isAfter(rangeEnd)) {
     yield occurrence;
+    if (occurrence == rangeEnd) return;
     occurrence = _nextAfter(item, occurrence);
   }
 }
@@ -40,50 +41,56 @@ PlannerItem occurrenceForDate(
   bool isCompleted = false,
 }) {
   final day = dateOnly(occurrenceDate);
-  if (item is Task) {
-    if (!isRecurring(item)) return item;
-    return Task(
-      id: item.id,
-      categoryId: item.categoryId,
-      title: item.title,
-      date: day,
-      isChecked: isCompleted,
-      time: item.time,
-      estimatedDuration: item.estimatedDuration,
-      repeat: item.repeat,
-      repeatUntil: item.repeatUntil,
-      occurrenceDate: day,
-      description: item.description,
-      priority: item.priority,
-      sourcePlatform: item.sourcePlatform,
-      externalId: item.externalId,
-    );
-  }
+  return switch (item) {
+    Task task => _taskOccurrenceForDate(task, day, isCompleted),
+    Event event => _eventOccurrenceForDate(event, day),
+  };
+}
 
-  if (item is Event) {
-    if (!isRecurring(item)) return item;
-    final durationDays = dateOnly(item.endDate).difference(dateOnly(item.date));
-    return Event(
-      id: item.id,
-      categoryId: item.categoryId,
-      title: item.title,
-      date: day,
-      endDate: day.add(durationDays),
-      start: item.start,
-      end: item.end,
-      isCurrent: item.isCurrent,
-      allDay: item.allDay,
-      location: item.location,
-      notes: item.notes,
-      repeat: item.repeat,
-      repeatUntil: item.repeatUntil,
-      occurrenceDate: day,
-      sourcePlatform: item.sourcePlatform,
-      externalId: item.externalId,
-    );
-  }
+/// Returns a typed event occurrence for event-specific callers.
+Event eventOccurrenceForDate(Event event, DateTime occurrenceDate) =>
+    _eventOccurrenceForDate(event, dateOnly(occurrenceDate));
 
-  return item;
+Task _taskOccurrenceForDate(Task task, DateTime day, bool isCompleted) {
+  if (!isRecurring(task)) return task;
+  return Task(
+    id: task.id,
+    categoryId: task.categoryId,
+    title: task.title,
+    date: day,
+    isChecked: isCompleted,
+    time: task.time,
+    estimatedDuration: task.estimatedDuration,
+    repeat: task.repeat,
+    repeatUntil: task.repeatUntil,
+    occurrenceDate: day,
+    description: task.description,
+    priority: task.priority,
+    sourcePlatform: task.sourcePlatform,
+    externalId: task.externalId,
+  );
+}
+
+Event _eventOccurrenceForDate(Event event, DateTime day) {
+  if (!isRecurring(event)) return event;
+  return Event(
+    id: event.id,
+    categoryId: event.categoryId,
+    title: event.title,
+    date: day,
+    endDate: day.add(dateOnly(event.endDate).difference(dateOnly(event.date))),
+    start: event.start,
+    end: event.end,
+    isCurrent: event.isCurrent,
+    allDay: event.allDay,
+    location: event.location,
+    notes: event.notes,
+    repeat: event.repeat,
+    repeatUntil: event.repeatUntil,
+    occurrenceDate: day,
+    sourcePlatform: event.sourcePlatform,
+    externalId: event.externalId,
+  );
 }
 
 DateTime? _nextOnOrAfter(PlannerItem item, DateTime target) {
@@ -126,13 +133,11 @@ DateTime? _nextAfter(PlannerItem item, DateTime date) {
 RecurrenceRule _repeatFor(PlannerItem item) => switch (item) {
   Task task => task.repeat,
   Event event => event.repeat,
-  _ => RecurrenceRule.never,
 };
 
 DateTime? _untilFor(PlannerItem item) => switch (item) {
   Task task => task.repeatUntil,
   Event event => event.repeatUntil,
-  _ => null,
 };
 
 bool _withinUntil(PlannerItem item, DateTime date) {

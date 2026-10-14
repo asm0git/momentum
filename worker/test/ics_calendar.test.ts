@@ -545,6 +545,28 @@ describe('calendar feed lifecycle', () => {
     });
   });
 
+  it('does not remove a feed for an expired session cookie', async () => {
+    const { db, statements } = createMockDatabase({ sessionId: null });
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/canvas/disconnect', {
+        method: 'POST',
+        headers: {
+          Origin: 'https://momentum.example.com',
+          Cookie: '__Host-momentum_session=expired-session',
+        },
+      }),
+      {
+        APP_ORIGIN: 'https://momentum.example.com',
+        DB: db,
+      } as Env,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ disconnected: true });
+    expect(statements.some(({ sql }) => sql.includes('DELETE FROM calendar_ics_feeds')))
+      .toBe(false);
+  });
+
   it('rejects sync for a missing session without contacting the feed provider', async () => {
     const { db, statements } = createMockDatabase({ sessionId: null });
     const fetcher = vi.spyOn(globalThis, 'fetch');

@@ -314,7 +314,13 @@ function matchesRuleDate(
         weekdayFilter,
         monthDayFilter,
       });
+    default:
+      return assertNever(filters.frequency);
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unsupported recurrence frequency: ${String(value)}`);
 }
 
 function optionalRuleFilter<T>(

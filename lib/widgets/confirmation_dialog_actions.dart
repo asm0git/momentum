@@ -43,8 +43,9 @@ class DialogActionButtons extends StatelessWidget {
           textStyle: textStyle,
         ).copyWith(
           backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) {
-            if (states.contains(WidgetState.disabled))
+            if (states.contains(WidgetState.disabled)) {
               return AppColors.disabled;
+            }
             return actionColor;
           }),
         );

@@ -5,7 +5,6 @@ import '../../data_models.dart';
 import 'swipe_to_reveal_delete.dart';
 import 'task_widget.dart';
 
-// Surface container that renders a vertical list of task widgets.
 class TaskListContainer extends StatelessWidget {
   static const _maxVisibleTasks = 4;
 
@@ -75,7 +74,6 @@ class TaskListContainer extends StatelessWidget {
     final time = switch (item) {
       Task task => task.time,
       Event event => event.start,
-      _ => const TimeOfDay(hour: 0, minute: 0),
     };
 
     return DateTime(

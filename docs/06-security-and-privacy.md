@@ -34,7 +34,7 @@ The app does **not** load a root `.env` file. The feed-link encryption key is us
 | `CLOUDFLARE_API_TOKEN` | A private credential allowing the deployment workflow to update Cloudflare resources | GitHub Actions repository secrets; it is not used by the app in the browser |
 | `CLOUDFLARE_ACCOUNT_ID` | Identifies the Cloudflare account used for deployment; it is not a password | GitHub Actions repository variables |
 
-Git ignores `worker/.dev.vars` and local Wrangler state. The committed `worker/.dev.vars.example` contains a placeholder encryption key only. The current feed-link flow needs no Canvas, Google, or Microsoft OAuth credentials. The Worker source still contains legacy Canvas OAuth handlers, but the provider OAuth endpoints return `410 Gone`; those handlers are not part of the supported connection flow. GitHub Actions uses its Cloudflare deployment token, while the feed-link encryption key remains in Cloudflare Worker secrets.
+Git ignores `worker/.dev.vars` and local Wrangler state. The committed `worker/.dev.vars.example` contains a placeholder encryption key only. The current feed-link flow needs no Canvas, Google, or Microsoft OAuth credentials. Provider OAuth endpoints return `410 Gone`; the Worker has no active OAuth connection flow. GitHub Actions uses its Cloudflare deployment token, while the feed-link encryption key remains in Cloudflare Worker secrets.
 
 Visitors can inspect the deployed JavaScript, static assets, and any configured backend URL. These contain public app resources and addresses, not the encryption key or the Cloudflare deployment token. Stored feed links stay on the Worker and are not returned in API responses. Setup details are in the [Worker guide](../worker/README.md).
 

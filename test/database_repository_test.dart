@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/data/database_helper.dart';
+import 'package:momentum/data/calendar_sync_repository.dart';
 import 'package:momentum/data/model_serialization.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data/recurrence.dart';
@@ -14,6 +15,7 @@ void main() {
   late Directory tempDirectory;
   late DatabaseHelper databaseHelper;
   late PlannerRepository repository;
+  late CalendarSyncRepository calendarSyncRepository;
 
   setUpAll(() => sqfliteFfiInit());
 
@@ -25,6 +27,9 @@ void main() {
       seedOnCreate: false,
     );
     repository = PlannerRepository(databaseHelper: databaseHelper);
+    calendarSyncRepository = CalendarSyncRepository(
+      databaseHelper: databaseHelper,
+    );
     await databaseHelper.database;
   });
 
@@ -118,6 +123,181 @@ void main() {
     expect(accountCopy.providerUrl, 'https://calendar.example.test');
   });
 
+  test('row decoders report malformed required column values', () {
+    final task = Task(
+      title: 'Read',
+      date: DateTime(2026, 10, 7),
+      time: const TimeOfDay(hour: 9, minute: 25),
+      estimatedDuration: const Duration(minutes: 65),
+      isChecked: false,
+    );
+    final event = Event(
+      title: 'Meeting',
+      date: DateTime(2026, 10, 7),
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    final plan = DailyPlan(
+      planDate: DateTime(2026, 10, 7),
+      orderedTaskIds: [7, 10],
+      generatedTimestamp: DateTime(2026, 10, 7, 8),
+    );
+    final account = LinkedAccount(
+      platformName: 'Calendar',
+      accountName: 'Planner',
+    );
+
+    void expectColumnError(void Function() decode, String column) {
+      expect(
+        decode,
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains(column),
+          ),
+        ),
+      );
+    }
+
+    final missingDue = Map<String, Object?>.from(taskToMap(task))
+      ..remove('due');
+    expectColumnError(() {
+      taskFromMap(missingDue);
+    }, 'due');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'estimated_duration_minutes': '65'});
+    }, 'estimated_duration_minutes');
+    expectColumnError(() {
+      eventFromMap({...eventToMap(event), 'start_time': 'not-a-date'});
+    }, 'start_time');
+    expectColumnError(() {
+      dailyPlanFromMap({
+        ...dailyPlanToMap(plan),
+        'ordered_task_ids': '{broken',
+      });
+    }, 'ordered_task_ids');
+    expectColumnError(() {
+      linkedAccountFromMap({
+        ...linkedAccountToMap(account),
+        'platform_name': null,
+      });
+    }, 'platform_name');
+  });
+
+  test('row decoders report malformed optional column values', () {
+    final task = Task(
+      title: 'Read',
+      date: DateTime(2026, 10, 7),
+      time: const TimeOfDay(hour: 9, minute: 25),
+      estimatedDuration: const Duration(minutes: 65),
+      isChecked: false,
+    );
+    final event = Event(
+      title: 'Meeting',
+      date: DateTime(2026, 10, 7),
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    final account = LinkedAccount(
+      platformName: 'Calendar',
+      accountName: 'Planner',
+    );
+
+    void expectColumnError(void Function() decode, String column) {
+      expect(
+        decode,
+        throwsA(
+          isA<FormatException>().having(
+            (error) => error.message,
+            'message',
+            contains(column),
+          ),
+        ),
+      );
+    }
+
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'id': '7'});
+    }, 'id');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'category_id': '4'});
+    }, 'category_id');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'description': 12});
+    }, 'description');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'priority': 'high'});
+    }, 'priority');
+    expectColumnError(() {
+      taskFromMap({...taskToMap(task), 'src_platform': 1});
+    }, 'src_platform');
+    expectColumnError(() {
+      eventFromMap({...eventToMap(event), 'location': false});
+    }, 'location');
+    expectColumnError(() {
+      eventFromMap({...eventToMap(event), 'notes': 12});
+    }, 'notes');
+    expectColumnError(() {
+      linkedAccountFromMap({...linkedAccountToMap(account), 'provider_url': 4});
+    }, 'provider_url');
+    expectColumnError(() {
+      linkedAccountFromMap({
+        ...linkedAccountToMap(account),
+        'category_id': '2',
+      });
+    }, 'category_id');
+    expectColumnError(() {
+      optionalStringFromMap({'external_id': 3}, 'external_id');
+    }, 'external_id');
+
+    final taskWithNulls = taskFromMap({
+      ...taskToMap(task),
+      'id': null,
+      'category_id': null,
+      'description': null,
+      'priority': null,
+      'src_platform': null,
+      'external_id': null,
+    });
+    expect(taskWithNulls.id, isNull);
+    expect(taskWithNulls.categoryId, isNull);
+    expect(taskWithNulls.description, isEmpty);
+    expect(taskWithNulls.priority, isNull);
+    expect(taskWithNulls.sourcePlatform, isNull);
+    expect(taskWithNulls.externalId, isNull);
+
+    final eventWithNulls = eventFromMap({
+      ...eventToMap(event),
+      'location': null,
+      'notes': null,
+      'src_platform': null,
+      'external_id': null,
+    });
+    expect(eventWithNulls.location, isNull);
+    expect(eventWithNulls.notes, isEmpty);
+    expect(eventWithNulls.sourcePlatform, isNull);
+    expect(eventWithNulls.externalId, isNull);
+
+    final accountWithNulls = linkedAccountFromMap({
+      ...linkedAccountToMap(account),
+      'account_name': null,
+      'account_email': null,
+      'provider_url': null,
+      'remote_user_id': null,
+      'category_id': null,
+    });
+    expect(accountWithNulls.accountName, 'Linked account');
+    expect(accountWithNulls.accountEmail, isNull);
+    expect(accountWithNulls.providerUrl, isNull);
+    expect(accountWithNulls.remoteUserId, isNull);
+    expect(accountWithNulls.categoryId, isNull);
+  });
+
   test(
     'CRUD works for categories, tasks, events, plans, and accounts',
     () async {
@@ -197,7 +377,7 @@ void main() {
         isEmpty,
       );
 
-      final account = await repository.insertLinkedAccount(
+      final account = await calendarSyncRepository.insertLinkedAccount(
         LinkedAccount(
           platformName: 'Calendar',
           accountName: 'Planner',
@@ -205,16 +385,21 @@ void main() {
         ),
       );
       account.lastSyncTime = DateTime(2026, 10, 7, 9);
-      expect(await repository.updateLinkedAccount(account), isTrue);
+      expect(await calendarSyncRepository.updateLinkedAccount(account), isTrue);
       expect(
-        (await repository.getLinkedAccount(account.id!))?.lastSyncTime,
+        (await calendarSyncRepository.getLinkedAccount(
+          account.id!,
+        ))?.lastSyncTime,
         DateTime(2026, 10, 7, 9),
       );
 
       expect(await repository.deleteTask(task.id!), isTrue);
       expect(await repository.deleteEvent(event.id!), isTrue);
       expect(await repository.deleteDailyPlan(plan.id!), isTrue);
-      expect(await repository.deleteLinkedAccount(account.id!), isTrue);
+      expect(
+        await calendarSyncRepository.deleteLinkedAccount(account.id!),
+        isTrue,
+      );
       expect(
         await repository.deleteCategory(
           category.id!,
@@ -256,7 +441,7 @@ void main() {
         ],
         providerName: 'google',
       );
-      final account = await repository.applyCalendarSync(firstSync);
+      final account = await calendarSyncRepository.applyCalendarSync(firstSync);
       final initialEvents = (await repository.getAllItems())
           .whereType<Event>()
           .toList();
@@ -265,7 +450,7 @@ void main() {
       expect(initialEvents, hasLength(1));
       expect(initialEvents.single.categoryId, account.categoryId);
 
-      await repository.applyCalendarSync(
+      await calendarSyncRepository.applyCalendarSync(
         CalendarSyncPayload(
           accountName: 'Student Calendar',
           accountEmail: 'student@example.test',
@@ -513,7 +698,7 @@ void main() {
           ),
         ],
       );
-      final account = await repository.applyCalendarSync(first);
+      final account = await calendarSyncRepository.applyCalendarSync(first);
       final task = (await repository.getTasks()).single;
       final event = (await repository.getEvents()).single;
       expect(account.categoryId, isNotNull);
@@ -527,7 +712,7 @@ void main() {
       task.isChecked = true;
       await repository.updateTask(task);
 
-      await repository.applyCalendarSync(
+      await calendarSyncRepository.applyCalendarSync(
         CalendarSyncPayload(
           accountName: 'Canvas Student',
           accountEmail: 'student@example.test',
@@ -555,7 +740,7 @@ void main() {
       expect(eventsAfterSync, hasLength(1));
       expect(eventsAfterSync.single.id, event.id);
 
-      await repository.applyCalendarSync(
+      await calendarSyncRepository.applyCalendarSync(
         CalendarSyncPayload(
           accountName: 'Canvas Student',
           accountEmail: 'student@example.test',
@@ -591,7 +776,7 @@ void main() {
         ],
         events: const [],
       );
-      final account = await repository.applyCalendarSync(baseline);
+      final account = await calendarSyncRepository.applyCalendarSync(baseline);
       final db = await databaseHelper.database;
       await db.execute('''
       CREATE TRIGGER reject_canvas_record BEFORE INSERT ON tasks
@@ -600,7 +785,7 @@ void main() {
     ''');
 
       await expectLater(
-        repository.applyCalendarSync(
+        calendarSyncRepository.applyCalendarSync(
           CalendarSyncPayload(
             accountName: 'Canvas Student',
             accountEmail: null,
@@ -627,11 +812,54 @@ void main() {
 
       expect((await repository.getTasks()).single.title, 'Original title');
       expect(
-        (await repository.getLinkedAccount(account.id!))?.lastSyncTime,
+        (await calendarSyncRepository.getLinkedAccount(
+          account.id!,
+        ))?.lastSyncTime,
         DateTime(2026, 10, 7, 9),
       );
     },
   );
+
+  test('a sync fails when its linked account update affects no rows', () async {
+    final originalPayload = CalendarSyncPayload(
+      accountName: 'Original account',
+      accountEmail: 'student@example.test',
+      remoteUserId: '42',
+      providerUrl: 'https://canvas.example.test',
+      syncedAt: DateTime(2026, 10, 7, 9),
+      tasks: const [],
+      events: const [],
+    );
+    final account = await calendarSyncRepository.applyCalendarSync(
+      originalPayload,
+    );
+    final db = await databaseHelper.database;
+    await db.execute('''
+      CREATE TRIGGER ignore_linked_account_update
+      BEFORE UPDATE ON linked_accounts
+      BEGIN SELECT RAISE(IGNORE); END
+    ''');
+
+    await expectLater(
+      calendarSyncRepository.applyCalendarSync(
+        CalendarSyncPayload(
+          accountName: 'Changed account',
+          accountEmail: 'student@example.test',
+          remoteUserId: '42',
+          providerUrl: 'https://canvas.example.test',
+          syncedAt: DateTime(2026, 10, 7, 10),
+          tasks: const [],
+          events: const [],
+        ),
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(
+      (await calendarSyncRepository.getLinkedAccount(account.id!))?.accountName,
+      'Original account',
+    );
+  });
 
   test(
     'v3 to v4 migration preserves planner rows and removes local token',
@@ -937,6 +1165,24 @@ void main() {
         DateTime(2027, 2, 28),
         DateTime(2028, 2, 29),
       ],
+    );
+
+    final maximumDate = DateTime(9999, 12, 31);
+    final finalDayDaily = Task(
+      title: 'Final day',
+      date: maximumDate,
+      time: const TimeOfDay(hour: 9, minute: 0),
+      estimatedDuration: Duration.zero,
+      isChecked: false,
+      repeat: RecurrenceRule.daily,
+    );
+    expect(
+      recurrenceDatesInRange(
+        finalDayDaily,
+        from: maximumDate,
+        through: maximumDate,
+      ),
+      [maximumDate],
     );
   });
 

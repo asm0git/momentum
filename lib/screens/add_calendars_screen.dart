@@ -12,6 +12,7 @@ import '../widgets/circular_icon_button.dart';
 import '../widgets/confirmation_dialog_actions.dart';
 import '../widgets/pill_action_button.dart';
 import '../widgets/calendar/calendar_feed_editor.dart';
+import '../widgets/calendar/calendar_provider_panel.dart';
 
 class AddCalendarsScreen extends StatefulWidget {
   const AddCalendarsScreen({super.key, this.onboarding = false});
@@ -290,7 +291,6 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
                                       index++
                                     )
                                       _providerSection(
-                                        context,
                                         planner,
                                         CalendarProvider.values[index],
                                         isLast:
@@ -332,7 +332,6 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
   }
 
   Widget _providerSection(
-    BuildContext context,
     PlannerState planner,
     CalendarProvider provider, {
     required bool isLast,
@@ -365,7 +364,7 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
                 ),
                 if (expanded) ...[
                   const SizedBox(height: AppSpacing.md),
-                  _providerPanel(context, planner, provider, isLast: isLast),
+                  _providerPanel(planner, provider, isLast: isLast),
                   if (!isLast) const SizedBox(height: AppSpacing.md),
                 ] else
                   const SizedBox(width: double.infinity, height: 0),
@@ -385,154 +384,32 @@ class _AddCalendarsScreenState extends State<AddCalendarsScreen> {
   }
 
   Widget _providerPanel(
-    BuildContext context,
     PlannerState planner,
     CalendarProvider provider, {
     required bool isLast,
   }) {
     final status = planner.statusForProvider(provider);
-    final textTheme = Theme.of(context).textTheme;
     final connected = status?.connected == true;
-    final syncing = planner.isProviderSyncing(provider);
-    final isPublishedIcsFeed =
-        status?.providerUrl?.endsWith('-published-ics') ?? false;
-    final showAccountIdentity =
-        !isPublishedIcsFeed &&
-        (status?.accountName != null || status?.accountEmail != null);
-
-    return Padding(
-      key: ValueKey('calendar-provider-panel-${provider.key}'),
-      padding: EdgeInsets.only(
-        left: AppSpacing.md,
-        right: AppSpacing.md,
-        bottom: isLast ? AppSpacing.md : 0,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_loadingProvider == provider && status == null)
-            const Padding(
-              padding: EdgeInsets.all(AppSpacing.md),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (status == null)
-            SizedBox(
-              width: double.infinity,
-              child: PillActionButton(
-                label: 'Try again',
-                leadingIcon: Icons.refresh,
-                foregroundColor: AppColors.error,
-                outlineColor: AppColors.error,
-                onPressed: () {
-                  setState(() {
-                    _loadingProvider = provider;
-                    _error = null;
-                  });
-                  unawaited(_loadProvider(provider));
-                },
-              ),
-            )
-          else if (connected) ...[
-            if (showAccountIdentity)
-              Text(
-                '${status.accountName ?? 'Connected'}${status.accountEmail == null ? '' : '\n${status.accountEmail}'}',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: AppColors.onSurface,
-                ),
-              ),
-            if (showAccountIdentity) const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                if (status.lastSyncTime != null) ...[
-                  Container(
-                    key: ValueKey('calendar-sync-success-${provider.key}'),
-                    width: 18,
-                    height: 18,
-                    decoration: const BoxDecoration(
-                      color: AppColors.success,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check,
-                      size: 13,
-                      color: AppColors.onPrimary,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xxs),
-                ],
-                Expanded(
-                  child: Text(
-                    status.lastSyncTime == null
-                        ? 'Not synced yet'
-                        : 'Last synced ${MaterialLocalizations.of(context).formatMediumDate(status.lastSyncTime!.toLocal())} at ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(status.lastSyncTime!.toLocal()))}',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.onSurface,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Refreshes when Momentum opens and every 5 minutes while it is open.',
-              style: textTheme.bodySmall?.copyWith(color: AppColors.primary),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _calendarFeedEditor(provider, connected: true),
-            if (syncing) ...[
-              const SizedBox(height: AppSpacing.sm),
-              const LinearProgressIndicator(),
-              const SizedBox(height: AppSpacing.sm),
-              Text('Syncing…', style: textTheme.bodyMedium),
-            ],
-            const SizedBox(height: AppSpacing.xs),
-            SizedBox(
-              height: AppSpacing.popupFieldHeight,
-              child: FilledButton.icon(
-                onPressed: syncing ? null : () => _syncProvider(provider),
-                icon: const Icon(Icons.sync),
-                label: const Text('Sync now'),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, AppSpacing.popupFieldHeight),
-                  textStyle: _actionTextStyle(context, AppColors.onPrimary),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            SizedBox(
-              width: double.infinity,
-              height: AppSpacing.popupFieldHeight,
-              child: OutlinedButton(
-                onPressed: () => _disconnect(provider),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, AppSpacing.popupFieldHeight),
-                  foregroundColor: AppColors.error,
-                  side: const BorderSide(color: AppColors.error),
-                  textStyle: _actionTextStyle(context, AppColors.error),
-                ),
-                child: const Text('Disconnect'),
-              ),
-            ),
-          ] else ...[
-            _calendarFeedEditor(provider, connected: false),
-          ],
-          if (_message != null || _error != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text(
-              _error ?? _message!,
-              style: textTheme.bodySmall?.copyWith(
-                color: _error == null ? AppColors.primary : AppColors.error,
-              ),
-            ),
-          ],
-        ],
-      ),
+    return CalendarProviderPanel(
+      provider: provider,
+      status: status,
+      loading: _loadingProvider == provider,
+      syncing: planner.isProviderSyncing(provider),
+      isLast: isLast,
+      message: _message,
+      error: _error,
+      feedEditor: _calendarFeedEditor(provider, connected: connected),
+      onRetry: () {
+        setState(() {
+          _loadingProvider = provider;
+          _error = null;
+        });
+        unawaited(_loadProvider(provider));
+      },
+      onSync: () => _syncProvider(provider),
+      onDisconnect: () => _disconnect(provider),
     );
   }
-
-  TextStyle _actionTextStyle(BuildContext context, Color color) => Theme.of(
-    context,
-  ).textTheme.bodyMedium!.copyWith(color: color, fontWeight: FontWeight.normal);
 
   Widget _calendarFeedEditor(
     CalendarProvider provider, {

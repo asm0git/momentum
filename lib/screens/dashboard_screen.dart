@@ -235,30 +235,34 @@ class _ScreenBody extends StatelessWidget {
   }
 
   DateTime _dateTimeFor(PlannerItem item) {
-    final time = item is Task ? item.time : (item as Event).start;
-    return DateTime(
-      item.date.year,
-      item.date.month,
-      item.date.day,
-      time.hour,
-      time.minute,
-    );
+    return switch (item) {
+      Task task => DateTime(
+        task.date.year,
+        task.date.month,
+        task.date.day,
+        task.time.hour,
+        task.time.minute,
+      ),
+      Event event => DateTime(
+        event.date.year,
+        event.date.month,
+        event.date.day,
+        event.start.hour,
+        event.start.minute,
+      ),
+    };
   }
 
-  DateTime _endDateTimeFor(PlannerItem item) {
-    if (item is Task) {
-      return _dateTimeFor(item).add(item.estimatedDuration);
-    }
-
-    final event = item as Event;
-    return DateTime(
+  DateTime _endDateTimeFor(PlannerItem item) => switch (item) {
+    Task task => _dateTimeFor(task).add(task.estimatedDuration),
+    Event event => DateTime(
       event.endDate.year,
       event.endDate.month,
       event.endDate.day,
       event.end.hour,
       event.end.minute,
-    );
-  }
+    ),
+  };
 
   String _formatTime(DateTime time) {
     return _formatTimeOfDay(TimeOfDay.fromDateTime(time));
@@ -456,5 +460,8 @@ class _DashboardItem {
   final DateTime startTime;
   final DateTime endTime;
 
-  bool get isAllDay => item is Event && (item as Event).allDay;
+  bool get isAllDay => switch (item) {
+    Task _ => false,
+    Event event => event.allDay,
+  };
 }

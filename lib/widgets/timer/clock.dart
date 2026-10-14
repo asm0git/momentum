@@ -117,7 +117,6 @@ class Clock extends StatelessWidget {
     return '${minutes.toString().padLeft(2, '0')}:${remainingSecs.toString().padLeft(2, '0')}';
   }
 
-  // Show the full focus total as hours, minutes, and seconds.
   static String _formatTotal(int seconds) {
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;

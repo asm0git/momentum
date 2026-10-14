@@ -7,10 +7,8 @@ import {
 import type { Env } from './env';
 import { json } from './http';
 import {
-  SESSION_COOKIE,
   activeSessionId,
   getOrCreateSession,
-  readCookie,
 } from './session';
 import { decrypt, encrypt, fingerprint } from './security';
 
@@ -178,14 +176,14 @@ async function disconnectProvider(
   env: Env,
   provider: CalendarIcsProvider,
 ): Promise<Response> {
-  const sessionId = readCookie(request, SESSION_COOKIE);
-  if (sessionId) {
-    await env.DB.prepare(
-      'DELETE FROM calendar_ics_feeds WHERE session_id = ? AND provider = ?',
-    )
-      .bind(sessionId, provider)
-      .run();
-  }
+  const sessionId = await activeSessionId(request, env.DB);
+  if (!sessionId) return json({ disconnected: true });
+
+  await env.DB.prepare(
+    'DELETE FROM calendar_ics_feeds WHERE session_id = ? AND provider = ?',
+  )
+    .bind(sessionId, provider)
+    .run();
   return json({ disconnected: true });
 }
 
@@ -197,7 +195,13 @@ function publishedCalendarName(provider: CalendarIcsProvider): string {
       return 'Outlook published calendar';
     case 'canvas':
       return 'Canvas calendar feed';
+    default:
+      return assertNever(provider);
   }
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unsupported calendar provider: ${String(value)}`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

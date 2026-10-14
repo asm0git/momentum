@@ -20,7 +20,10 @@ class CalendarWeekPlacement {
   final bool continuesBefore;
   final bool continuesAfter;
 
-  bool get isCompleted => item is Task && (item as Task).isChecked;
+  bool get isCompleted => switch (item) {
+    Task task => task.isChecked,
+    Event _ => false,
+  };
 }
 
 /// Expands visible recurring items and assigns each occurrence a calendar row.
@@ -47,7 +50,7 @@ List<CalendarWeekPlacement> placeCalendarWeekItems({
         from: searchStart,
         through: rangeEnd,
       )) {
-        final occurrence = occurrenceForDate(item, occurrenceDate) as Event;
+        final occurrence = eventOccurrenceForDate(item, occurrenceDate);
         final startsOn = dateOnly(occurrence.date);
         final endsOn = dateOnly(occurrence.endDate);
         if (endsOn.isBefore(rangeStart) || startsOn.isAfter(rangeEnd)) {
@@ -141,24 +144,22 @@ class _CalendarOccurrence {
   final int ordinal;
 
   DateTime get scheduledAt {
-    if (item is Task) {
-      final task = item as Task;
-      return DateTime(
+    return switch (item) {
+      Task task => DateTime(
         startsOn.year,
         startsOn.month,
         startsOn.day,
         task.time.hour,
         task.time.minute,
-      );
-    }
-    final event = item as Event;
-    return DateTime(
-      startsOn.year,
-      startsOn.month,
-      startsOn.day,
-      event.allDay ? 0 : event.start.hour,
-      event.allDay ? 0 : event.start.minute,
-    );
+      ),
+      Event event => DateTime(
+        startsOn.year,
+        startsOn.month,
+        startsOn.day,
+        event.allDay ? 0 : event.start.hour,
+        event.allDay ? 0 : event.start.minute,
+      ),
+    };
   }
 }
 
@@ -169,8 +170,14 @@ int _compareCalendarOccurrences(
   final dayComparison = first.startsOn.compareTo(second.startsOn);
   if (dayComparison != 0) return dayComparison;
 
-  final firstAllDay = first.item is Event && (first.item as Event).allDay;
-  final secondAllDay = second.item is Event && (second.item as Event).allDay;
+  final firstAllDay = switch (first.item) {
+    Task _ => false,
+    Event event => event.allDay,
+  };
+  final secondAllDay = switch (second.item) {
+    Task _ => false,
+    Event event => event.allDay,
+  };
   if (firstAllDay != secondAllDay) return firstAllDay ? -1 : 1;
 
   final scheduleComparison = first.scheduledAt.compareTo(second.scheduledAt);

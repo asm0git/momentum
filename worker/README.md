@@ -88,6 +88,15 @@ and skip to step 3.
    you are logged in, return to the terminal. Keep using this terminal from
    inside the `worker` folder for the next steps.
 
+For development, run the Worker checks from this folder before deploying:
+
+```sh
+npm test
+npm run typecheck
+```
+
+The first command runs the Worker tests. The second checks the TypeScript code.
+
 ### How to open the settings files
 
 In Visual Studio Code, choose **File > Open Folder**, select the `momentum`

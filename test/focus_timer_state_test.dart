@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/data/database_helper.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
+import 'package:momentum/state/automatic_event_focus_coordinator.dart';
 import 'package:momentum/state/focus_timer_state.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:path/path.dart' as p;
@@ -346,6 +347,167 @@ void main() {
       ],
     );
     expect(buckets[1].selection, firstCategory);
+  });
+
+  testWidgets(
+    'automatic event focus starts at the clock and records every 10 seconds',
+    (tester) async {
+      var clockNow = DateTime(2026, 10, 9, 10);
+      final event = Event(
+        title: 'Scheduled study session',
+        date: clockNow,
+        start: const TimeOfDay(hour: 10, minute: 0),
+        end: const TimeOfDay(hour: 11, minute: 0),
+        isCurrent: false,
+        allDay: false,
+      );
+      const eventSelection = FocusTaskSelection(
+        taskId: 7,
+        taskTitle: 'Scheduled study session',
+        categoryId: 4,
+        categoryTitle: 'School',
+        categoryIcon: 'mi_school',
+        isEvent: true,
+      );
+      final recorded = <AutomaticFocusBatchEntry>[];
+      var onRecordedCount = 0;
+      final coordinator = AutomaticEventFocusCoordinator(
+        events: () => [event],
+        selectionForItem: (_) => eventSelection,
+        recordBatch: (entries) async => recorded.addAll(entries),
+        onRecorded: () => onRecordedCount++,
+        clock: () => clockNow,
+        enabled: true,
+      );
+
+      coordinator.start();
+      clockNow = clockNow.add(const Duration(seconds: 10));
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+
+      expect(recorded, [
+        (date: DateTime(2026, 10, 9), seconds: 10, selection: eventSelection),
+      ]);
+      expect(onRecordedCount, 1);
+      coordinator.dispose();
+    },
+  );
+
+  test('event focus selection uses half-open event boundaries', () {
+    final eventStart = DateTime(2026, 10, 9, 10);
+    final eventEnd = DateTime(2026, 10, 9, 11);
+    final event = Event(
+      title: 'Scheduled study session',
+      date: eventStart,
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    const eventSelection = FocusTaskSelection(
+      taskId: 7,
+      taskTitle: 'Scheduled study session',
+      categoryId: 4,
+      categoryTitle: 'School',
+      categoryIcon: 'mi_school',
+      isEvent: true,
+    );
+    final coordinator = AutomaticEventFocusCoordinator(
+      events: () => [event],
+      selectionForItem: (_) => eventSelection,
+      recordBatch: (_) async {},
+      onRecorded: () {},
+      clock: () => eventStart,
+      enabled: false,
+    );
+
+    expect(coordinator.eventFocusSelectionAt(eventStart), eventSelection);
+    expect(
+      coordinator.eventFocusSelectionAt(
+        eventEnd.subtract(const Duration(seconds: 1)),
+      ),
+      eventSelection,
+    );
+    expect(
+      coordinator.eventFocusSelectionAt(
+        eventStart.subtract(const Duration(seconds: 1)),
+      ),
+      isNull,
+    );
+    expect(coordinator.eventFocusSelectionAt(eventEnd), isNull);
+    coordinator.dispose();
+  });
+
+  test('next event focus boundary is the nearest future half-open edge', () {
+    final eventStart = DateTime(2026, 10, 9, 10);
+    final eventEnd = DateTime(2026, 10, 9, 11);
+    final event = Event(
+      title: 'Scheduled study session',
+      date: eventStart,
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    final coordinator = AutomaticEventFocusCoordinator(
+      events: () => [event],
+      selectionForItem: (_) => selection,
+      recordBatch: (_) async {},
+      onRecorded: () {},
+      clock: () => eventStart,
+      enabled: false,
+    );
+
+    expect(
+      coordinator.nextEventFocusBoundaryAfter(
+        eventStart.subtract(const Duration(hours: 1)),
+        eventEnd,
+      ),
+      eventStart,
+    );
+    expect(
+      coordinator.nextEventFocusBoundaryAfter(eventStart, eventEnd),
+      eventEnd,
+    );
+    expect(
+      coordinator.nextEventFocusBoundaryAfter(
+        eventEnd,
+        eventEnd.add(const Duration(hours: 1)),
+      ),
+      isNull,
+    );
+    coordinator.dispose();
+  });
+
+  testWidgets('disposed automatic event focus cannot record again', (
+    tester,
+  ) async {
+    var clockNow = DateTime(2026, 10, 9, 10);
+    final event = Event(
+      title: 'Scheduled study session',
+      date: clockNow,
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    final recorded = <AutomaticFocusBatchEntry>[];
+    final coordinator = AutomaticEventFocusCoordinator(
+      events: () => [event],
+      selectionForItem: (_) => selection,
+      recordBatch: (entries) async => recorded.addAll(entries),
+      onRecorded: () {},
+      clock: () => clockNow,
+      enabled: true,
+    );
+
+    coordinator.start();
+    coordinator.dispose();
+    clockNow = clockNow.add(const Duration(seconds: 10));
+    await tester.pump(const Duration(seconds: 10));
+    await coordinator.recordCurrentInterval();
+
+    expect(recorded, isEmpty);
   });
 
   test(

@@ -1,4 +1,5 @@
 export const SESSION_COOKIE = '__Host-momentum_session';
+const MILLISECONDS_PER_SECOND = 1_000;
 const SECONDS_PER_DAY = 24 * 60 * 60;
 const SESSION_TTL_DAYS = 30;
 const SESSION_TTL_SECONDS = SESSION_TTL_DAYS * SECONDS_PER_DAY;
@@ -17,7 +18,7 @@ export function sessionCookie(sessionId: string): string {
 }
 
 export function nowSeconds(): number {
-  return Math.floor(Date.now() / 1000);
+  return Math.floor(Date.now() / MILLISECONDS_PER_SECOND);
 }
 
 export function randomId(): string {

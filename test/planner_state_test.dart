@@ -61,6 +61,89 @@ void main() {
     expect(planner.categories.single.items.single.title, 'Read chapter');
   });
 
+  test('updating a deleted category reports that no row was updated', () async {
+    final category = await planner.addCategory(
+      TaskCategory(title: 'School', iconName: 'mi_school', items: []),
+    );
+    await repository.deleteCategory(
+      category.id!,
+      disposition: CategoryDeleteDisposition.deleteItems,
+    );
+
+    await expectLater(
+      planner.updateCategory(category),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('updating a deleted event reports that no row was updated', () async {
+    final event = Event(
+      title: 'Study session',
+      date: DateTime(2026, 10, 20),
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    await planner.saveEvent(event);
+    await repository.deleteEvent(event.id!);
+
+    await expectLater(planner.saveEvent(event), throwsA(isA<StateError>()));
+  });
+
+  test('deleting a missing task reports that no row was deleted', () async {
+    final task = await planner.saveTask(
+      Task(
+        title: 'Read chapter',
+        date: DateTime(2026, 10, 20),
+        time: const TimeOfDay(hour: 10, minute: 0),
+        estimatedDuration: const Duration(minutes: 25),
+        isChecked: false,
+      ),
+    );
+    await repository.deleteTask(task.id!);
+
+    await expectLater(planner.deleteItem(task), throwsA(isA<StateError>()));
+  });
+
+  test('deleting a missing event reports that no row was deleted', () async {
+    final event = Event(
+      title: 'Study session',
+      date: DateTime(2026, 10, 20),
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    await planner.saveEvent(event);
+    await repository.deleteEvent(event.id!);
+
+    await expectLater(planner.deleteItem(event), throwsA(isA<StateError>()));
+  });
+
+  test(
+    'completing a deleted task reports failure without changing it',
+    () async {
+      final task = await planner.saveTask(
+        Task(
+          title: 'Read chapter',
+          date: DateTime(2026, 10, 20),
+          time: const TimeOfDay(hour: 10, minute: 0),
+          estimatedDuration: const Duration(minutes: 25),
+          isChecked: false,
+        ),
+      );
+      await repository.deleteTask(task.id!);
+
+      await expectLater(
+        planner.setTaskCompleted(task, true),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(task.isChecked, isFalse);
+    },
+  );
+
   test(
     'retry reports a load error and recovers when storage is available',
     () async {

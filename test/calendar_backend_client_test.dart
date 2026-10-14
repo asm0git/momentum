@@ -164,7 +164,7 @@ void main() {
         final backendError = error as CalendarBackendException;
         expect(backendError.provider, CalendarProvider.canvas);
         expect(backendError.endpoint, 'status');
-        expect(backendError.cause, isA<TypeError>());
+        expect(backendError.cause, isA<FormatException>());
         expect(backendError.causeStackTrace, isNotNull);
       },
     );

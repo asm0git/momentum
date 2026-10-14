@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/app_theme.dart';
 import 'package:momentum/data/database_helper.dart';
+import 'package:momentum/data/calendar_sync_repository.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
 import 'package:momentum/screens/add_calendars_screen.dart';
 import 'package:momentum/services/calendar_backend_client.dart';
+import 'package:momentum/state/calendar_sync_coordinator.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -106,9 +108,9 @@ void main() {
     await tester.runAsync(() async {
       final timeout = DateTime.now().add(const Duration(seconds: 5));
       while ((planner
-                      .statusForProvider(CalendarProvider.googleCalendar)
-                      ?.connected !=
-                  true ||
+                      .accountForProvider(CalendarProvider.googleCalendar)
+                      ?.lastSyncTime ==
+                  null ||
               planner.isProviderSyncing(CalendarProvider.googleCalendar)) &&
           DateTime.now().isBefore(timeout)) {
         await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -203,17 +205,108 @@ void main() {
     await tester.runAsync(() async {
       final timeout = DateTime.now().add(const Duration(seconds: 5));
       while ((backend.canvasSyncCount == 0 ||
-              planner.isProviderSyncing(CalendarProvider.canvas)) &&
+              planner.isProviderSyncing(CalendarProvider.canvas) ||
+              planner
+                      .accountForProvider(CalendarProvider.canvas)
+                      ?.lastSyncTime ==
+                  null) &&
           DateTime.now().isBefore(timeout)) {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       }
     });
-    await tester.pumpAndSettle();
+    await _pumpUntilText(tester, 'Sync complete.');
 
     expect(backend.canvasSyncCount, 1);
     expect(find.text('Sync complete.'), findsOneWidget);
     expect(find.text('Sync now'), findsOneWidget);
   });
+
+  test(
+    'overlapping provider status refreshes share one backend request',
+    () async {
+      final pendingStatus = Completer<CalendarConnectionStatus>();
+      backend.pendingProviderStatuses[CalendarProvider.canvas] = pendingStatus;
+      const status = CalendarConnectionStatus(
+        connected: true,
+        providerUrl: 'https://canvas.school.edu',
+        accountName: 'Student',
+      );
+
+      final firstRequest = planner.refreshProviderStatus(
+        CalendarProvider.canvas,
+      );
+      final secondRequest = planner.refreshProviderStatus(
+        CalendarProvider.canvas,
+      );
+
+      expect(backend.providerStatusCallCounts[CalendarProvider.canvas], 1);
+      pendingStatus.complete(status);
+      final results = await Future.wait([firstRequest, secondRequest]);
+
+      expect(results, [status, status]);
+      expect(backend.providerStatusCallCounts[CalendarProvider.canvas], 1);
+    },
+  );
+
+  test('disposed planner stops its calendar refresh timer', () async {
+    final autoSyncPlanner = PlannerState(
+      repository: PlannerRepository(databaseHelper: databaseHelper),
+      calendarBackend: backend,
+      autoSyncCalendarsOnStartup: true,
+      calendarRefreshInterval: const Duration(milliseconds: 50),
+      startAutomaticEventFocusTimer: false,
+    );
+    await autoSyncPlanner.initialize();
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    final callsBeforeDisposal = Map<CalendarProvider, int>.from(
+      backend.providerStatusCallCounts,
+    );
+    expect(
+      callsBeforeDisposal.values.fold(0, (sum, count) => sum + count),
+      greaterThan(3),
+    );
+
+    autoSyncPlanner.dispose();
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    for (final provider in CalendarProvider.values) {
+      expect(
+        backend.providerStatusCallCounts[provider],
+        callsBeforeDisposal[provider],
+      );
+    }
+  });
+
+  test(
+    'disconnect reports when the local linked account no longer exists',
+    () async {
+      final repository = CalendarSyncRepository(databaseHelper: databaseHelper);
+      final account = await repository.insertLinkedAccount(
+        LinkedAccount(
+          platformName: 'canvas',
+          accountName: 'Student',
+          lastSyncTime: DateTime(2026, 10, 7, 9),
+        ),
+      );
+      await repository.deleteLinkedAccount(account.id!);
+      final coordinator = CalendarSyncCoordinator(
+        repository: repository,
+        calendarBackend: backend,
+      );
+
+      await expectLater(
+        coordinator.disconnectProvider(
+          CalendarProvider.canvas,
+          account: account,
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(account.lastSyncTime, DateTime(2026, 10, 7, 9));
+      coordinator.dispose();
+    },
+  );
 
   testWidgets('inline sync and disconnect preserve imported tasks', (
     tester,
@@ -315,13 +408,23 @@ void main() {
     expect(find.text('Syncing…'), findsOneWidget);
 
     pendingSync.complete(_payloadForTest());
-    await _waitForCanvasSync(tester, planner);
+    await _waitForCanvasSync(
+      tester,
+      planner,
+      expectedFeedback: 'Sync complete.',
+      expectSuccess: true,
+    );
     expect(find.text('Sync complete.'), findsOneWidget);
 
     backend.nextCanvasSyncError = StateError('Calendar service unavailable.');
     await tester.tap(find.text('Sync now'));
     await tester.pump();
-    await _waitForCanvasSync(tester, planner);
+    await _waitForCanvasSync(
+      tester,
+      planner,
+      expectedFeedback: 'Calendar service unavailable.',
+      expectSuccess: false,
+    );
     expect(find.text('Calendar service unavailable.'), findsOneWidget);
   });
 }
@@ -335,16 +438,40 @@ void _setIPhone13Viewport(WidgetTester tester) {
 
 Future<void> _waitForCanvasSync(
   WidgetTester tester,
-  PlannerState planner,
-) async {
+  PlannerState planner, {
+  required String expectedFeedback,
+  required bool expectSuccess,
+}) async {
+  final previousLastSync = planner
+      .accountForProvider(CalendarProvider.canvas)
+      ?.lastSyncTime;
   await tester.runAsync(() async {
     final timeout = DateTime.now().add(const Duration(seconds: 5));
-    while (planner.isProviderSyncing(CalendarProvider.canvas) &&
-        DateTime.now().isBefore(timeout)) {
+    while (DateTime.now().isBefore(timeout)) {
+      final accountLastSync = planner
+          .accountForProvider(CalendarProvider.canvas)
+          ?.lastSyncTime;
+      final completed = expectSuccess
+          ? accountLastSync != null && accountLastSync != previousLastSync
+          : planner.errorForProvider(CalendarProvider.canvas) != null;
+      if (!planner.isProviderSyncing(CalendarProvider.canvas) && completed) {
+        return;
+      }
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
   });
-  await tester.pumpAndSettle();
+  await _pumpUntilText(tester, expectedFeedback);
+}
+
+Future<void> _pumpUntilText(WidgetTester tester, String text) async {
+  for (var attempt = 0; attempt < 50; attempt++) {
+    await tester.pump(const Duration(milliseconds: 20));
+    if (find.text(text).evaluate().isNotEmpty) {
+      await tester.pumpAndSettle();
+      return;
+    }
+  }
+  fail('Timed out waiting for "$text".');
 }
 
 CalendarSyncPayload _payloadForTest({
@@ -382,6 +509,9 @@ class _FakeCalendarBackend implements ProviderCalendarBackend {
     ),
     CalendarProvider.outlook: const CalendarConnectionStatus(connected: false),
   };
+  final Map<CalendarProvider, int> providerStatusCallCounts = {};
+  final Map<CalendarProvider, Completer<CalendarConnectionStatus>>
+  pendingProviderStatuses = {};
   CalendarSyncPayload? nextCanvasSync;
   Completer<CalendarSyncPayload>? pendingCanvasSync;
   Object? nextCanvasSyncError;
@@ -406,11 +536,16 @@ class _FakeCalendarBackend implements ProviderCalendarBackend {
   }
 
   @override
-  Future<CalendarConnectionStatus> providerStatus(
-    CalendarProvider provider,
-  ) async =>
+  Future<CalendarConnectionStatus> providerStatus(CalendarProvider provider) {
+    providerStatusCallCounts[provider] =
+        (providerStatusCallCounts[provider] ?? 0) + 1;
+    final pending = pendingProviderStatuses.remove(provider);
+    if (pending != null) return pending.future;
+    return Future.value(
       providerStatuses[provider] ??
-      const CalendarConnectionStatus(connected: false);
+          const CalendarConnectionStatus(connected: false),
+    );
+  }
 
   @override
   Future<CalendarSyncPayload> syncProvider(CalendarProvider provider) async {

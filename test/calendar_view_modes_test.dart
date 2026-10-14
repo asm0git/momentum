@@ -1,3 +1,6 @@
+// This fixture keeps public constructor labels while its fields remain private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show SemanticsAction;
 import 'package:flutter_test/flutter_test.dart';

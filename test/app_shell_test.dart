@@ -109,6 +109,8 @@ void main() {
 }
 
 class _GatePlannerState extends PlannerState {
+  // Keep the injected public label while the test override remains private.
+  // ignore: prefer_initializing_formals
   _GatePlannerState({bool isLoading = false}) : _isLoading = isLoading;
 
   bool _isLoading;

@@ -8,6 +8,7 @@ import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
 import 'package:momentum/state/planner_state.dart';
 import 'package:momentum/widgets/item_editor/add_item_popup.dart';
+import 'package:momentum/widgets/planner/swipe_to_reveal_delete.dart';
 import 'package:momentum/widgets/planner/task_list_container.dart';
 import 'package:momentum/widgets/planner/task_widget.dart';
 import 'package:momentum/widgets/calendar/days.dart';
@@ -160,6 +161,169 @@ void main() {
     final rowHeight = tester.getSize(find.byType(TaskWidget)).height;
     expect(rowHeight, lessThanOrEqualTo(40));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('task and event row taps forward the original item', (
+    tester,
+  ) async {
+    final task = Task(
+      title: 'Read chapter',
+      date: DateTime(2026, 10, 9),
+      isChecked: false,
+      time: const TimeOfDay(hour: 9, minute: 0),
+      estimatedDuration: Duration.zero,
+    );
+    final event = Event(
+      title: 'Study group',
+      date: DateTime(2026, 10, 9),
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+    final tappedItems = <PlannerItem>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: Scaffold(
+          body: TaskListContainer(
+            items: [task, event],
+            onItemTap: tappedItems.add,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text(task.title));
+    await tester.tap(find.text(event.title));
+
+    expect(tappedItems, hasLength(2));
+    expect(tappedItems[0], same(task));
+    expect(tappedItems[1], same(event));
+  });
+
+  testWidgets('swipe delete is installed only when a delete callback exists', (
+    tester,
+  ) async {
+    final task = Task(
+      title: 'Read chapter',
+      date: DateTime(2026, 10, 9),
+      isChecked: false,
+      time: const TimeOfDay(hour: 9, minute: 0),
+      estimatedDuration: Duration.zero,
+    );
+    final event = Event(
+      title: 'Study group',
+      date: DateTime(2026, 10, 9),
+      start: const TimeOfDay(hour: 10, minute: 0),
+      end: const TimeOfDay(hour: 11, minute: 0),
+      isCurrent: false,
+      allDay: false,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: Scaffold(body: TaskListContainer(items: [task, event])),
+      ),
+    );
+    expect(find.byType(SwipeToRevealDelete), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: Scaffold(
+          body: TaskListContainer(items: [task, event], onDelete: (_) {}),
+        ),
+      ),
+    );
+    expect(find.byType(SwipeToRevealDelete), findsNWidgets(2));
+  });
+
+  testWidgets('delete semantics invokes the callback once for its item', (
+    tester,
+  ) async {
+    final task = Task(
+      title: 'Read chapter',
+      date: DateTime(2026, 10, 9),
+      isChecked: false,
+      time: const TimeOfDay(hour: 9, minute: 0),
+      estimatedDuration: Duration.zero,
+    );
+    var deleteCount = 0;
+    PlannerItem? deletedItem;
+    final semantics = tester.ensureSemantics();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: Scaffold(
+          body: TaskListContainer(
+            items: [task],
+            onDelete: (item) {
+              deleteCount++;
+              deletedItem = item;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    tester.semantics.tap(find.semantics.byLabel('Delete item'));
+    await tester.pump();
+
+    expect(deleteCount, 1);
+    expect(deletedItem, same(task));
+    semantics.dispose();
+  });
+
+  testWidgets('swipe threshold reveals and closes the delete action', (
+    tester,
+  ) async {
+    final task = Task(
+      title: 'Read chapter',
+      date: DateTime(2026, 10, 9),
+      isChecked: false,
+      time: const TimeOfDay(hour: 9, minute: 0),
+      estimatedDuration: Duration.zero,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: appTheme,
+        home: Scaffold(
+          body: TaskListContainer(items: [task], onDelete: (_) {}),
+        ),
+      ),
+    );
+    final swipeRow = find.byType(SwipeToRevealDelete);
+
+    await tester.timedDrag(
+      swipeRow,
+      const Offset(-30, 0),
+      const Duration(milliseconds: 500),
+    );
+    await tester.pumpAndSettle();
+    final frontSurface = find.descendant(
+      of: swipeRow,
+      matching: find.byType(Transform),
+    );
+    expect(
+      tester.widget<Transform>(frontSurface.last).transform.storage[12],
+      closeTo(-SwipeToRevealDelete.actionWidth, 1),
+    );
+
+    await tester.timedDrag(
+      swipeRow,
+      const Offset(48, 0),
+      const Duration(milliseconds: 500),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Transform>(frontSurface.last).transform.storage[12],
+      closeTo(0, 1),
+    );
   });
 
   testWidgets(

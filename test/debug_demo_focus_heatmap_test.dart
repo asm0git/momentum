@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/data/debug_demo_data.dart';
 import 'package:momentum/data_models.dart';
-import 'package:momentum/screens/insights_screen.dart';
+import 'package:momentum/widgets/insights/focus_heatmap.dart';
 
 void main() {
   test('demo calendar category creates a future read-only event', () {

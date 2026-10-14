@@ -1,3 +1,6 @@
+// Public constructor labels keep the implementation fields private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -117,8 +120,9 @@ class FocusTimerState extends ChangeNotifier {
         preset.breakMinutes > 1435) {
       return CustomPresetSaveResult.invalid;
     }
-    if (_customPresets.contains(preset))
+    if (_customPresets.contains(preset)) {
       return CustomPresetSaveResult.duplicate;
+    }
 
     _customPresets.insert(0, preset);
     notifyListeners();
@@ -223,31 +227,7 @@ class FocusTimerState extends ChangeNotifier {
             chunk = secondsUntilEventBoundary;
           }
         }
-        final eventAlreadyCountsThisTime =
-            _focusHistorySource?.eventFocusSelectionAt(cursor) != null;
-        if (chunk > 0 && !eventAlreadyCountsThisTime) {
-          final day = dateOnly(cursor);
-          _pendingSeconds.update(
-            day,
-            (seconds) => seconds + chunk,
-            ifAbsent: () => chunk,
-          );
-          final activeTask = _activeTask ?? FocusTaskSelection.unassigned;
-          final categoryForDay = _pendingCategorySeconds.putIfAbsent(
-            day,
-            () => <int, _PendingCategoryFocus>{},
-          );
-          final pending = categoryForDay[activeTask.categoryId];
-          if (pending == null) {
-            categoryForDay[activeTask.categoryId] = _PendingCategoryFocus(
-              selection: activeTask,
-              seconds: chunk,
-            );
-          } else {
-            pending.selection = activeTask;
-            pending.seconds += chunk;
-          }
-        }
+        _recordWorkChunk(cursor, chunk);
       }
 
       cursor = cursor.add(Duration(seconds: chunk));
@@ -260,6 +240,36 @@ class FocusTimerState extends ChangeNotifier {
       }
     }
     _lastTick = cursor;
+  }
+
+  void _recordWorkChunk(DateTime cursor, int seconds) {
+    if (seconds <= 0 ||
+        _focusHistorySource?.eventFocusSelectionAt(cursor) != null) {
+      return;
+    }
+
+    final day = dateOnly(cursor);
+    _pendingSeconds.update(
+      day,
+      (total) => total + seconds,
+      ifAbsent: () => seconds,
+    );
+    final activeTask = _activeTask ?? FocusTaskSelection.unassigned;
+    final categoryForDay = _pendingCategorySeconds.putIfAbsent(
+      day,
+      () => <int, _PendingCategoryFocus>{},
+    );
+    final pending = categoryForDay[activeTask.categoryId];
+    if (pending == null) {
+      categoryForDay[activeTask.categoryId] = _PendingCategoryFocus(
+        selection: activeTask,
+        seconds: seconds,
+      );
+    } else {
+      pending
+        ..selection = activeTask
+        ..seconds += seconds;
+    }
   }
 
   void _advancePhase() {
@@ -320,22 +330,11 @@ class FocusTimerState extends ChangeNotifier {
               categoryEntry.value.selection,
             );
             wroteSeconds = true;
-            final stillPending = _pendingSeconds[dayEntry.key] ?? 0;
-            final dailyRemaining = stillPending - amount;
-            if (dailyRemaining <= 0) {
-              _pendingSeconds.remove(dayEntry.key);
-            } else {
-              _pendingSeconds[dayEntry.key] = dailyRemaining;
-            }
-            final categories = _pendingCategorySeconds[dayEntry.key];
-            final current = categories?[categoryEntry.key];
-            if (categories != null && current != null) {
-              current.seconds -= amount;
-              if (current.seconds <= 0) categories.remove(categoryEntry.key);
-              if (categories.isEmpty) {
-                _pendingCategorySeconds.remove(dayEntry.key);
-              }
-            }
+            _reconcilePendingCategoryEntry(
+              dayEntry.key,
+              categoryEntry.key,
+              amount,
+            );
           }
         }
       } catch (error) {
@@ -363,6 +362,28 @@ class FocusTimerState extends ChangeNotifier {
     } finally {
       _flushInProgress = null;
     }
+  }
+
+  void _reconcilePendingCategoryEntry(
+    DateTime day,
+    int categoryId,
+    int amount,
+  ) {
+    final stillPending = _pendingSeconds[day] ?? 0;
+    final dailyRemaining = stillPending - amount;
+    if (dailyRemaining <= 0) {
+      _pendingSeconds.remove(day);
+    } else {
+      _pendingSeconds[day] = dailyRemaining;
+    }
+
+    final categories = _pendingCategorySeconds[day];
+    final current = categories?[categoryId];
+    if (categories == null || current == null) return;
+
+    current.seconds -= amount;
+    if (current.seconds <= 0) categories.remove(categoryId);
+    if (categories.isEmpty) _pendingCategorySeconds.remove(day);
   }
 
   bool _sameDay(DateTime first, DateTime second) =>

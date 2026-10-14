@@ -222,7 +222,7 @@ class PlannerSnapshotQueries {
       from: dateOnly(now),
       through: DateTime(9999, 12, 31),
     )) {
-      final occurrence = occurrenceForDate(series, occurrenceDate) as Event;
+      final occurrence = eventOccurrenceForDate(series, occurrenceDate);
       if (!_hasEnded(occurrence, now)) return occurrence;
     }
     return null;
@@ -231,25 +231,23 @@ class PlannerSnapshotQueries {
   bool _isImported(PlannerItem item) => switch (item) {
     Task task => task.sourcePlatform?.trim().isNotEmpty ?? false,
     Event event => event.sourcePlatform?.trim().isNotEmpty ?? false,
-    _ => false,
   };
 
-  bool _hasEnded(PlannerItem item, DateTime now) {
-    if (item is Task) return !taskDateTime(item).isAfter(now);
-    if (item is Event) {
-      if (item.allDay) {
-        final endExclusive = dateOnly(
-          item.endDate,
-        ).add(const Duration(days: 1));
-        return !endExclusive.isAfter(now);
-      }
-      var end = eventEndDateTime(item);
-      if (!end.isAfter(eventStartDateTime(item))) {
-        end = end.add(const Duration(days: 1));
-      }
-      return !end.isAfter(now);
+  bool _hasEnded(PlannerItem item, DateTime now) => switch (item) {
+    Task task => !taskDateTime(task).isAfter(now),
+    Event event => _eventHasEnded(event, now),
+  };
+
+  bool _eventHasEnded(Event event, DateTime now) {
+    if (event.allDay) {
+      final endExclusive = dateOnly(event.endDate).add(const Duration(days: 1));
+      return !endExclusive.isAfter(now);
     }
-    return false;
+    var end = eventEndDateTime(event);
+    if (!end.isAfter(eventStartDateTime(event))) {
+      end = end.add(const Duration(days: 1));
+    }
+    return !end.isAfter(now);
   }
 
   PlannerItem? _nextUpcomingFrom(Iterable<PlannerItem> source, DateTime now) {
@@ -277,10 +275,10 @@ class PlannerSnapshotQueries {
           isCompleted: completed,
         );
         final startsAt = _scheduledDate(occurrence);
-        final allDayIsToday =
-            occurrence is Event &&
-            occurrence.allDay &&
-            _sameDay(occurrence.date, today);
+        final allDayIsToday = switch (occurrence) {
+          Task _ => false,
+          Event event => event.allDay && _sameDay(event.date, today),
+        };
         if (startsAt.isBefore(now) && !allDayIsToday) continue;
         if (nextAt == null || startsAt.isBefore(nextAt)) {
           next = occurrence;
@@ -295,25 +293,22 @@ class PlannerSnapshotQueries {
   int _compareItems(PlannerItem first, PlannerItem second) =>
       _scheduledDate(first).compareTo(_scheduledDate(second));
 
-  DateTime _scheduledDate(PlannerItem item) {
-    if (item is Task) {
-      return DateTime(
-        item.date.year,
-        item.date.month,
-        item.date.day,
-        item.time.hour,
-        item.time.minute,
-      );
-    }
-    final event = item as Event;
-    return DateTime(
+  DateTime _scheduledDate(PlannerItem item) => switch (item) {
+    Task task => DateTime(
+      task.date.year,
+      task.date.month,
+      task.date.day,
+      task.time.hour,
+      task.time.minute,
+    ),
+    Event event => DateTime(
       event.date.year,
       event.date.month,
       event.date.day,
       event.start.hour,
       event.start.minute,
-    );
-  }
+    ),
+  };
 
   bool _sameDay(DateTime first, DateTime second) =>
       first.year == second.year &&

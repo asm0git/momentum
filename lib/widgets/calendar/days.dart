@@ -27,7 +27,7 @@ class DayWidget extends StatelessWidget {
         day != null &&
         minimumDate != null &&
         DateUtils.dateOnly(day).isBefore(DateUtils.dateOnly(minimumDate!));
-    final circleSize = AppSpacing.calendarTodayCircleSize;
+    const circleSize = AppSpacing.calendarTodayCircleSize;
     final circleColor = isBeforeMinimumDate
         ? AppColors.transparent
         : isToday

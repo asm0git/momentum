@@ -4,7 +4,6 @@ import '../../app_theme.dart';
 import '../../data_models.dart';
 import '../category_icon_picker.dart';
 
-// Compact category preview used in the dashboard's horizontal category strip.
 class DashboardCategoryCard extends StatelessWidget {
   const DashboardCategoryCard({
     super.key,
@@ -155,8 +154,12 @@ class DashboardCategoryCard extends StatelessWidget {
     ];
     final scheduledDate = item.date;
     final weekday = weekdays[scheduledDate.weekday - 1];
-    if (item is Event && item.allDay) return weekday;
-    final time = item is Task ? item.time : (item as Event).start;
+    final time = switch (item) {
+      Task task => task.time,
+      Event event when event.allDay => null,
+      Event event => event.start,
+    };
+    if (time == null) return weekday;
     final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';

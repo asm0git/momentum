@@ -11,6 +11,8 @@ import '../category_icon_picker.dart';
 import '../planner/planner_write_feedback.dart';
 import '../selector.dart';
 import 'time_picker_dialog.dart';
+import 'event_editor_draft.dart';
+import 'task_editor_draft.dart';
 
 enum _PopupItemType { event, task }
 
@@ -50,17 +52,9 @@ class AddItemPopup extends StatefulWidget {
 class _AddItemPopupState extends State<AddItemPopup> {
   _PopupItemType _selectedType = _PopupItemType.event;
   final _titleController = TextEditingController();
-  final _eventNotesController = TextEditingController();
-  final _notesController = TextEditingController();
+  late final EventEditorDraft _eventDraft;
+  late final TaskEditorDraft _taskDraft;
   int? _selectedCategoryId;
-  bool _allDay = false;
-  DateTime _taskDeadline = DateTime.now();
-  TimeOfDay _taskDeadlineTime = const TimeOfDay(hour: 9, minute: 0);
-  Duration _taskEstimatedDuration = const Duration(hours: 1);
-  DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now();
-  TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
-  TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   RecurrenceRule _repeat = RecurrenceRule.never;
   DateTime? _repeatUntil;
   String? _validationMessage;
@@ -69,95 +63,62 @@ class _AddItemPopupState extends State<AddItemPopup> {
   void initState() {
     super.initState();
     final item = widget.initialItem;
+    _eventDraft = EventEditorDraft(initialEvent: item is Event ? item : null);
+    _taskDraft = TaskEditorDraft(initialTask: item is Task ? item : null);
     if (item == null) return;
     _titleController.text = item.title;
     _selectedCategoryId = item.categoryId;
     if (item is Task) {
       _selectedType = _PopupItemType.task;
-      _taskDeadline = item.date;
-      _taskDeadlineTime = item.time;
-      _taskEstimatedDuration = item.estimatedDuration;
       _repeat = item.repeat;
       _repeatUntil = item.repeatUntil;
-      _notesController.text = item.description;
     } else if (item is Event) {
       _selectedType = _PopupItemType.event;
-      _allDay = item.allDay;
-      _startDate = item.date;
-      _startTime = item.start;
-      _endDate = item.endDate;
-      _endTime = item.end;
       _repeat = item.repeat;
       _repeatUntil = item.repeatUntil;
-      _eventNotesController.text = item.notes;
-      if (!_allDay) _normalizeEndDateTime();
     }
   }
 
   @override
   void dispose() {
     _titleController.dispose();
-    _eventNotesController.dispose();
-    _notesController.dispose();
+    _eventDraft.dispose();
+    _taskDraft.dispose();
     super.dispose();
   }
 
   void _setAllDay(bool value) {
-    setState(() {
-      _allDay = value;
-      if (value) {
-        _endDate = _dateOnly(_startDate);
-      } else {
-        _normalizeEndDateTime();
-      }
-    });
+    setState(() => _eventDraft.setAllDay(value));
   }
 
   void _setAllDayDate(DateTime value) {
     setState(() {
-      _startDate = _dateOnly(value);
-      _endDate = _startDate;
-      _clampRepeatUntil(_startDate);
+      _eventDraft.setAllDayDate(value);
+      _clampRepeatUntil(_eventDraft.startDate);
     });
   }
 
   void _setStartDate(DateTime value) {
     setState(() {
-      _startDate = _dateOnly(value);
-      _clampRepeatUntil(_startDate);
-      if (_dateOnly(_endDate).isBefore(_startDate)) _endDate = _startDate;
-      _normalizeEndDateTime();
+      _eventDraft.setStartDate(value);
+      _clampRepeatUntil(_eventDraft.startDate);
     });
   }
 
   void _setStartTime(TimeOfDay value) {
-    setState(() {
-      _startTime = value;
-      _normalizeEndDateTime();
-    });
+    setState(() => _eventDraft.setStartTime(value));
   }
 
-  void _setEndDate(DateTime value) {
-    setState(() {
-      final selectedDate = _dateOnly(value);
-      _endDate = selectedDate.isBefore(_dateOnly(_startDate))
-          ? _dateOnly(_startDate)
-          : selectedDate;
-      _normalizeEndDateTime();
-    });
-  }
+  void _setEndDate(DateTime value) =>
+      setState(() => _eventDraft.setEndDate(value));
 
-  void _setEndTime(TimeOfDay value) {
-    setState(() {
-      _endTime = value;
-      _normalizeEndDateTime();
-    });
-  }
+  void _setEndTime(TimeOfDay value) =>
+      setState(() => _eventDraft.setEndTime(value));
 
   void _setTaskDeadline(DateTime value) {
     setState(() {
-      _taskDeadline = _dateOnly(value);
-      _clampRepeatUntil(_taskDeadline);
+      _taskDraft.setDeadline(value);
+      _clampRepeatUntil(_taskDraft.deadline);
     });
   }
 
@@ -185,32 +146,9 @@ class _AddItemPopupState extends State<AddItemPopup> {
     }
   }
 
-  DateTime get _repeatStartDate =>
-      _selectedType == _PopupItemType.task ? _taskDeadline : _startDate;
-
-  void _normalizeEndDateTime() {
-    if (_allDay) return;
-
-    final startsAt = DateTime(
-      _startDate.year,
-      _startDate.month,
-      _startDate.day,
-      _startTime.hour,
-      _startTime.minute,
-    );
-    final endsAt = DateTime(
-      _endDate.year,
-      _endDate.month,
-      _endDate.day,
-      _endTime.hour,
-      _endTime.minute,
-    );
-    if (!endsAt.isAfter(startsAt)) {
-      final earliestEnd = startsAt.add(const Duration(minutes: 1));
-      _endDate = _dateOnly(earliestEnd);
-      _endTime = TimeOfDay.fromDateTime(earliestEnd);
-    }
-  }
+  DateTime get _repeatStartDate => _selectedType == _PopupItemType.task
+      ? _taskDraft.deadline
+      : _eventDraft.startDate;
 
   DateTime _dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);
@@ -236,7 +174,9 @@ class _AddItemPopupState extends State<AddItemPopup> {
                 onTypeChanged: (type) => setState(() {
                   _selectedType = type;
                   _clampRepeatUntil(
-                    type == _PopupItemType.task ? _taskDeadline : _startDate,
+                    type == _PopupItemType.task
+                        ? _taskDraft.deadline
+                        : _eventDraft.startDate,
                   );
                   _validationMessage = null;
                 }),
@@ -258,16 +198,16 @@ class _AddItemPopupState extends State<AddItemPopup> {
             if (_selectedType == _PopupItemType.event) ...[
               const SizedBox(height: AppSpacing.sm),
               _EventFields(
-                allDay: _allDay,
+                allDay: _eventDraft.allDay,
                 onAllDayChanged: _setAllDay,
-                startDate: _startDate,
+                startDate: _eventDraft.startDate,
                 onAllDayDateChanged: _setAllDayDate,
                 onStartDateChanged: _setStartDate,
-                startTime: _startTime,
+                startTime: _eventDraft.startTime,
                 onStartTimeChanged: _setStartTime,
-                endDate: _endDate,
+                endDate: _eventDraft.endDate,
                 onEndDateChanged: _setEndDate,
-                endTime: _endTime,
+                endTime: _eventDraft.endTime,
                 onEndTimeChanged: _setEndTime,
                 repeat: _repeat,
                 repeatUntil: _repeatUntil,
@@ -275,23 +215,23 @@ class _AddItemPopupState extends State<AddItemPopup> {
                 onRepeatUntilChanged: _setRepeatUntil,
               ),
               const SizedBox(height: AppSpacing.sm),
-              _NotesField(controller: _eventNotesController),
+              _NotesField(controller: _eventDraft.notesController),
             ] else ...[
               const SizedBox(height: AppSpacing.sm),
               _TaskFields(
-                deadline: _taskDeadline,
+                deadline: _taskDraft.deadline,
                 onDeadlineChanged: _setTaskDeadline,
-                deadlineTime: _taskDeadlineTime,
+                deadlineTime: _taskDraft.deadlineTime,
                 onDeadlineTimeChanged: (value) =>
-                    setState(() => _taskDeadlineTime = value),
-                estimatedDuration: _taskEstimatedDuration,
+                    setState(() => _taskDraft.deadlineTime = value),
+                estimatedDuration: _taskDraft.estimatedDuration,
                 onEstimatedDurationChanged: (value) =>
-                    setState(() => _taskEstimatedDuration = value),
+                    setState(() => _taskDraft.estimatedDuration = value),
                 repeat: _repeat,
                 repeatUntil: _repeatUntil,
                 onRepeatChanged: _setRepeat,
                 onRepeatUntilChanged: _setRepeatUntil,
-                notesController: _notesController,
+                notesController: _taskDraft.notesController,
               ),
             ],
             if (_validationMessage != null) ...[
@@ -351,48 +291,26 @@ class _AddItemPopupState extends State<AddItemPopup> {
     try {
       if (_selectedType == _PopupItemType.task) {
         final previous = widget.initialItem;
-        final task = Task(
-          id: previous is Task ? previous.id : null,
-          categoryId: _selectedCategoryId,
+        final task = _taskDraft.toTask(
+          original: previous is Task ? previous : null,
+          categoryId: _selectedCategoryId!,
           title: title,
-          date: DateTime(
-            _taskDeadline.year,
-            _taskDeadline.month,
-            _taskDeadline.day,
-          ),
-          time: _taskDeadlineTime,
-          estimatedDuration: _taskEstimatedDuration,
           repeat: _repeat,
           repeatUntil: _repeatUntil,
-          isChecked: previous is Task ? previous.isChecked : false,
-          description: _notesController.text.trim(),
-          priority: previous is Task ? previous.priority : null,
-          sourcePlatform: previous is Task ? previous.sourcePlatform : null,
-          externalId: previous is Task ? previous.externalId : null,
         );
         final saved = await state.saveTask(task);
         widget.onSaved?.call(saved);
         return;
       }
 
-      _normalizeEndDateTime();
+      _eventDraft.normalizeEndDateTime();
       final previous = widget.initialItem;
-      final event = Event(
-        id: previous is Event ? previous.id : null,
-        categoryId: _selectedCategoryId,
+      final event = _eventDraft.toEvent(
+        original: previous is Event ? previous : null,
+        categoryId: _selectedCategoryId!,
         title: title,
-        date: DateTime(_startDate.year, _startDate.month, _startDate.day),
-        endDate: DateTime(_endDate.year, _endDate.month, _endDate.day),
-        start: _allDay ? const TimeOfDay(hour: 0, minute: 0) : _startTime,
-        end: _allDay ? const TimeOfDay(hour: 0, minute: 0) : _endTime,
-        isCurrent: previous is Event ? previous.isCurrent : false,
-        allDay: _allDay,
-        location: previous is Event ? previous.location : null,
-        notes: _eventNotesController.text.trim(),
         repeat: _repeat,
         repeatUntil: _repeatUntil,
-        sourcePlatform: previous is Event ? previous.sourcePlatform : null,
-        externalId: previous is Event ? previous.externalId : null,
       );
       final saved = await state.saveEvent(event);
       widget.onSaved?.call(saved);

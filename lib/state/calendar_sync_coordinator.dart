@@ -5,37 +5,26 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import '../data/planner_repository.dart';
+import '../data/calendar_sync_repository.dart';
 import '../data_models.dart';
 import '../services/calendar_backend_client.dart';
 
-/// Owns remote provider status, sync operations, and periodic refreshes.
-/// PlannerState remains responsible for the local planner snapshot.
+/// Owns remote provider status and sync request state.
 class CalendarSyncCoordinator extends ChangeNotifier {
   CalendarSyncCoordinator({
-    required PlannerRepository repository,
+    required CalendarSyncRepository repository,
     required ProviderCalendarBackend calendarBackend,
-    required Future<void> Function() reloadSnapshot,
-    required LinkedAccount? Function(CalendarProvider) accountForProvider,
-    required bool Function() isParentDisposed,
   }) : _repository = repository,
-       _calendarBackend = calendarBackend,
-       _reloadSnapshot = reloadSnapshot,
-       _accountForProvider = accountForProvider,
-       _isParentDisposed = isParentDisposed;
+       _calendarBackend = calendarBackend;
 
-  final PlannerRepository _repository;
+  final CalendarSyncRepository _repository;
   final ProviderCalendarBackend _calendarBackend;
-  final Future<void> Function() _reloadSnapshot;
-  final LinkedAccount? Function(CalendarProvider) _accountForProvider;
-  final bool Function() _isParentDisposed;
 
   final Map<CalendarProvider, CalendarConnectionStatus> _providerStatuses = {};
   final Set<CalendarProvider> _syncingProviders = {};
   final Map<CalendarProvider, Object> _providerErrors = {};
   final Map<CalendarProvider, Future<CalendarConnectionStatus>>
   _statusRequests = {};
-  Timer? _calendarRefreshTimer;
   bool _isDisposed = false;
 
   CalendarConnectionStatus? statusForProvider(CalendarProvider provider) =>
@@ -57,14 +46,20 @@ class CalendarSyncCoordinator extends ChangeNotifier {
     if (inFlight != null) return inFlight;
 
     late final Future<CalendarConnectionStatus> tracked;
-    tracked = _calendarBackend
-        .providerStatus(provider)
-        .then((status) {
-          _providerStatuses[provider] = status;
-          _notifyChanged();
-          return status;
-        })
-        .whenComplete(() {
+    tracked =
+        () async {
+          try {
+            final status = await _calendarBackend.providerStatus(provider);
+            _providerStatuses[provider] = status;
+            _providerErrors.remove(provider);
+            _notifyChanged();
+            return status;
+          } catch (error) {
+            _providerErrors[provider] = error;
+            _notifyChanged();
+            rethrow;
+          }
+        }().whenComplete(() {
           if (identical(_statusRequests[provider], tracked)) {
             _statusRequests.remove(provider);
           }
@@ -73,13 +68,13 @@ class CalendarSyncCoordinator extends ChangeNotifier {
     return tracked;
   }
 
-  Future<void> syncProvider(
+  Future<bool> syncProvider(
     CalendarProvider provider, {
     bool replaceExistingImports = false,
     bool removeMissingTasks = false,
     bool removeMissingEvents = false,
   }) async {
-    if (!_syncingProviders.add(provider)) return;
+    if (!_syncingProviders.add(provider)) return false;
     _providerErrors.remove(provider);
     _notifyChanged();
     try {
@@ -90,7 +85,6 @@ class CalendarSyncCoordinator extends ChangeNotifier {
         removeMissingTasks: removeMissingTasks,
         removeMissingEvents: removeMissingEvents,
       );
-      await _reloadSnapshot();
       _providerStatuses[provider] = CalendarConnectionStatus(
         connected: true,
         providerUrl: payload.providerUrl,
@@ -99,6 +93,7 @@ class CalendarSyncCoordinator extends ChangeNotifier {
         remoteUserId: payload.remoteUserId,
         lastSyncTime: payload.syncedAt,
       );
+      return true;
     } catch (error) {
       _providerErrors[provider] = error;
       rethrow;
@@ -119,59 +114,50 @@ class CalendarSyncCoordinator extends ChangeNotifier {
     _notifyChanged();
   }
 
-  Future<void> disconnectProvider(CalendarProvider provider) async {
+  Future<void> disconnectProvider(
+    CalendarProvider provider, {
+    LinkedAccount? account,
+  }) async {
     await _calendarBackend.disconnectProvider(provider);
     try {
-      final account = _accountForProvider(provider);
       if (account != null && account.id != null) {
         // Keep the local account identity as a marker for the next sync.
-        account.lastSyncTime = null;
-        await _repository.updateLinkedAccount(account);
+        final updatedAccount = LinkedAccount(
+          id: account.id,
+          platformName: account.platformName,
+          accountName: account.accountName,
+          accountEmail: account.accountEmail,
+          providerUrl: account.providerUrl,
+          remoteUserId: account.remoteUserId,
+          categoryId: account.categoryId,
+        );
+        final updated = await _repository.updateLinkedAccount(updatedAccount);
+        if (!updated) {
+          throw StateError(
+            'The linked calendar account was not updated in local storage.',
+          );
+        }
       }
-      await _reloadSnapshot();
-    } finally {
-      _providerStatuses[provider] = const CalendarConnectionStatus(
-        connected: false,
-      );
-      _providerErrors.remove(provider);
+    } catch (error) {
+      _providerErrors[provider] = error;
       _notifyChanged();
+      rethrow;
     }
-  }
 
-  void startBackgroundRefresh() {
-    _startCalendarRefreshTimer();
-    unawaited(_refreshCalendarsIfConnected());
-  }
-
-  void _startCalendarRefreshTimer() {
-    if (_calendarRefreshTimer != null) return;
-    _calendarRefreshTimer = Timer.periodic(
-      const Duration(minutes: 5),
-      (_) => unawaited(_refreshCalendarsIfConnected()),
+    _providerStatuses[provider] = const CalendarConnectionStatus(
+      connected: false,
     );
-  }
-
-  Future<void> _refreshCalendarsIfConnected() async {
-    if (_isDisposed || _isParentDisposed()) return;
-    for (final provider in CalendarProvider.values) {
-      try {
-        final status = await refreshProviderStatus(provider);
-        if (status.connected) await syncProvider(provider);
-      } catch (error) {
-        _providerErrors[provider] = error;
-        _notifyChanged();
-      }
-    }
+    _providerErrors.remove(provider);
+    _notifyChanged();
   }
 
   void _notifyChanged() {
-    if (!_isDisposed && !_isParentDisposed()) notifyListeners();
+    if (!_isDisposed) notifyListeners();
   }
 
   @override
   void dispose() {
     _isDisposed = true;
-    _calendarRefreshTimer?.cancel();
     super.dispose();
   }
 }

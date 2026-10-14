@@ -1,3 +1,6 @@
+// Public constructor labels keep the injected dependencies private.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -256,7 +259,7 @@ class AutomaticEventFocusCoordinator {
         from: firstDay,
         through: lastDay,
       )) {
-        final occurrence = occurrenceForDate(series, occurrenceDate) as Event;
+        final occurrence = eventOccurrenceForDate(series, occurrenceDate);
         final start = occurrence.allDay
             ? dateOnly(occurrence.date)
             : eventStartDateTime(occurrence);

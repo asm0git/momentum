@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:momentum/app_theme.dart';
 import 'package:momentum/data/database_helper.dart';
+import 'package:momentum/data/focus_history_repository.dart';
 import 'package:momentum/data/planner_repository.dart';
 import 'package:momentum/data_models.dart';
 import 'package:momentum/screens/insights_screen.dart';
@@ -15,7 +17,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   late Directory tempDirectory;
   late DatabaseHelper databaseHelper;
-  late _TestInsightsRepository repository;
+  late PlannerRepository repository;
+  late _TestInsightsFocusHistoryRepository focusRepository;
   late PlannerState planner;
 
   setUpAll(() => sqfliteFfiInit());
@@ -29,8 +32,14 @@ void main() {
       databasePath: '${tempDirectory.path}/insights.db',
       seedOnCreate: false,
     );
-    repository = _TestInsightsRepository(databaseHelper: databaseHelper);
-    planner = PlannerState(repository: repository);
+    repository = PlannerRepository(databaseHelper: databaseHelper);
+    focusRepository = _TestInsightsFocusHistoryRepository(
+      databaseHelper: databaseHelper,
+    );
+    planner = PlannerState(
+      repository: repository,
+      focusHistoryRepository: focusRepository,
+    );
     await planner.initialize();
   });
 
@@ -118,7 +127,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('30 mins'), findsWidgets);
 
-    repository.nextFocusTotalsError = StateError('private storage details');
+    focusRepository.nextFocusTotalsError = StateError(
+      'private storage details',
+    );
     await tester.runAsync(
       () => planner.addFocusSeconds(today, 60, FocusTaskSelection.unassigned),
     );
@@ -211,6 +222,10 @@ void main() {
       final initialRange = tester
           .widget<Text>(find.byKey(const ValueKey('insights-week-range')))
           .data;
+      final historicalQueryCount = focusRepository.focusTotalsRanges
+          .where((range) => range.$2.difference(range.$1).inDays > 300)
+          .length;
+      expect(historicalQueryCount, 1);
       await tester.tap(find.byKey(const ValueKey('insights-previous-week')));
       await tester.pump();
       await tester.runAsync(
@@ -222,6 +237,12 @@ void main() {
           .widget<Text>(find.byKey(const ValueKey('insights-week-range')))
           .data;
       expect(previousRange, isNot(initialRange));
+      expect(
+        focusRepository.focusTotalsRanges
+            .where((range) => range.$2.difference(range.$1).inDays > 300)
+            .length,
+        historicalQueryCount,
+      );
 
       final category = (await tester.runAsync(
         () => planner.addCategory(
@@ -266,6 +287,86 @@ void main() {
       expect(find.byType(Tooltip), findsWidgets);
     },
   );
+
+  testWidgets('keeps the heatmap visible during a weekly reload', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<PlannerState>.value(
+        value: planner,
+        child: MaterialApp(theme: appTheme, home: const InsightsScreen()),
+      ),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    final heatmap = find.byKey(const ValueKey('insights-heatmap-grid'));
+    expect(heatmap, findsOneWidget);
+
+    final pendingWeeklyTotals = Completer<Map<DateTime, int>>();
+    focusRepository.nextWeeklyFocusTotals = pendingWeeklyTotals;
+    await tester.tap(find.byKey(const ValueKey('insights-previous-week')));
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
+    expect(heatmap, findsOneWidget);
+
+    pendingWeeklyTotals.complete({});
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(heatmap, findsOneWidget);
+  });
+
+  testWidgets('shows weekly charts while heatmap history is still loading', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final pendingHeatmapTotals = Completer<Map<DateTime, int>>();
+    focusRepository.nextHistoricalFocusTotals = pendingHeatmapTotals;
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<PlannerState>.value(
+        value: planner,
+        child: MaterialApp(theme: appTheme, home: const InsightsScreen()),
+      ),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('insights-weekly-bar-chart')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('insights-heatmap-grid')), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
+
+    pendingHeatmapTotals.complete({});
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('insights-heatmap-grid')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('weekly bars show selected values and scale the vertical axis', (
     tester,
@@ -393,16 +494,33 @@ void main() {
   });
 }
 
-class _TestInsightsRepository extends PlannerRepository {
-  _TestInsightsRepository({required super.databaseHelper});
+class _TestInsightsFocusHistoryRepository extends FocusHistoryRepository {
+  _TestInsightsFocusHistoryRepository({required super.databaseHelper});
 
   Object? nextFocusTotalsError;
+  Completer<Map<DateTime, int>>? nextWeeklyFocusTotals;
+  Completer<Map<DateTime, int>>? nextHistoricalFocusTotals;
+  final focusTotalsRanges = <(DateTime, DateTime)>[];
 
   @override
   Future<Map<DateTime, int>> getFocusTotalsForRange(
     DateTime firstDay,
     DateTime lastDay,
   ) async {
+    focusTotalsRanges.add((firstDay, lastDay));
+    if (lastDay.difference(firstDay).inDays <= 6) {
+      final pendingTotals = nextWeeklyFocusTotals;
+      if (pendingTotals != null) {
+        nextWeeklyFocusTotals = null;
+        return pendingTotals.future;
+      }
+    } else if (lastDay.difference(firstDay).inDays > 300) {
+      final pendingTotals = nextHistoricalFocusTotals;
+      if (pendingTotals != null) {
+        nextHistoricalFocusTotals = null;
+        return pendingTotals.future;
+      }
+    }
     final error = nextFocusTotalsError;
     nextFocusTotalsError = null;
     if (error != null) throw error;

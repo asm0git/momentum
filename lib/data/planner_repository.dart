@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../data_models.dart';
@@ -11,6 +10,9 @@ class PlannerRepository {
     : _databaseHelper = databaseHelper ?? DatabaseHelper.instance;
 
   final DatabaseHelper _databaseHelper;
+
+  /// Shared by repositories that must participate in the same local store.
+  DatabaseHelper get databaseHelper => _databaseHelper;
 
   Future<TaskCategory> insertCategory(TaskCategory category) async {
     final db = await _databaseHelper.database;
@@ -208,298 +210,6 @@ class PlannerRepository {
     return await db.delete('ai_plans', where: 'id = ?', whereArgs: [id]) > 0;
   }
 
-  Future<LinkedAccount> insertLinkedAccount(LinkedAccount account) async {
-    final db = await _databaseHelper.database;
-    account.id = await db.insert(
-      'linked_accounts',
-      linkedAccountToMap(account),
-    );
-    return account;
-  }
-
-  Future<List<LinkedAccount>> getLinkedAccounts() async {
-    final db = await _databaseHelper.database;
-    final rows = await db.query('linked_accounts', orderBy: 'platform_name');
-    return rows.map(linkedAccountFromMap).toList();
-  }
-
-  Future<LinkedAccount?> getLinkedAccount(int id) async {
-    final db = await _databaseHelper.database;
-    final rows = await db.query(
-      'linked_accounts',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    return rows.isEmpty ? null : linkedAccountFromMap(rows.first);
-  }
-
-  Future<bool> updateLinkedAccount(LinkedAccount account) async {
-    if (account.id == null) return false;
-    final db = await _databaseHelper.database;
-    return await db.update(
-          'linked_accounts',
-          linkedAccountToMap(account),
-          where: 'id = ?',
-          whereArgs: [account.id],
-        ) >
-        0;
-  }
-
-  Future<bool> deleteLinkedAccount(int id) async {
-    final db = await _databaseHelper.database;
-    return await db.delete(
-          'linked_accounts',
-          where: 'id = ?',
-          whereArgs: [id],
-        ) >
-        0;
-  }
-
-  /// Applies a provider response in one transaction. Missing imported rows are
-  /// retained unless replacement or cleanup is explicitly requested.
-  Future<LinkedAccount> applyCalendarSync(
-    CalendarSyncPayload payload, {
-    bool replaceExistingImports = false,
-    bool removeMissingTasks = false,
-    bool removeMissingEvents = false,
-  }) async {
-    final db = await _databaseHelper.database;
-    final provider = payload.providerName.toLowerCase();
-    final providerInfo = CalendarProvider.values.firstWhere(
-      (value) => value.key == provider,
-      orElse: () => throw ArgumentError.value(
-        payload.providerName,
-        'providerName',
-        'Unknown calendar provider.',
-      ),
-    );
-    return db.transaction((txn) async {
-      final accounts = await txn.query(
-        'linked_accounts',
-        where: 'LOWER(platform_name) = ?',
-        whereArgs: [provider],
-        limit: 1,
-      );
-      final existingAccount = accounts.isEmpty
-          ? null
-          : linkedAccountFromMap(accounts.single);
-
-      final oldRemoteUserId = existingAccount?.remoteUserId?.trim();
-      final newRemoteUserId = payload.remoteUserId.trim();
-      final oldProviderUrl = existingAccount?.providerUrl?.trim();
-      final newProviderUrl = payload.providerUrl.trim();
-      final accountChanged =
-          (oldRemoteUserId?.isNotEmpty == true &&
-              newRemoteUserId.isNotEmpty &&
-              oldRemoteUserId != newRemoteUserId) ||
-          (oldProviderUrl?.isNotEmpty == true &&
-              newProviderUrl.isNotEmpty &&
-              oldProviderUrl != newProviderUrl);
-      if (replaceExistingImports || accountChanged) {
-        // Only remove records imported from this provider. Locally created
-        // planner items and imports from other calendars remain untouched.
-        await txn.delete(
-          'tasks',
-          where: 'src_platform = ?',
-          whereArgs: [provider],
-        );
-        await txn.delete(
-          'events',
-          where: 'src_platform = ?',
-          whereArgs: [provider],
-        );
-      }
-
-      TaskCategory? category;
-      final existingCategoryId = existingAccount?.categoryId;
-      if (existingCategoryId != null) {
-        final rows = await txn.query(
-          'categories',
-          where: 'id = ?',
-          whereArgs: [existingCategoryId],
-          limit: 1,
-        );
-        if (rows.isNotEmpty) category ??= categoryFromMap(rows.single);
-      }
-      if (category == null) {
-        final rows = await txn.query(
-          'categories',
-          where: 'title = ? COLLATE NOCASE',
-          whereArgs: [providerInfo.title],
-          limit: 1,
-        );
-        category = rows.isEmpty
-            ? TaskCategory(
-                title: providerInfo.title,
-                iconName: providerInfo.categoryIcon,
-                items: [],
-              )
-            : categoryFromMap(rows.single);
-        category.id ??= await txn.insert('categories', categoryToMap(category));
-      }
-
-      final account = LinkedAccount(
-        id: existingAccount?.id,
-        platformName: provider,
-        accountName: payload.accountName,
-        accountEmail: payload.accountEmail,
-        providerUrl: payload.providerUrl,
-        remoteUserId: payload.remoteUserId,
-        categoryId: category.id,
-        lastSyncTime: payload.syncedAt,
-      );
-      if (account.id == null) {
-        account.id = await txn.insert(
-          'linked_accounts',
-          linkedAccountToMap(account),
-        );
-      } else {
-        await txn.update(
-          'linked_accounts',
-          linkedAccountToMap(account)..remove('id'),
-          where: 'id = ?',
-          whereArgs: [account.id],
-        );
-      }
-
-      for (final imported in payload.tasks) {
-        final rows = await txn.query(
-          'tasks',
-          where: 'src_platform = ? AND external_id = ?',
-          whereArgs: [provider, imported.externalId],
-          limit: 1,
-        );
-        if (rows.isEmpty) {
-          final due = imported.due.toLocal();
-          await txn.insert(
-            'tasks',
-            taskToMap(
-              Task(
-                categoryId: category.id,
-                title: imported.title,
-                date: DateTime(due.year, due.month, due.day),
-                time: TimeOfDay(hour: due.hour, minute: due.minute),
-                estimatedDuration: Duration.zero,
-                isChecked: false,
-                description: imported.description,
-                sourcePlatform: provider,
-                externalId: imported.externalId,
-              ),
-            ),
-          );
-        } else {
-          final old = taskFromMap(rows.single);
-          final due = imported.due.toLocal();
-          old
-            ..categoryId = category.id
-            ..title = imported.title
-            ..date = DateTime(due.year, due.month, due.day)
-            ..time = TimeOfDay(hour: due.hour, minute: due.minute)
-            ..description = imported.description
-            ..sourcePlatform = provider
-            ..externalId = imported.externalId;
-          await txn.update(
-            'tasks',
-            taskToMap(old)..remove('id'),
-            where: 'id = ?',
-            whereArgs: [old.id],
-          );
-        }
-      }
-
-      if (removeMissingTasks) {
-        await _removeMissingImportedItems(
-          txn,
-          table: 'tasks',
-          provider: provider,
-          importedIds: payload.tasks.map((task) => task.externalId).toSet(),
-        );
-      }
-
-      for (final imported in payload.events) {
-        final rows = await txn.query(
-          'events',
-          where: 'src_platform = ? AND external_id = ?',
-          whereArgs: [provider, imported.externalId],
-          limit: 1,
-        );
-        final start = imported.start.toLocal();
-        final end = imported.end.toLocal();
-        if (rows.isEmpty) {
-          await txn.insert(
-            'events',
-            eventToMap(
-              Event(
-                categoryId: category.id,
-                title: imported.title,
-                date: DateTime(start.year, start.month, start.day),
-                endDate: DateTime(end.year, end.month, end.day),
-                start: TimeOfDay(hour: start.hour, minute: start.minute),
-                end: TimeOfDay(hour: end.hour, minute: end.minute),
-                isCurrent: false,
-                allDay: imported.allDay,
-                location: imported.location,
-                notes: imported.description,
-                sourcePlatform: provider,
-                externalId: imported.externalId,
-              ),
-            ),
-          );
-        } else {
-          final old = eventFromMap(rows.single);
-          old
-            ..categoryId = category.id
-            ..title = imported.title
-            ..date = DateTime(start.year, start.month, start.day)
-            ..endDate = DateTime(end.year, end.month, end.day)
-            ..start = TimeOfDay(hour: start.hour, minute: start.minute)
-            ..end = TimeOfDay(hour: end.hour, minute: end.minute)
-            ..allDay = imported.allDay
-            ..location = imported.location
-            ..notes = imported.description
-            ..sourcePlatform = provider
-            ..externalId = imported.externalId;
-          await txn.update(
-            'events',
-            eventToMap(old)..remove('id'),
-            where: 'id = ?',
-            whereArgs: [old.id],
-          );
-        }
-      }
-
-      if (removeMissingEvents) {
-        await _removeMissingImportedItems(
-          txn,
-          table: 'events',
-          provider: provider,
-          importedIds: payload.events.map((event) => event.externalId).toSet(),
-        );
-      }
-      return account;
-    });
-  }
-
-  Future<void> _removeMissingImportedItems(
-    Transaction txn, {
-    required String table,
-    required String provider,
-    required Set<String> importedIds,
-  }) async {
-    final rows = await txn.query(
-      table,
-      columns: ['id', 'external_id'],
-      where: 'src_platform = ?',
-      whereArgs: [provider],
-    );
-    for (final row in rows) {
-      final externalId = row['external_id'] as String?;
-      if (externalId == null || !importedIds.contains(externalId)) {
-        await txn.delete(table, where: 'id = ?', whereArgs: [row['id']]);
-      }
-    }
-  }
-
   Future<List<PlannerItem>> getAllItems() async {
     final db = await _databaseHelper.database;
     final rows = await db.rawQuery('''
@@ -554,8 +264,8 @@ class PlannerRepository {
     return {
       for (final row in rows)
         taskOccurrenceKey(
-          row['task_id']! as int,
-          DateTime.parse(row['occurrence_date']! as String),
+          _requiredInt(row, 'task_id'),
+          _requiredDateTime(row, 'occurrence_date'),
         ),
     };
   }
@@ -581,121 +291,25 @@ class PlannerRepository {
     }
   }
 
-  Future<int> getFocusSecondsForDate(DateTime date) async {
-    final db = await _databaseHelper.database;
-    final focusDate = dateOnly(date).toIso8601String();
-    final rows = await db.query(
-      'focus_daily_totals',
-      columns: ['total_seconds'],
-      where: 'focus_date = ?',
-      whereArgs: [focusDate],
-      limit: 1,
-    );
-    return rows.isEmpty ? 0 : rows.single['total_seconds']! as int;
+  int _requiredInt(Map<String, Object?> row, String column) {
+    final value = row[column];
+    if (value is int) return value;
+    throw FormatException('Expected SQL column "$column" to be an integer.');
   }
 
-  Future<Map<DateTime, int>> getFocusTotalsForRange(
-    DateTime firstDay,
-    DateTime lastDay,
-  ) async {
-    final db = await _databaseHelper.database;
-    final first = dateOnly(firstDay).toIso8601String();
-    final last = dateOnly(lastDay).toIso8601String();
-    final rows = await db.query(
-      'focus_daily_totals',
-      columns: ['focus_date', 'total_seconds'],
-      where: 'focus_date >= ? AND focus_date <= ?',
-      whereArgs: [first, last],
-      orderBy: 'focus_date',
-    );
-    return {
-      for (final row in rows)
-        dateOnly(DateTime.parse(row['focus_date']! as String)):
-            row['total_seconds']! as int,
-    };
-  }
-
-  Future<List<FocusCategoryTotal>> getFocusCategoryTotalsForRange(
-    DateTime firstDay,
-    DateTime lastDay,
-  ) async {
-    final db = await _databaseHelper.database;
-    final rows = await db.rawQuery(
-      '''
-      SELECT totals.category_id,
-        COALESCE(categories.title, totals.category_title) AS category_title,
-        COALESCE(categories.icon_name, totals.category_icon) AS category_icon,
-        SUM(totals.total_seconds) AS total_seconds
-      FROM focus_daily_category_totals AS totals
-      LEFT JOIN categories ON categories.id = totals.category_id
-      WHERE totals.focus_date >= ? AND totals.focus_date <= ?
-      GROUP BY totals.category_id, category_title, category_icon
-      ORDER BY total_seconds DESC, category_title COLLATE NOCASE
-      ''',
-      [
-        dateOnly(firstDay).toIso8601String(),
-        dateOnly(lastDay).toIso8601String(),
-      ],
-    );
-    return rows
-        .map(
-          (row) => FocusCategoryTotal(
-            categoryId: row['category_id']! as int,
-            categoryTitle: row['category_title']! as String,
-            categoryIcon: row['category_icon']! as String,
-            totalSeconds: row['total_seconds']! as int,
-          ),
-        )
-        .toList();
-  }
-
-  Future<void> addFocusSeconds(
-    DateTime date,
-    int seconds,
-    FocusTaskSelection selection,
-  ) => addFocusSecondsBatch([
-    (date: date, seconds: seconds, selection: selection),
-  ]);
-
-  Future<void> addFocusSecondsBatch(
-    Iterable<({DateTime date, int seconds, FocusTaskSelection selection})>
-    entries,
-  ) async {
-    final writes = entries.where((entry) => entry.seconds > 0).toList();
-    if (writes.isEmpty) return;
-    final db = await _databaseHelper.database;
-    await db.transaction((txn) async {
-      for (final entry in writes) {
-        final focusDate = dateOnly(entry.date).toIso8601String();
-        await txn.rawInsert(
-          '''
-          INSERT INTO focus_daily_totals (focus_date, total_seconds)
-          VALUES (?, ?)
-          ON CONFLICT(focus_date) DO UPDATE SET
-            total_seconds = total_seconds + excluded.total_seconds
-          ''',
-          [focusDate, entry.seconds],
-        );
-        await txn.rawInsert(
-          '''
-          INSERT INTO focus_daily_category_totals
-            (focus_date, category_id, category_title, category_icon, total_seconds)
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(focus_date, category_id) DO UPDATE SET
-            category_title = excluded.category_title,
-            category_icon = excluded.category_icon,
-            total_seconds = total_seconds + excluded.total_seconds
-          ''',
-          [
-            focusDate,
-            entry.selection.categoryId,
-            entry.selection.categoryTitle,
-            entry.selection.categoryIcon,
-            entry.seconds,
-          ],
-        );
-      }
-    });
+  DateTime _requiredDateTime(Map<String, Object?> row, String column) {
+    final value = row[column];
+    if (value is! String) {
+      throw FormatException('Expected SQL column "$column" to be a string.');
+    }
+    try {
+      return DateTime.parse(value);
+    } on FormatException {
+      throw FormatException(
+        'Expected SQL column "$column" to contain a valid date.',
+        value,
+      );
+    }
   }
 
   Future<List<Task>> getTasksForDate(DateTime day) async {
@@ -724,13 +338,14 @@ class PlannerRepository {
           day,
           isCompleted: isCompleted,
         );
-        final scheduled = occurrence is Task
-            ? taskDateTime(occurrence)
-            : eventStartDateTime(occurrence as Event);
-        final isCurrentAllDay =
-            occurrence is Event &&
-            occurrence.allDay &&
-            _sameDay(occurrence.date, now);
+        final scheduled = switch (occurrence) {
+          Task task => taskDateTime(task),
+          Event event => eventStartDateTime(event),
+        };
+        final isCurrentAllDay = switch (occurrence) {
+          Task _ => false,
+          Event event => event.allDay && _sameDay(event.date, now),
+        };
         if (scheduled.isBefore(now) && !isCurrentAllDay) continue;
         if (nextTime == null || scheduled.isBefore(nextTime)) {
           next = occurrence;
@@ -759,7 +374,8 @@ class PlannerRepository {
   }
 
   PlannerItem _itemFromUnionRow(Map<String, Object?> row) {
-    if (row['item_type'] == 'task') {
+    final itemType = row['item_type'];
+    if (itemType == 'task') {
       return taskFromMap({
         for (final key in [
           'id',
@@ -777,6 +393,9 @@ class PlannerRepository {
         ])
           key: row[key],
       });
+    }
+    if (itemType != 'event') {
+      throw FormatException('Unknown planner item type: $itemType');
     }
     return eventFromMap({
       for (final key in [
@@ -798,15 +417,13 @@ class PlannerRepository {
     });
   }
 
-  int _compareItems(PlannerItem first, PlannerItem second) {
-    final firstTime = first is Task
-        ? taskDateTime(first)
-        : eventStartDateTime(first as Event);
-    final secondTime = second is Task
-        ? taskDateTime(second)
-        : eventStartDateTime(second as Event);
-    return firstTime.compareTo(secondTime);
-  }
+  int _compareItems(PlannerItem first, PlannerItem second) =>
+      _scheduledDate(first).compareTo(_scheduledDate(second));
+
+  DateTime _scheduledDate(PlannerItem item) => switch (item) {
+    Task task => taskDateTime(task),
+    Event event => eventStartDateTime(event),
+  };
 
   bool _sameDay(DateTime first, DateTime second) =>
       first.year == second.year &&

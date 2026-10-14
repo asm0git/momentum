@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../data/debug_demo_data.dart';
+import '../data/calendar_sync_repository.dart';
+import '../data/focus_history_repository.dart';
 import '../data/planner_repository.dart';
 import '../data/recurrence.dart';
 import '../data_models.dart';
@@ -18,27 +22,34 @@ export 'automatic_event_focus_coordinator.dart'
 class PlannerState extends ChangeNotifier implements FocusHistorySource {
   PlannerState({
     PlannerRepository? repository,
+    CalendarSyncRepository? calendarSyncRepository,
+    FocusHistoryRepository? focusHistoryRepository,
     ProviderCalendarBackend? calendarBackend,
     bool? autoSyncCalendarsOnStartup,
     @visibleForTesting DateTime Function()? clock,
+    @visibleForTesting
+    this.calendarRefreshInterval = const Duration(minutes: 5),
     @visibleForTesting bool startAutomaticEventFocusTimer = true,
     this.includeDebugDemoData = false,
   }) : _repository = repository ?? PlannerRepository(),
+       _calendarSyncRepository =
+           calendarSyncRepository ??
+           CalendarSyncRepository(databaseHelper: repository?.databaseHelper),
+       _focusHistoryRepository =
+           focusHistoryRepository ??
+           FocusHistoryRepository(databaseHelper: repository?.databaseHelper),
        _calendarBackend = calendarBackend ?? CalendarBackendClient(),
        _autoSyncCalendarsOnStartup = autoSyncCalendarsOnStartup ?? kIsWeb,
        _clock = clock ?? DateTime.now,
        _automaticFocusTimerEnabled = startAutomaticEventFocusTimer {
     _calendarSync = CalendarSyncCoordinator(
-      repository: _repository,
+      repository: _calendarSyncRepository,
       calendarBackend: _calendarBackend,
-      reloadSnapshot: _reloadSnapshot,
-      accountForProvider: accountForProvider,
-      isParentDisposed: () => _isDisposed,
     )..addListener(_onCalendarSyncChanged);
     _automaticEventFocus = AutomaticEventFocusCoordinator(
       events: () => _items.whereType<Event>(),
       selectionForItem: focusSelectionForItem,
-      recordBatch: _repository.addFocusSecondsBatch,
+      recordBatch: _focusHistoryRepository.addFocusSecondsBatch,
       onRecorded: _onAutomaticFocusRecorded,
       clock: _clock,
       enabled: _automaticFocusTimerEnabled,
@@ -47,14 +58,19 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   }
 
   final PlannerRepository _repository;
+  final CalendarSyncRepository _calendarSyncRepository;
+  final FocusHistoryRepository _focusHistoryRepository;
   final ProviderCalendarBackend _calendarBackend;
   late final CalendarSyncCoordinator _calendarSync;
   late final AutomaticEventFocusCoordinator _automaticEventFocus;
   late PlannerSnapshotQueries _snapshotQueries;
   final bool _autoSyncCalendarsOnStartup;
   final DateTime Function() _clock;
+  @visibleForTesting
+  final Duration calendarRefreshInterval;
   final bool _automaticFocusTimerEnabled;
   final bool includeDebugDemoData;
+  Timer? _calendarRefreshTimer;
   List<TaskCategory> _categories = [];
   List<PlannerItem> _items = [];
   Set<String> _taskOccurrenceCompletionKeys = {};
@@ -202,7 +218,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     }
     _automaticEventFocus.start();
     if (_autoSyncCalendarsOnStartup) {
-      _calendarSync.startBackgroundRefresh();
+      _startBackgroundCalendarRefresh();
     }
   }
 
@@ -213,7 +229,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     final items = await _repository.getAllItems();
     final occurrenceCompletions = await _repository
         .getTaskOccurrenceCompletionKeys();
-    final accounts = await _repository.getLinkedAccounts();
+    final accounts = await _calendarSyncRepository.getLinkedAccounts();
     if (includeDebugDemoData) {
       final demoCategory = DebugDemoData.googleCalendarCategory();
       categories.add(demoCategory);
@@ -251,7 +267,10 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   }
 
   Future<void> updateCategory(TaskCategory category) => _afterWrite(() async {
-    await _repository.updateCategory(category);
+    final updated = await _repository.updateCategory(category);
+    if (!updated) {
+      throw StateError('The category was not updated in local storage.');
+    }
   });
 
   Future<void> deleteCategory(
@@ -293,10 +312,20 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
       if (event.id == null) {
         await _repository.insertEvent(event);
       } else {
-        await _repository.updateEvent(event);
+        final updated = await _repository.updateEvent(event);
+        if (!updated) {
+          throw StateError('The event was not updated in local storage.');
+        }
       }
     });
-    return event;
+    final savedEvent = _items
+        .whereType<Event>()
+        .where((saved) => saved.id == event.id)
+        .firstOrNull;
+    if (savedEvent == null) {
+      throw StateError('The saved event could not be reloaded.');
+    }
+    return savedEvent;
   }
 
   Future<void> setTaskCompleted(Task task, bool isCompleted) =>
@@ -310,17 +339,32 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
           );
           return;
         }
+        final wasChecked = task.isChecked;
         task.isChecked = isCompleted;
-        await _repository.updateTask(task);
+        try {
+          final updated = await _repository.updateTask(task);
+          if (!updated) {
+            throw StateError('The task was not updated in local storage.');
+          }
+        } catch (_) {
+          task.isChecked = wasChecked;
+          rethrow;
+        }
       });
 
   Future<void> deleteItem(PlannerItem item) => _afterWrite(() async {
     final id = item.id;
     if (id == null) return;
     if (item is Task) {
-      await _repository.deleteTask(id);
+      final deleted = await _repository.deleteTask(id);
+      if (!deleted) {
+        throw StateError('The task was not deleted from local storage.');
+      }
     } else if (item is Event) {
-      await _repository.deleteEvent(id);
+      final deleted = await _repository.deleteEvent(id);
+      if (!deleted) {
+        throw StateError('The event was not deleted from local storage.');
+      }
     }
   });
 
@@ -335,7 +379,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
 
   @override
   Future<int> getFocusSecondsForDate(DateTime date) async {
-    final stored = await _repository.getFocusSecondsForDate(date);
+    final stored = await _focusHistoryRepository.getFocusSecondsForDate(date);
     if (!includeDebugDemoData) return stored;
     final demo = DebugDemoData.focusByDay(
       firstDay: date,
@@ -349,7 +393,10 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     DateTime firstDay,
     DateTime lastDay,
   ) async {
-    final totals = await _repository.getFocusTotalsForRange(firstDay, lastDay);
+    final totals = await _focusHistoryRepository.getFocusTotalsForRange(
+      firstDay,
+      lastDay,
+    );
     if (!includeDebugDemoData) return totals;
     final demo = DebugDemoData.focusByDay(firstDay: firstDay, lastDay: lastDay);
     for (final entry in demo.entries) {
@@ -369,7 +416,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     DateTime firstDay,
     DateTime lastDay,
   ) async {
-    final stored = await _repository.getFocusCategoryTotalsForRange(
+    final stored = await _focusHistoryRepository.getFocusCategoryTotalsForRange(
       firstDay,
       lastDay,
     );
@@ -407,7 +454,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     int seconds,
     FocusTaskSelection selection,
   ) async {
-    await _repository.addFocusSeconds(date, seconds, selection);
+    await _focusHistoryRepository.addFocusSeconds(date, seconds, selection);
     if (!_isDisposed) {
       _focusHistoryRevision++;
       notifyListeners();
@@ -437,18 +484,47 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
     bool replaceExistingImports = false,
     bool removeMissingTasks = false,
     bool removeMissingEvents = false,
-  }) => _calendarSync.syncProvider(
-    provider,
-    replaceExistingImports: replaceExistingImports,
-    removeMissingTasks: removeMissingTasks,
-    removeMissingEvents: removeMissingEvents,
-  );
+  }) async {
+    final synced = await _calendarSync.syncProvider(
+      provider,
+      replaceExistingImports: replaceExistingImports,
+      removeMissingTasks: removeMissingTasks,
+      removeMissingEvents: removeMissingEvents,
+    );
+    if (synced) await _reloadSnapshot();
+  }
 
   Future<void> connectCalendarIcsFeed(CalendarProvider provider, String url) =>
       _calendarSync.connectCalendarIcsFeed(provider, url);
 
-  Future<void> disconnectProvider(CalendarProvider provider) =>
-      _calendarSync.disconnectProvider(provider);
+  Future<void> disconnectProvider(CalendarProvider provider) async {
+    await _calendarSync.disconnectProvider(
+      provider,
+      account: accountForProvider(provider),
+    );
+    await _reloadSnapshot();
+  }
+
+  void _startBackgroundCalendarRefresh() {
+    _calendarRefreshTimer ??= Timer.periodic(
+      calendarRefreshInterval,
+      (_) => unawaited(_refreshCalendarsIfConnected()),
+    );
+    unawaited(_refreshCalendarsIfConnected());
+  }
+
+  Future<void> _refreshCalendarsIfConnected() async {
+    if (_isDisposed) return;
+    for (final provider in CalendarProvider.values) {
+      if (_isDisposed) return;
+      try {
+        final status = await _calendarSync.refreshProviderStatus(provider);
+        if (status.connected) await syncProvider(provider);
+      } catch (_) {
+        // The coordinator keeps provider errors available to the UI.
+      }
+    }
+  }
 
   @visibleForTesting
   Future<void> recordAutomaticEventFocusForTesting() =>
@@ -463,6 +539,7 @@ class PlannerState extends ChangeNotifier implements FocusHistorySource {
   @override
   void dispose() {
     _isDisposed = true;
+    _calendarRefreshTimer?.cancel();
     _calendarSync.removeListener(_onCalendarSyncChanged);
     _calendarSync.dispose();
     _automaticEventFocus.dispose();
