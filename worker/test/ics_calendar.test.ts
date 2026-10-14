@@ -92,6 +92,25 @@ describe('iCalendar event parsing', () => {
     }]);
   });
 
+  it('converts week, day, and clock components of an event duration', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const [event] = parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:duration-components',
+      'DTSTART:20261015T090000Z',
+      'DURATION:P1W2DT3H4M5S',
+      'SUMMARY:Duration event',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'));
+
+    expect(event.end).toBe('2026-10-24T12:04:05.000Z');
+  });
+
   it('expands recurrence rules and omits excluded occurrences', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));

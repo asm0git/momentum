@@ -11,6 +11,11 @@ import { masterOccurrences } from './ics_calendar_recurrence';
 
 const MAX_FEED_EVENTS = 10_000;
 const MAX_EXPANDED_EVENTS = 20_000;
+const MILLISECONDS_PER_SECOND = 1_000;
+const MILLISECONDS_PER_MINUTE = 60 * MILLISECONDS_PER_SECOND;
+const MILLISECONDS_PER_HOUR = 60 * MILLISECONDS_PER_MINUTE;
+const MILLISECONDS_PER_DAY = 24 * MILLISECONDS_PER_HOUR;
+const MILLISECONDS_PER_WEEK = 7 * MILLISECONDS_PER_DAY;
 
 export interface IcsCalendarEvent {
   externalId: string;
@@ -276,9 +281,15 @@ function parseDuration(value: string | null): number | null {
   if (!value) return null;
   const match = value.match(/^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i);
   if (!match) return null;
-  return ((Number(match[1] ?? 0) * 7 + Number(match[2] ?? 0)) * 24 +
-    Number(match[3] ?? 0)) * 3_600_000 + Number(match[4] ?? 0) * 60_000 +
-    Number(match[5] ?? 0) * 1000;
+  return durationInMilliseconds(match[1], MILLISECONDS_PER_WEEK) +
+    durationInMilliseconds(match[2], MILLISECONDS_PER_DAY) +
+    durationInMilliseconds(match[3], MILLISECONDS_PER_HOUR) +
+    durationInMilliseconds(match[4], MILLISECONDS_PER_MINUTE) +
+    durationInMilliseconds(match[5], MILLISECONDS_PER_SECOND);
+}
+
+function durationInMilliseconds(value: string | undefined, unit: number): number {
+  return Number(value ?? 0) * unit;
 }
 
 function toImportedEvent(
