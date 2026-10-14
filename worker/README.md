@@ -144,8 +144,9 @@ once for this Momentum copy.
    Enter. Look for a success message before continuing.
 
    Migrations run in order. Migration `0004` removes the unused Google and
-   Outlook OAuth token tables while preserving Canvas OAuth and all published
-   calendar feed data.
+   Outlook OAuth token tables. The old Canvas OAuth tables remain in the
+   schema for migration compatibility, but the Worker no longer uses that
+   connection flow. Calendar connections use published feed links.
 
    The `--local` option creates a database for testing on your computer. The
    separate Cloudflare database is used only when you deploy the app online.

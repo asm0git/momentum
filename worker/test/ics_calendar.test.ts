@@ -1,17 +1,516 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import worker, { type Env } from '../src/index';
+import { parseCalendarIcs } from '../src/ics_calendar_parser';
 import {
   CalendarIcsError,
   fetchCalendarIcsEvents,
   normalizeCalendarIcsUrl,
 } from '../src/ics_calendar';
+import { decrypt, encrypt, fingerprint } from '../src/security';
 
 const canvasFeedUrl =
   'https://canvas.school.instructure.com/feeds/calendars/user_123.ics?verifier=private-token';
 
+interface MockCalendarFeed {
+  session_id: string;
+  provider: 'canvas' | 'google' | 'outlook';
+  remote_user_id: string;
+  encrypted_feed_url: string;
+  last_sync_time: string | null;
+}
+
+interface MockStatementCall {
+  sql: string;
+  values: unknown[];
+}
+
+function createMockDatabase(options: {
+  sessionId?: string | null;
+  feed?: MockCalendarFeed | null;
+} = {}): { db: D1Database; statements: MockStatementCall[] } {
+  const statements: MockStatementCall[] = [];
+  const db = {
+    prepare(sql: string) {
+      const call: MockStatementCall = { sql, values: [] };
+      statements.push(call);
+      return {
+        bind(...values: unknown[]) {
+          call.values = values;
+          return this;
+        },
+        async first<T>() {
+          if (sql.includes('FROM sessions')) {
+            return options.sessionId
+              ? { session_id: options.sessionId } as T
+              : null;
+          }
+          if (sql.includes('FROM calendar_ics_feeds')) {
+            return (options.feed ?? null) as T | null;
+          }
+          return null;
+        },
+        async run() {
+          return {};
+        },
+      };
+    },
+  } as unknown as D1Database;
+  return { db, statements };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+describe('iCalendar event parsing', () => {
+  it('maps event fields and decodes escaped text', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    expect(parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:study-session',
+      'DTSTART:20261015T090000Z',
+      'DTEND:20261015T100000Z',
+      'SUMMARY:Planning\\, focus',
+      'DESCRIPTION:Bring a notebook\\nand review\\; notes',
+      'LOCATION:Room 4',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'))).toEqual([{
+      externalId: 'ics:study-session:single',
+      title: 'Planning, focus',
+      start: '2026-10-15T09:00:00.000Z',
+      end: '2026-10-15T10:00:00.000Z',
+      allDay: false,
+      description: 'Bring a notebook\nand review; notes',
+      location: 'Room 4',
+    }]);
+  });
+
+  it('expands recurrence rules and omits excluded occurrences', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const events = parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:daily-review',
+      'DTSTART:20261015T090000Z',
+      'DTEND:20261015T093000Z',
+      'RRULE:FREQ=DAILY;COUNT=3',
+      'EXDATE:20261016T090000Z',
+      'SUMMARY:Daily review',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'));
+
+    expect(events.map(({ externalId, start }) => ({ externalId, start }))).toEqual([
+      {
+        externalId: 'ics:daily-review:20261015T090000',
+        start: '2026-10-15T09:00:00.000Z',
+      },
+      {
+        externalId: 'ics:daily-review:20261017T090000',
+        start: '2026-10-17T09:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('moves an overridden occurrence and omits a cancelled occurrence', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const events = parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:daily-standup',
+      'DTSTART:20261015T090000Z',
+      'DTEND:20261015T100000Z',
+      'RRULE:FREQ=DAILY;COUNT=3',
+      'SUMMARY:Daily standup',
+      'END:VEVENT',
+      'BEGIN:VEVENT',
+      'UID:daily-standup',
+      'RECURRENCE-ID:20261016T090000Z',
+      'DTSTART:20261020T120000Z',
+      'DTEND:20261020T130000Z',
+      'SUMMARY:Moved standup',
+      'END:VEVENT',
+      'BEGIN:VEVENT',
+      'UID:daily-standup',
+      'RECURRENCE-ID:20261017T090000Z',
+      'STATUS:CANCELLED',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'));
+
+    expect(events.map(({ externalId, title, start }) => ({ externalId, title, start })))
+      .toEqual([
+        {
+          externalId: 'ics:daily-standup:20261015T090000',
+          title: 'Daily standup',
+          start: '2026-10-15T09:00:00.000Z',
+        },
+        {
+          externalId: 'ics:daily-standup:20261016T090000',
+          title: 'Moved standup',
+          start: '2026-10-20T12:00:00.000Z',
+        },
+      ]);
+  });
+
+  it('expands explicit RDATE occurrences', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const events = parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:extra-sessions',
+      'DTSTART:20261015T090000Z',
+      'DTEND:20261015T100000Z',
+      'RDATE:20261020T090000Z,20261022T090000Z',
+      'SUMMARY:Extra session',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'));
+
+    expect(events.map(({ externalId, start }) => ({ externalId, start }))).toEqual([
+      {
+        externalId: 'ics:extra-sessions:20261015T090000',
+        start: '2026-10-15T09:00:00.000Z',
+      },
+      {
+        externalId: 'ics:extra-sessions:20261020T090000',
+        start: '2026-10-20T09:00:00.000Z',
+      },
+      {
+        externalId: 'ics:extra-sessions:20261022T090000',
+        start: '2026-10-22T09:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('keeps a timezone-aware daily recurrence at the same local wall time', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const events = parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:timezone-daily',
+      'DTSTART;TZID=America/New_York:20260307T090000',
+      'DTEND;TZID=America/New_York:20260307T100000',
+      'RRULE:FREQ=DAILY;COUNT=3',
+      'SUMMARY:Timezone-aware daily event',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'));
+
+    expect(events.map(({ externalId, start }) => ({ externalId, start }))).toEqual([
+      {
+        externalId: 'ics:timezone-daily:20260307T090000',
+        start: '2026-03-07T14:00:00.000Z',
+      },
+      {
+        externalId: 'ics:timezone-daily:20260308T090000',
+        start: '2026-03-08T13:00:00.000Z',
+      },
+      {
+        externalId: 'ics:timezone-daily:20260309T090000',
+        start: '2026-03-09T13:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('converts an event across the New York spring DST boundary', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const [event] = parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:dst-transition',
+      'DTSTART;TZID=America/New_York:20260308T013000',
+      'DTEND;TZID=America/New_York:20260308T033000',
+      'SUMMARY:DST transition',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'));
+
+    expect(event).toMatchObject({
+      start: '2026-03-08T06:30:00.000Z',
+      end: '2026-03-08T07:30:00.000Z',
+    });
+  });
+
+  it('preserves a floating local time without adding a timezone suffix', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const [event] = parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:floating-event',
+      'DTSTART:20261020T090000',
+      'DTEND:20261020T100000',
+      'SUMMARY:Floating event',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'));
+
+    expect(event).toMatchObject({
+      start: '2026-10-20T09:00:00',
+      end: '2026-10-20T10:00:00',
+    });
+  });
+
+  it('drops event dates with invalid calendar fields', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const events = parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:invalid-date',
+      'DTSTART:20260230T100000Z',
+      'DTEND:20260230T110000Z',
+      'SUMMARY:Invalid date',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'));
+
+    expect(events).toEqual([]);
+  });
+});
+
+describe('calendar feed sync', () => {
+  it('returns parsed events and records the successful sync time', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const sessionId = 'session-123';
+    const encryptionKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+    const feed = {
+      session_id: sessionId,
+      provider: 'canvas',
+      remote_user_id: 'feed-fingerprint',
+      encrypted_feed_url: await encrypt(canvasFeedUrl, encryptionKey),
+      last_sync_time: null,
+    };
+    const statements: Array<{ sql: string; values: unknown[] }> = [];
+    const db = {
+      prepare(sql: string) {
+        const statement = {
+          sql,
+          values: [] as unknown[],
+          bind(...values: unknown[]) {
+            this.values = values;
+            return this;
+          },
+          async first<T>() {
+            if (sql.includes('FROM sessions')) {
+              return { session_id: sessionId } as T;
+            }
+            if (sql.includes('FROM calendar_ics_feeds')) return feed as T;
+            return null;
+          },
+          async run() {
+            statements.push({ sql, values: [...this.values] });
+            return {};
+          },
+        };
+        return statement;
+      },
+    } as unknown as D1Database;
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response([
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        'UID:sync-event',
+        'DTSTART:20261015T090000Z',
+        'DTEND:20261015T100000Z',
+        'SUMMARY:Synced planning',
+        'END:VEVENT',
+        'END:VCALENDAR',
+      ].join('\r\n'), {
+        status: 200,
+        headers: { 'Content-Type': 'text/calendar' },
+      }),
+    );
+
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/canvas/sync', {
+        method: 'POST',
+        headers: {
+          Origin: 'https://momentum.example.com',
+          Cookie: `__Host-momentum_session=${sessionId}`,
+        },
+      }),
+      {
+        APP_ORIGIN: 'https://momentum.example.com',
+        ALLOWED_CANVAS_HOST: 'canvas.school.edu',
+        TOKEN_ENCRYPTION_KEY: encryptionKey,
+        DB: db,
+      } as Env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      accountName: 'Canvas calendar feed',
+      accountEmail: null,
+      remoteUserId: 'feed-fingerprint',
+      providerUrl: 'canvas-published-ics',
+      providerName: 'canvas',
+      tasks: [],
+      events: [{
+        externalId: 'ics:sync-event:single',
+        title: 'Synced planning',
+        start: '2026-10-15T09:00:00.000Z',
+        end: '2026-10-15T10:00:00.000Z',
+      }],
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][0]?.toString()).toBe(canvasFeedUrl);
+    expect(statements).toEqual([{
+      sql: expect.stringContaining('UPDATE calendar_ics_feeds SET last_sync_time'),
+      values: ['2026-10-14T00:00:00.000Z', sessionId, 'canvas'],
+    }]);
+  });
+});
+
+describe('calendar feed lifecycle', () => {
+  const encryptionKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+
+  it('stores an encrypted feed URL and fingerprint when connecting', async () => {
+    const { db, statements } = createMockDatabase();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR', {
+        status: 200,
+        headers: { 'Content-Type': 'text/calendar' },
+      }),
+    );
+
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/canvas/connect', {
+        method: 'POST',
+        headers: {
+          Origin: 'https://momentum.example.com',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: canvasFeedUrl }),
+      }),
+      {
+        APP_ORIGIN: 'https://momentum.example.com',
+        ALLOWED_CANVAS_HOST: 'canvas.school.edu',
+        TOKEN_ENCRYPTION_KEY: encryptionKey,
+        DB: db,
+      } as Env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ connected: true });
+    const cookie = response.headers.get('Set-Cookie');
+    expect(cookie).toContain('__Host-momentum_session=');
+    expect(cookie).toContain('HttpOnly');
+    const sessionId = cookie?.match(/__Host-momentum_session=([^;]+)/)?.[1];
+    expect(sessionId).toBeTruthy();
+
+    const insert = statements.find(({ sql }) => sql.includes('INSERT INTO calendar_ics_feeds'));
+    expect(insert).toBeDefined();
+    expect(insert?.values[0]).toBe(sessionId);
+    expect(insert?.values[1]).toBe('canvas');
+    expect(insert?.values[2]).toBe(await fingerprint(canvasFeedUrl));
+    expect(insert?.values[3]).not.toBe(canvasFeedUrl);
+    expect(await decrypt(String(insert?.values[3]), encryptionKey)).toBe(canvasFeedUrl);
+  });
+
+  it('returns stored feed status and removes the connection on disconnect', async () => {
+    const sessionId = 'lifecycle-session';
+    const feed: MockCalendarFeed = {
+      session_id: sessionId,
+      provider: 'canvas',
+      remote_user_id: 'feed-fingerprint',
+      encrypted_feed_url: await encrypt(canvasFeedUrl, encryptionKey),
+      last_sync_time: '2026-10-14T00:00:00.000Z',
+    };
+    const { db, statements } = createMockDatabase({ sessionId, feed });
+    const env = {
+      APP_ORIGIN: 'https://momentum.example.com',
+      DB: db,
+    } as Env;
+    const cookie = `__Host-momentum_session=${sessionId}`;
+
+    const status = await worker.fetch(
+      new Request('https://momentum.example.com/api/canvas/status', {
+        headers: { Cookie: cookie },
+      }),
+      env,
+    );
+    expect(status.status).toBe(200);
+    expect(await status.json()).toEqual({
+      connected: true,
+      providerUrl: 'canvas-published-ics',
+      accountName: 'Canvas calendar feed',
+      remoteUserId: 'feed-fingerprint',
+      lastSyncTime: '2026-10-14T00:00:00.000Z',
+    });
+
+    const disconnected = await worker.fetch(
+      new Request('https://momentum.example.com/api/canvas/disconnect', {
+        method: 'POST',
+        headers: {
+          Origin: 'https://momentum.example.com',
+          Cookie: cookie,
+        },
+      }),
+      env,
+    );
+    expect(disconnected.status).toBe(200);
+    expect(await disconnected.json()).toEqual({ disconnected: true });
+    expect(statements).toContainEqual({
+      sql: expect.stringContaining('DELETE FROM calendar_ics_feeds'),
+      values: [sessionId, 'canvas'],
+    });
+  });
+
+  it('rejects sync for a missing session without contacting the feed provider', async () => {
+    const { db, statements } = createMockDatabase({ sessionId: null });
+    const fetcher = vi.spyOn(globalThis, 'fetch');
+
+    const response = await worker.fetch(
+      new Request('https://momentum.example.com/api/google/sync', {
+        method: 'POST',
+        headers: {
+          Origin: 'https://momentum.example.com',
+          Cookie: '__Host-momentum_session=expired-session',
+        },
+      }),
+      {
+        APP_ORIGIN: 'https://momentum.example.com',
+        DB: db,
+      } as Env,
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: 'Connect google first.' });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(statements.some(({ sql }) => sql.includes('FROM calendar_ics_feeds')))
+      .toBe(false);
+  });
 });
 
 describe('Canvas calendar feed failures', () => {

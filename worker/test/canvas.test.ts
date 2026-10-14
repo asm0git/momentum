@@ -1,110 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  fetchCanvasPages,
-  mapCanvasAssignment,
-  mapCanvasEvent,
-  normalizeCanvasSiteUrl,
-  splitContextBatches,
-} from '../src/canvas';
 import worker, {
   cleanupExpiredState,
   type Env,
 } from '../src/index';
 
-describe('Canvas import helpers', () => {
-  it('only accepts the configured HTTPS Canvas host', () => {
-    expect(
-      normalizeCanvasSiteUrl('https://canvas.school.edu', 'canvas.school.edu')
-        .origin,
-    ).toBe('https://canvas.school.edu');
-    expect(() =>
-      normalizeCanvasSiteUrl('https://other.school.edu', 'canvas.school.edu'),
-    ).toThrow(/not enabled/);
-    expect(() =>
-      normalizeCanvasSiteUrl('http://canvas.school.edu', 'canvas.school.edu'),
-    ).toThrow(/not enabled/);
-  });
+describe('Calendar provider routes', () => {
+  it('does not dispatch an unsupported provider segment', async () => {
+    const request = new Request('https://momentum.example.com/api/unknown/status');
+    const assets = { fetch: vi.fn(async () => new Response('asset')) };
 
-  it('maps timed assignment dates with the timezone offset intact as an instant', () => {
-    const assignment = mapCanvasAssignment({
-      id: 5,
-      context_code: 'course_21',
-      title: 'Due item',
-      start_at: '2026-10-12T23:00:00-04:00',
-      assignment: {
-        id: 5,
-        name: 'Essay',
-        due_at: '2026-10-12T23:00:00-04:00',
-        description: '<p>Read prompt</p>',
-      },
-    });
-    expect(assignment).toEqual({
-      externalId: 'assignment:course_21:5',
-      title: 'Essay',
-      due: '2026-10-13T03:00:00.000Z',
-      description: '<p>Read prompt</p>',
-    });
-    expect(mapCanvasAssignment({ title: 'Undated', id: 7 })).toBeNull();
-  });
+    const response = await worker.fetch(request, { ASSETS: assets } as unknown as Env);
 
-  it('maps all-day and timed events with stable source identifiers', () => {
-    expect(
-      mapCanvasEvent({
-        id: 17,
-        title: 'Holiday',
-        all_day: true,
-        all_day_date: '2026-12-25',
-      }),
-    ).toEqual({
-      externalId: 'event:17',
-      title: 'Holiday',
-      start: '2026-12-25T00:00:00',
-      end: '2026-12-25T00:00:00',
-      allDay: true,
-      description: '',
-      location: null,
-    });
-    expect(
-      mapCanvasEvent({
-        id: 18,
-        title: 'Seminar',
-        start_at: '2026-10-12T23:00:00-04:00',
-        end_at: '2026-10-13T00:00:00-04:00',
-        location_name: 'Hall B',
-      })?.start,
-    ).toBe('2026-10-13T03:00:00.000Z');
-  });
-
-  it('batches calendar contexts at Canvas limits', () => {
-    const contexts = Array.from({ length: 23 }, (_, index) => `course_${index}`);
-    const batches = splitContextBatches(contexts, 10);
-    expect(batches.map((batch) => batch.length)).toEqual([10, 10, 3]);
-    expect(batches.flat()).toEqual(contexts);
-  });
-
-  it('fetches every Canvas pagination page and sends the bearer token', async () => {
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify([{ id: 1 }]), {
-          headers: {
-            Link: '<https://canvas.school.edu/api/v1/courses?page=2>; rel="next", <https://canvas.school.edu/api/v1/courses?page=1>; rel="first"',
-          },
-        }),
-      )
-      .mockResolvedValueOnce(new Response(JSON.stringify([{ id: 2 }])));
-    const rows = await fetchCanvasPages<{ id: number }>(
-      new URL('https://canvas.school.edu'),
-      'access-token',
-      '/api/v1/courses?page=1',
-      fetcher,
-    );
-    expect(rows.map((row) => row.id)).toEqual([1, 2]);
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(fetcher.mock.calls[0][1]?.headers).toEqual({
-      Authorization: 'Bearer access-token',
-    });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('asset');
+    expect(assets.fetch).toHaveBeenCalledWith(request);
   });
 
   it('rejects the retired Canvas OAuth callback', async () => {
@@ -118,25 +28,6 @@ describe('Canvas import helpers', () => {
     expect(await response.json()).toEqual({
       error: 'Calendar OAuth is no longer used.',
     });
-  });
-
-  it('rejects a pagination link outside the configured Canvas host', async () => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
-      new Response(JSON.stringify([{ id: 1 }]), {
-        headers: {
-          Link: '<https://attacker.example/api/v1/steal>; rel="next"',
-        },
-      }),
-    );
-    await expect(
-      fetchCanvasPages(
-        new URL('https://canvas.school.edu'),
-        'access-token',
-        '/api/v1/courses',
-        fetcher,
-      ),
-    ).rejects.toThrow(/unsafe pagination/);
-    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it('directs Google users to use a published feed instead of OAuth', async () => {
@@ -234,7 +125,7 @@ describe('Canvas import helpers', () => {
     });
   });
 
-  it('cleans expired OAuth state, connections, and sessions in one D1 batch', async () => {
+  it('cleans expired calendar feeds and sessions in one D1 batch', async () => {
     const prepared: Array<{ sql: string; values: unknown[] }> = [];
     const db = {
       prepare(sql: string) {
@@ -255,19 +146,12 @@ describe('Canvas import helpers', () => {
     await cleanupExpiredState(db);
 
     expect(db.batch).toHaveBeenCalledTimes(1);
-    expect(prepared).toHaveLength(4);
-    expect(prepared.map(({ sql }) => sql).join('\n')).toContain(
-      'DELETE FROM oauth_states WHERE expires_at <= ?',
-    );
+    expect(prepared).toHaveLength(2);
     expect(prepared.map(({ sql }) => sql).join('\n')).toContain(
       'DELETE FROM calendar_ics_feeds',
     );
-    expect(prepared.map(({ sql }) => sql).join('\n')).not.toContain(
-      'provider_oauth_states',
-    );
-    expect(prepared.map(({ sql }) => sql).join('\n')).not.toContain(
-      'provider_connections',
-    );
+    expect(prepared.map(({ sql }) => sql).join('\n')).not.toContain('oauth_states');
+    expect(prepared.map(({ sql }) => sql).join('\n')).not.toContain('canvas_connections');
     expect(prepared.every(({ values }) => values.length === 1)).toBe(true);
   });
 
