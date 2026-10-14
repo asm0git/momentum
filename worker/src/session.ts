@@ -1,5 +1,7 @@
 export const SESSION_COOKIE = '__Host-momentum_session';
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+const SECONDS_PER_DAY = 24 * 60 * 60;
+const SESSION_TTL_DAYS = 30;
+const SESSION_TTL_SECONDS = SESSION_TTL_DAYS * SECONDS_PER_DAY;
 
 export function readCookie(request: Request, name: string): string | null {
   const cookies = request.headers.get('Cookie')?.split(';') ?? [];
