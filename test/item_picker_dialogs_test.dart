@@ -69,7 +69,7 @@ void main() {
 
     expect(
       tester
-          .widget<TimePickerDialog>(find.byType(TimePickerDialog))
+          .widget<AppTimePickerDialog>(find.byType(AppTimePickerDialog))
           .initialTime,
       const TimeOfDay(hour: 9, minute: 30),
     );

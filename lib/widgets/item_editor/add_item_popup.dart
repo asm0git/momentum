@@ -404,13 +404,14 @@ class _EventFields extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final minimumEndDateTime = DateTime(
+    final startDateTime = DateTime(
       startDate.year,
       startDate.month,
       startDate.day,
       startTime.hour,
       startTime.minute,
-    ).add(const Duration(minutes: 1));
+    );
+    final minimumEndDateTime = startDateTime.add(const Duration(minutes: 1));
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -471,6 +472,18 @@ class _EventFields extends StatelessWidget {
                 enabled: true,
                 minimumDate: startDate,
                 minimumDateTime: minimumEndDateTime,
+                validateTimeSelection: (selected) {
+                  final selectedEnd = DateTime(
+                    endDate.year,
+                    endDate.month,
+                    endDate.day,
+                    selected.hour,
+                    selected.minute,
+                  );
+                  return selectedEnd.isBefore(startDateTime)
+                      ? 'End time cannot be before start time.'
+                      : null;
+                },
                 onDateChanged: onEndDateChanged,
                 onTimeChanged: onEndTimeChanged,
               ),
@@ -710,6 +723,7 @@ class _EventDateTimeRow extends StatelessWidget {
     required this.onTimeChanged,
     this.minimumDate,
     this.minimumDateTime,
+    this.validateTimeSelection,
   });
 
   final String label;
@@ -720,6 +734,7 @@ class _EventDateTimeRow extends StatelessWidget {
   final ValueChanged<TimeOfDay> onTimeChanged;
   final DateTime? minimumDate;
   final DateTime? minimumDateTime;
+  final String? Function(TimeOfDay time)? validateTimeSelection;
 
   Future<void> _pickDate(BuildContext context) async {
     final selected = await showAppDatePickerDialog(
@@ -739,6 +754,7 @@ class _EventDateTimeRow extends StatelessWidget {
       context,
       initialTime: time,
       minimumTime: minimumTime,
+      validateSelection: validateTimeSelection,
     );
     if (selected != null) onTimeChanged(selected);
   }

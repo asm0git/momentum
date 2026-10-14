@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../../app_theme.dart';
 import '../blurred_dialog.dart';
+import 'app_time_picker_dialog.dart';
+
+export 'app_time_picker_dialog.dart' show AppTimePickerDialog;
 
 Future<TimeOfDay?> showAppTimePickerDialog(
   BuildContext context, {
   required TimeOfDay initialTime,
   TimeOfDay? minimumTime,
+  String? Function(TimeOfDay time)? validateSelection,
 }) async {
-  const checkIcon = Icons.check;
   final initialMinutes = initialTime.hour * 60 + initialTime.minute;
   final minimumMinutes = minimumTime == null
       ? null
@@ -51,9 +54,9 @@ Future<TimeOfDay?> showAppTimePickerDialog(
                 : AppColors.onSurface,
           ),
         ),
-        child: TimePickerDialog(
+        child: AppTimePickerDialog(
           initialTime: clampedInitialTime,
-          confirmText: String.fromCharCode(checkIcon.codePoint),
+          validateSelection: validateSelection,
         ),
       );
     },
