@@ -67,30 +67,11 @@ async function connectCalendarIcsFeed(
   env: Env,
   provider: CalendarIcsProvider,
 ): Promise<Response> {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch (cause) {
-    throw calendarIcsValidationError(
-      provider,
-      `Paste a valid published ${provider} .ics link.`,
-      cause,
-    );
-  }
-  if (!isRecord(body) || typeof body.url !== 'string') {
-    throw calendarIcsValidationError(
-      provider,
-      `Paste a valid published ${provider} .ics link.`,
-    );
-  }
-
-  const feedUrl = normalizeCalendarIcsUrl(
+  const feedUrl = await validatedPublishedFeedUrl(
+    request,
     provider,
-    body.url,
     env.ALLOWED_CANVAS_HOST,
-  ).toString();
-  // Validate before saving so a typo never replaces a working feed.
-  await fetchCalendarIcsEvents(provider, feedUrl, env.ALLOWED_CANVAS_HOST);
+  );
 
   const { sessionId, cookie } = await getOrCreateSession(request, env.DB);
   await env.DB.prepare(`
@@ -111,6 +92,38 @@ async function connectCalendarIcsFeed(
     .run();
 
   return json({ connected: true }, 200, { 'Set-Cookie': cookie });
+}
+
+async function validatedPublishedFeedUrl(
+  request: Request,
+  provider: CalendarIcsProvider,
+  allowedCanvasHost: string,
+): Promise<string> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch (cause) {
+    throw calendarIcsValidationError(
+      provider,
+      `Paste a valid published ${provider} .ics link.`,
+      cause,
+    );
+  }
+  if (!isRecord(body) || typeof body.url !== 'string') {
+    throw calendarIcsValidationError(
+      provider,
+      `Paste a valid published ${provider} .ics link.`,
+    );
+  }
+
+  const feedUrl = normalizeCalendarIcsUrl(
+    provider,
+    body.url,
+    allowedCanvasHost,
+  ).toString();
+  // Validate before saving so a typo never replaces a working feed.
+  await fetchCalendarIcsEvents(provider, feedUrl, allowedCanvasHost);
+  return feedUrl;
 }
 
 async function calendarIcsFeedForRequest(

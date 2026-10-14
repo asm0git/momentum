@@ -122,6 +122,45 @@ describe('iCalendar event parsing', () => {
     ]);
   });
 
+  it.each([
+    {
+      frequency: 'weekly',
+      start: '20261019',
+      rule: 'FREQ=WEEKLY;BYDAY=MO,WE;COUNT=4',
+      dates: ['2026-10-19', '2026-10-21', '2026-10-26', '2026-10-28'],
+    },
+    {
+      frequency: 'monthly',
+      start: '20261015',
+      rule: 'FREQ=MONTHLY;COUNT=3',
+      dates: ['2026-10-15', '2026-11-15', '2026-12-15'],
+    },
+    {
+      frequency: 'yearly',
+      start: '20261015',
+      rule: 'FREQ=YEARLY;COUNT=2',
+      dates: ['2026-10-15', '2027-10-15'],
+    },
+  ])('expands $frequency recurrence rules', ({ start, rule, dates }) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));
+
+    const events = parseCalendarIcs([
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'UID:recurrence-frequency',
+      `DTSTART:${start}T090000Z`,
+      `DTEND:${start}T100000Z`,
+      `RRULE:${rule}`,
+      'SUMMARY:Recurring event',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n'));
+
+    expect(events.map(({ start: eventStart }) => eventStart.slice(0, 10))).toEqual(dates);
+  });
+
   it('moves an overridden occurrence and omits a cancelled occurrence', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-14T00:00:00Z'));

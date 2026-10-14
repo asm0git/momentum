@@ -5,12 +5,20 @@ export interface IcsProperty {
   value: string;
 }
 
+type DateTimeFields = [number, number, number, number, number, number];
+
 export interface IcsDateTime {
   instant: Date;
-  fields: [number, number, number, number, number, number];
+  fields: DateTimeFields;
   allDay: boolean;
   floating: boolean;
   timeZone?: string;
+}
+
+interface ParsedDateTimeFields {
+  fields: DateTimeFields;
+  allDay: boolean;
+  isUtc: boolean;
 }
 
 const windowsTimeZones: Record<string, string> = {
@@ -41,14 +49,29 @@ const windowsTimeZones: Record<string, string> = {
 
 export function parseDateTime(property: IcsProperty | null): IcsDateTime | null {
   if (!property) return null;
+  const parsed = parseDateTimeFields(property);
+  if (!parsed) return null;
+
+  const timeZone = resolveTimeZone(property);
+  const { instant, floating } = constructDateTimeInstant(parsed, timeZone);
+  return {
+    instant,
+    fields: parsed.fields,
+    allDay: parsed.allDay,
+    floating,
+    timeZone: floating ? undefined : timeZone,
+  };
+}
+
+function parseDateTimeFields(property: IcsProperty): ParsedDateTimeFields | null {
   const value = property.value.trim();
-  const dateOnly = property.params.get('VALUE')?.toUpperCase() === 'DATE' ||
+  const allDay = property.params.get('VALUE')?.toUpperCase() === 'DATE' ||
     /^\d{8}$/.test(value);
   const match = value.match(
     /^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?(Z)?)?$/i,
   );
   if (!match) return null;
-  const fields: [number, number, number, number, number, number] = [
+  const fields: DateTimeFields = [
     Number(match[1]),
     Number(match[2]),
     Number(match[3]),
@@ -57,33 +80,38 @@ export function parseDateTime(property: IcsProperty | null): IcsDateTime | null 
     Number(match[6] ?? 0),
   ];
   if (!isValidFields(fields)) return null;
-  const utcValue = Date.UTC(
-    fields[0], fields[1] - 1, fields[2], fields[3], fields[4], fields[5],
-  );
+
+  return {
+    fields,
+    allDay,
+    isUtc: match[7]?.toUpperCase() === 'Z',
+  };
+}
+
+function resolveTimeZone(property: IcsProperty): string | undefined {
   const rawZone = property.params.get('TZID');
-  const timeZone = rawZone
-    ? windowsTimeZones[rawZone.toLowerCase()] ?? rawZone
-    : undefined;
-  const isUtc = match[7]?.toUpperCase() === 'Z';
-  let instant: Date;
-  let floating: boolean;
-  if (isUtc) {
-    instant = new Date(utcValue);
-    floating = false;
-  } else if (timeZone && isSupportedTimeZone(timeZone)) {
-    instant = zonedDate(fields, timeZone);
-    floating = false;
-  } else {
-    instant = new Date(utcValue);
-    floating = !dateOnly;
+  if (!rawZone) return undefined;
+  return windowsTimeZones[rawZone.toLowerCase()] ?? rawZone;
+}
+
+function constructDateTimeInstant(
+  parsed: ParsedDateTimeFields,
+  timeZone: string | undefined,
+): { instant: Date; floating: boolean } {
+  if (parsed.isUtc) return { instant: utcDate(parsed.fields), floating: false };
+  if (timeZone && isSupportedTimeZone(timeZone)) {
+    return { instant: zonedDate(parsed.fields, timeZone), floating: false };
   }
   return {
-    instant,
-    fields,
-    allDay: dateOnly,
-    floating,
-    timeZone: floating ? undefined : timeZone,
+    instant: utcDate(parsed.fields),
+    floating: !parsed.allDay,
   };
+}
+
+function utcDate(fields: DateTimeFields): Date {
+  return new Date(Date.UTC(
+    fields[0], fields[1] - 1, fields[2], fields[3], fields[4], fields[5],
+  ));
 }
 
 function isSupportedTimeZone(timeZone: string): boolean {
@@ -103,12 +131,11 @@ function isValidFields(fields: number[]): boolean {
 }
 
 function zonedDate(
-  fields: [number, number, number, number, number, number],
+  fields: DateTimeFields,
   timeZone: string,
 ): Date {
-  let guess = Date.UTC(
-    fields[0], fields[1] - 1, fields[2], fields[3], fields[4], fields[5],
-  );
+  const wallClockTime = utcDate(fields).getTime();
+  let guess = wallClockTime;
   try {
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone,
@@ -124,9 +151,7 @@ function zonedDate(
         Number(parts.year), Number(parts.month) - 1, Number(parts.day),
         Number(parts.hour), Number(parts.minute), Number(parts.second),
       );
-      guess += Date.UTC(
-        fields[0], fields[1] - 1, fields[2], fields[3], fields[4], fields[5],
-      ) - represented;
+      guess += wallClockTime - represented;
     }
   } catch {
     // Preserve the feed's wall-clock time when its timezone is not recognized.
@@ -135,7 +160,7 @@ function zonedDate(
 }
 
 export function makeDateTime(
-  fields: [number, number, number, number, number, number],
+  fields: DateTimeFields,
   template: IcsDateTime,
 ): IcsDateTime {
   const [year, month, day, hour, minute, second] = fields;
@@ -171,7 +196,7 @@ export function addMilliseconds(value: IcsDateTime, milliseconds: number): IcsDa
     ], value);
   }
   const instant = new Date(value.instant.getTime() + milliseconds);
-  let fields: [number, number, number, number, number, number];
+  let fields: DateTimeFields;
   if (value.floating) {
     fields = [
       instant.getUTCFullYear(),
